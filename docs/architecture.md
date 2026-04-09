@@ -87,6 +87,7 @@ klow_server/
 │       │   └── public-products.controller.ts → /v1/products (GET only)
 │       ├── creators/                # nested-routine transactions
 │       ├── videos/                  # VideoProduct join transactions
+│       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
 │       ├── upload/                  # R2Service + presigned URL endpoint
 │       └── stats/                   # /admin/stats counts
 ```
@@ -146,7 +147,7 @@ export class PublicProductsController {
 | Admin    | `/admin/*` | klow_admin              | GET / POST / PATCH / DELETE   | `AdminGuard` (stub)     |
 | Public   | `/v1/*`    | KLOW webapp (planned)   | GET only                      | none / `UserGuard` later |
 
-### Endpoints (22 routes)
+### Endpoints
 
 **Stats**
 - `GET /admin/stats` → `{ products, creators, videos }` counts
@@ -175,6 +176,14 @@ export class PublicProductsController {
 - `DELETE /admin/videos/:id`
 - `GET    /v1/videos` + `GET /v1/videos/:id`
 
+**Reviews** — full CRUD with auto-aggregation
+- `GET    /admin/reviews`       (filters: `?productId=`, `?minRating=`, `?q=`; includes parent product summary)
+- `GET    /admin/reviews/:id`
+- `POST   /admin/reviews`       (recomputes `Product.rating` / `reviewCount` in same tx)
+- `PATCH  /admin/reviews/:id`   (recomputes aggregates)
+- `DELETE /admin/reviews/:id`   (recomputes aggregates)
+- `GET    /v1/reviews` + `GET /v1/reviews/:id`
+
 **Upload**
 - `POST   /admin/upload` → `{ uploadUrl, publicUrl, key }` (R2 presigned PUT URL, valid 10 min)
 
@@ -187,7 +196,7 @@ export class PublicProductsController {
 ```
 Creator (1) ──< Video (N)
    │              │
-   │              └── VideoProduct (N) ── Product
+   │              └── VideoProduct (N) ── Product ──< Review (N)
    │                                         │
    └── Routine (N) ── RoutineProduct (N) ────┘
 ```
@@ -196,10 +205,11 @@ Creator (1) ──< Video (N)
 
 | Model           | Purpose                                                                 |
 |-----------------|-------------------------------------------------------------------------|
-| `Product`       | K-beauty product. Includes FOMO fields: `stockLeft`, `viewersNow`, `totalSold`, `rating`, `reviewCount`. |
+| `Product`       | K-beauty product. FOMO fields: `stockLeft`, `viewersNow`, `totalSold`. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
 | `Creator`       | Influencer profile: handle, story, profile/hero images, social URLs, follower count. |
 | `Video`         | Short-form reel. References one `Creator` (N:1) and N `Product`s (N:M). |
-| `Routine`       | Bundle of products belonging to one `Creator` (morning/evening/weekend). |
+| `Routine`       | Bundle of products belonging to one `Creator` (morning/evening/weekend). `savedAmount` is **auto-derived** from `originalTotal − bundlePrice` server-side. |
+| `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
 | `RoutineProduct`| Same pattern for `Routine` ↔ `Product`.                                 |
 
