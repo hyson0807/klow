@@ -5,7 +5,7 @@
 KLOW/
 klow_admin/
 klow_server/
-klaw_web/
+klow_web/
 
 # ── OS / editor ──────────────────────────────────────────────────
 .DS_Store
