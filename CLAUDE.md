@@ -34,13 +34,13 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 |-------------------------------|---------------------------------------------------------------------------------------------------------|
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
-| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload) |
+| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload, concierge) |
 | Server validation (zod)       | `klow_server/src/common/validation.ts`                                                                  |
 | Shared product field selects  | `klow_server/src/modules/products/product-selects.ts`                                                   |
-| Admin pages                   | `klow_admin/src/app/` (products, brands, creators, videos, reviews, shop-settings)                      |
+| Admin pages                   | `klow_admin/src/app/` (products, brands, creators, videos, reviews, concierge-requests, shop-settings)  |
 | Admin API client              | `klow_admin/src/lib/api.ts`                                                                             |
 | Admin upload helper           | `klow_admin/src/lib/upload.ts`                                                                          |
-| klow_web pages                | `klow_web/src/app/` (feed, product, creator, shop, discover, my)                                        |
+| klow_web pages                | `klow_web/src/app/` (feed, product, creator, shop, discover, concierge, my)                             |
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
 | Legacy KLOW mock data         | `KLOW/data/mock.ts`                                                                                     |

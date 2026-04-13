@@ -95,6 +95,7 @@ klow_server/
 │       ├── creators/                # nested-routine transactions
 │       ├── videos/                  # VideoProduct join transactions
 │       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
+│       ├── concierge/               # user K-beauty concierge requests (public POST + admin list/status)
 │       ├── shop/                    # ShopSettings singleton + /v1/shop/today
 │       ├── discover/                # read-only personalized recommendations (/v1/discover)
 │       ├── upload/                  # R2Service + presigned URL endpoint
@@ -117,6 +118,7 @@ Some modules intentionally diverge from the two-controller shape:
 - `stats/` — admin-only, has a single `StatsController` at `/admin/stats`.
 - `discover/` — read-only personalization, has only `PublicDiscoverController` at `/v1/discover`.
 - `upload/` — admin-only presign endpoint, no public surface.
+- `concierge/` — public controller accepts POST only (user submits request); admin controller handles list/status/delete.
 
 Example (`products` module):
 
@@ -152,7 +154,7 @@ This is the single place to edit if list payload shape needs to change.
 | Surface  | Prefix     | Caller                  | Methods                       | Guard                   |
 |----------|------------|-------------------------|-------------------------------|-------------------------|
 | Admin    | `/admin/*` | klow_admin              | GET / POST / PATCH / DELETE   | `AdminGuard` (stub)     |
-| Public   | `/v1/*`    | klaw_web                | GET only                      | none / `UserGuard` later |
+| Public   | `/v1/*`    | klow_web                | GET + POST (concierge)        | none / `UserGuard` later |
 
 ### Endpoints
 
@@ -210,6 +212,12 @@ This is the single place to edit if list payload shape needs to change.
   - When neither param is supplied, returns a **non-personalized fallback** (`fallback: true`): latest products + bestsellers, no creators.
   - Otherwise scores products (skin-type match, concern overlap, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. Concerns are expanded through `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) before querying.
 
+**Concierge Requests** — user K-beauty product sourcing requests
+- `POST   /v1/concierge-requests` — public, no guard. Requires `imageUrl` or `product` (at least one). Creates a pending request.
+- `GET    /admin/concierge-requests` (filter: `?status=pending|replied|completed`)
+- `PATCH  /admin/concierge-requests/:id` — update status (`pending` → `replied` → `completed`)
+- `DELETE /admin/concierge-requests/:id`
+
 **Upload**
 - `POST   /admin/upload` → `{ uploadUrl, publicUrl, key }` (R2 presigned PUT URL, valid 10 min). Allowed content types: `image/{webp,jpeg,png,gif}` or `video/{mp4,quicktime,webm}` — SVG is intentionally rejected (XSS risk).
 
@@ -227,6 +235,7 @@ Brand (1) ──< Product (N) ──< Review (N)
                  └──< RoutineProduct (N) ── Routine (N) ───┘
 
 ShopSettings (singleton, id = "default")
+ConciergeRequest (standalone — no FK relations)
 ```
 
 ### Entities
@@ -242,6 +251,7 @@ ShopSettings (singleton, id = "default")
 | `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
 | `RoutineProduct`| Same pattern for `Routine` ↔ `Product`.                                 |
+| `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
 
 ### Enums (Postgres-native)
 
@@ -250,6 +260,7 @@ ShopSettings (singleton, id = "default")
 - `ProductCategoryKey` — `cleanser | toner | serum | cream | mist | suncream | mask`
 - `VideoTheme` — `acne | whitening | brightening | antiaging | glow | hydration | pore`
 - `TimeOfDay` — `morning | evening | weekend`
+- `ConciergeStatus` — `pending | replied | completed`
 
 The string-based `CONCERNS` constant lives in `src/common/constants.ts` and is shared by `ShopSettings.todaysPickConcern` and `CreatorInput.concerns`.
 
