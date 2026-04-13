@@ -6,7 +6,7 @@ KLOW is a TikTok-style K-beauty commerce platform. The stack is split across **f
 
 ```
 ┌──────────────────────┐  ┌─────────────────────┐  ┌──────────────────────┐
-│  klow_admin          │  │  klaw_web           │  │  Future RN/iOS app   │
+│  klow_admin          │  │  klow_web           │  │  Future RN/iOS app   │
 │  Next.js UI client   │  │  Next.js + TanStack │  │  (planned)           │
 │  port 3000           │  │  Query, port 3001   │  │                      │
 └──────────┬───────────┘  └──────────┬──────────┘  └──────────┬───────────┘
@@ -25,11 +25,11 @@ KLOW is a TikTok-style K-beauty commerce platform. The stack is split across **f
                      ▼                   ▼
            ┌──────────────────┐  ┌─────────────────────┐
            │  Neon Postgres   │  │  Cloudflare R2      │
-           │  (via Prisma)    │  │  bucket: klaw       │
+           │  (via Prisma)    │  │  bucket: klow       │
            └──────────────────┘  └─────────────────────┘
 ```
 
-(The legacy `KLOW/` project is a separate Next.js app still wired to `data/mock.ts`; `klaw_web` supersedes it and is the one that actually talks to `/v1/*`.)
+(The legacy `KLOW/` project is a separate Next.js app still wired to `data/mock.ts`; `klow_web` supersedes it and is the one that actually talks to `/v1/*`.)
 
 The server was extracted from `klow_admin` (which originally owned Prisma directly) for three reasons:
 
@@ -43,12 +43,12 @@ The server was extracted from `klow_admin` (which originally owned Prisma direct
 
 | Repo          | Stack                                                       | Role                                                        |
 |---------------|-------------------------------------------------------------|-------------------------------------------------------------|
-| `klaw_web`    | Next.js 14 + Tailwind + **TanStack Query** + Zustand + Framer Motion | Public mobile webapp (production). Reads `/v1/*`.           |
+| `klow_web`    | Next.js 14 + Tailwind + **TanStack Query** + Zustand + Framer Motion | Public mobile webapp (production). Reads `/v1/*`.           |
 | `KLOW`        | Next.js 14 + Tailwind + Zustand + Framer Motion             | **Legacy** prototype. Still uses `data/mock.ts`. Phased out. |
 | `klow_admin`  | Next.js 14 + Tailwind + react-hook-form                     | Internal admin dashboard, pure UI client                    |
 | `klow_server` | NestJS 10 + Prisma 6 + zod                                  | Backend API; owns DB + R2; the only repo with Prisma        |
 
-Each subdirectory under `/Users/hyson/welkit/klow/` is its own git repo with its own commit history. They share no source code (a future improvement is a shared workspace package for types/constants — today `klaw_web/src/lib/types.ts` is a hand-copied mirror of server response shapes).
+Each subdirectory under `/Users/hyson/welkit/klow/` is its own git repo with its own commit history. They share no source code (a future improvement is a shared workspace package for types/constants — today `klow_web/src/lib/types.ts` is a hand-copied mirror of server response shapes).
 
 ---
 
@@ -61,7 +61,7 @@ Each subdirectory under `/Users/hyson/welkit/klow/` is its own git repo with its
 - **Object storage:** Cloudflare R2 (S3-compatible) via `@aws-sdk/client-s3`
 - **Validation:** zod schemas wrapped in a custom `ZodValidationPipe`
 - **Port:** `4000`
-- **CORS:** `main.ts` whitelists `http://localhost:*` (regex) so both admin `:3000` and klaw_web `:3001` work in dev.
+- **CORS:** `main.ts` whitelists `http://localhost:*` (regex) so both admin `:3000` and klow_web `:3001` work in dev.
 
 ### Project Tree
 
@@ -92,7 +92,7 @@ klow_server/
 │       │   ├── admin-products.controller.ts → /admin/products (full CRUD)
 │       │   └── public-products.controller.ts → /v1/products (GET, with filters)
 │       ├── brands/                  # Brand CRUD + Product.brand cache sync on rename
-│       ├── creators/                # nested-routine transactions
+│       ├── creators/                # Creator CRUD
 │       ├── videos/                  # VideoProduct join transactions
 │       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
 │       ├── concierge/               # user K-beauty concierge requests (public POST + admin list/status)
@@ -178,12 +178,12 @@ This is the single place to edit if list payload shape needs to change.
 - `DELETE /admin/brands/:id` — detaches products (`brandId → null`) before deleting
 - `GET    /v1/brands` (list only)
 
-**Creators** — full CRUD with nested routines
+**Creators** — full CRUD
 - `GET    /admin/creators`
-- `GET    /admin/creators/:id`  (includes routines + their products in order)
-- `POST   /admin/creators`      (creates creator + nested routines + RoutineProduct join rows in one transaction)
-- `PATCH  /admin/creators/:id`  (replaces nested routines transactionally)
-- `DELETE /admin/creators/:id`  (cascade deletes videos + routines)
+- `GET    /admin/creators/:id`
+- `POST   /admin/creators`
+- `PATCH  /admin/creators/:id`
+- `DELETE /admin/creators/:id`  (cascade deletes videos)
 - `GET    /v1/creators` + `GET /v1/creators/:id`
 
 **Videos** — full CRUD with VideoProduct join
@@ -230,9 +230,7 @@ This is the single place to edit if list payload shape needs to change.
 ```
 Brand (1) ──< Product (N) ──< Review (N)
                  │
-                 ├──< VideoProduct (N) ── Video (N) ──> Creator (1)
-                 │                                         │
-                 └──< RoutineProduct (N) ── Routine (N) ───┘
+                 └──< VideoProduct (N) ── Video (N) ──> Creator (1)
 
 ShopSettings (singleton, id = "default")
 ConciergeRequest (standalone — no FK relations)
@@ -247,10 +245,8 @@ ConciergeRequest (standalone — no FK relations)
 | `ShopSettings`  | Singleton row (`id = "default"`) storing merchandising config. Today only `todaysPickConcern` (a `CONCERNS` value). Created lazily on first read. Powers `/v1/shop/today`. |
 | `Creator`       | Influencer profile: handle, story, profile/hero images, social URLs, follower count, `skinType`, `concerns`, `country`, `heroVideoUrl`. |
 | `Video`         | Short-form reel. References one `Creator` (N:1) and N `Product`s (N:M) via `VideoProduct`. Carries `themes` (enum array) and `forSkinTypes` for discovery. |
-| `Routine`       | Bundle of products belonging to one `Creator` (morning/evening/weekend). `savedAmount` is auto-derived from `originalTotal − bundlePrice` server-side. |
 | `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
-| `RoutineProduct`| Same pattern for `Routine` ↔ `Product`.                                 |
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
 
 ### Enums (Postgres-native)
@@ -258,15 +254,13 @@ ConciergeRequest (standalone — no FK relations)
 `schema.prisma` declares three native enums used throughout the model:
 
 - `ProductCategoryKey` — `cleanser | toner | serum | cream | mist | suncream | mask`
-- `VideoTheme` — `acne | whitening | brightening | antiaging | glow | hydration | pore`
-- `TimeOfDay` — `morning | evening | weekend`
 - `ConciergeStatus` — `pending | replied | completed`
 
 The string-based `CONCERNS` constant lives in `src/common/constants.ts` and is shared by `ShopSettings.todaysPickConcern` and `CreatorInput.concerns`.
 
 ### Why explicit join tables?
 
-Both `VideoProduct` and `RoutineProduct` carry an `order: Int` column so the admin can reorder which products appear first inside a video or routine. Implicit Prisma N:M relations don't support extra columns, so we use explicit join tables. This also lets us add fields like `timestamp`, `mentionType`, or `isPrimary` later without a migration headache.
+`VideoProduct` carries an `order: Int` column so the admin can reorder which products appear first inside a video. Implicit Prisma N:M relations don't support extra columns, so we use an explicit join table. This also lets us add fields like `timestamp`, `mentionType`, or `isPrimary` later without a migration headache.
 
 ### Schema location
 
@@ -291,7 +285,7 @@ Browser-direct two-step upload, used for both images and videos:
 **Why direct (not proxied through the server):**
 Next.js API routes have a 4 MB body limit. Product/creator videos are routinely 50–500 MB. A presigned URL bypasses Next entirely; the file goes straight from the browser to R2.
 
-**Bucket:** `klaw`
+**Bucket:** `klow`
 **Public URL base:** `https://pub-cac46f90807b402a9079c58c5e8287bb.r2.dev`
 **Presigned URL TTL:** 10 minutes
 **Allowed content types:** `image/webp`, `image/jpeg`, `image/png`, `image/gif`, `video/mp4`, `video/quicktime`, `video/webm`. SVG is intentionally rejected.
@@ -309,9 +303,9 @@ responseChecksumValidation:  'WHEN_REQUIRED',
 
 ### CORS
 
-`klow_server/src/main.ts` whitelists `http://localhost:*` via regex so both the admin (`:3000`) and klaw_web (`:3001`) dev servers work out of the box. Replace with an explicit origin list before deployment.
+`klow_server/src/main.ts` whitelists `http://localhost:*` via regex so both the admin (`:3000`) and klow_web (`:3001`) dev servers work out of the box. Replace with an explicit origin list before deployment.
 
-The R2 bucket itself also has a CORS policy allowing PUT from local dev ports. If you ever see `No 'Access-Control-Allow-Origin' header` on the browser PUT, update the CORS policy in the Cloudflare dashboard (R2 → klaw → Settings → CORS Policy).
+The R2 bucket itself also has a CORS policy allowing PUT from local dev ports. If you ever see `No 'Access-Control-Allow-Origin' header` on the browser PUT, update the CORS policy in the Cloudflare dashboard (R2 → klow → Settings → CORS Policy).
 
 ---
 
@@ -350,10 +344,10 @@ R2Service.getPresignedUploadUrl()       // klow_server
 [on form submit, the publicUrl ends up on Creator.profileImage in Postgres]
 ```
 
-### Example 3: klaw_web renders the TikTok-style feed
+### Example 3: klow_web renders the TikTok-style feed
 
 ```
-klaw_web/src/app/page.tsx
+klow_web/src/app/page.tsx
   ↓ useVideosQuery() → api.videos.list()         // TanStack Query caches keyed by queryKeys
   ↓ GET http://localhost:4000/v1/videos
 PublicVideosController.list()            // klow_server
@@ -363,7 +357,7 @@ VideosService.findAll()                  // ← same method admin uses
   ← JSON of latest 200 videos (creator info + tagged-product counts, no product objects)
 
   For each visible card:
-VideoFeedCard                            // klaw_web/src/components/video
+VideoFeedCard                            // klow_web/src/components/video
   ↓ useVideoQuery(id) → api.videos.detail(id)    // lazy-load detail only for visible cards
   ↓ GET /v1/videos/:id → products[] with order
   [on activeIdx change, usePrefetchVideo warms next 1–2 cards]
@@ -372,13 +366,13 @@ VideoFeedCard                            // klaw_web/src/components/video
 The key things to notice in Example 3:
 
 - `VideosService.findAll()` is called by both `AdminVideosController` and `PublicVideosController`. Same code, two URLs.
-- The list endpoint deliberately omits the products array to keep the payload small; klaw_web fetches detail per-card on demand. A future optimization is to add `products` to the list include on the server and drop the per-card round-trip.
-- **klaw_web never uses `useEffect + fetch` directly** — all server state flows through TanStack Query hooks in `klaw_web/src/hooks/`. This is a hard convention.
+- The list endpoint deliberately omits the products array to keep the payload small; klow_web fetches detail per-card on demand. A future optimization is to add `products` to the list include on the server and drop the per-card round-trip.
+- **klow_web never uses `useEffect + fetch` directly** — all server state flows through TanStack Query hooks in `klow_web/src/hooks/`. This is a hard convention.
 
-### Example 4: klaw_web fetches discover recommendations
+### Example 4: klow_web fetches discover recommendations
 
 ```
-klaw_web/src/app/discover/page.tsx
+klow_web/src/app/discover/page.tsx
   ↓ useDiscoverQuery({ skinType, concern })      // reads persona from zustand store
   ↓ GET /v1/discover?skinType=oily&concern=hydration
 PublicDiscoverController.get()           // klow_server
@@ -405,7 +399,7 @@ cd klow_admin
 npm run dev                # next dev            →  http://localhost:3000
 
 # Terminal 3 — public webapp
-cd klaw_web
+cd klow_web
 npm run dev                # next dev -p 3001    →  http://localhost:3001
 ```
 
@@ -415,7 +409,7 @@ npm run dev                # next dev -p 3001    →  http://localhost:3001
 |------|---------------|
 | `klow_server/.env` | `DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE`, `PORT` |
 | `klow_admin/.env.local` | `NEXT_PUBLIC_API_URL=http://localhost:4000` |
-| `klaw_web/.env.local` | `NEXT_PUBLIC_API_URL=http://localhost:4000` |
+| `klow_web/.env.local` | `NEXT_PUBLIC_API_URL=http://localhost:4000` |
 
 ### Re-seeding the dev DB
 
@@ -442,7 +436,7 @@ The module pattern was chosen specifically so that the next four things are addi
 ### Authentication
 Replace the no-op stubs in `klow_server/src/common/guards/`:
 - `AdminGuard` → verify NextAuth cookie / session token from klow_admin
-- `UserGuard` → verify user JWT from klaw_web
+- `UserGuard` → verify user JWT from klow_web
 
 Route signatures don't change. Only the guard implementations change.
 
@@ -467,7 +461,7 @@ Add `@nestjs/bull` (Redis) or Temporal worker. Same `PrismaService`, same module
 
 - **Auth implementation** — guards are no-op stubs
 - **Payment integration** — modules planned but not built
-- **Legacy `KLOW/` retirement** — still shipping its mock-based prototype; `klaw_web` is the real public client going forward.
+- **Legacy `KLOW/` retirement** — still shipping its mock-based prototype; `klow_web` is the real public client going forward.
 - **Production deployment / CI/CD** — local dev only
-- **Type sharing across repos** — `klow_admin/src/lib/constants.ts`, `klow_server/src/common/constants.ts`, and `klaw_web/src/lib/types.ts` are intentional hand-mirrored copies. A future shared workspace package will replace this.
-- **Pagination** — list endpoints clamp to `take ≤ 200` but have no cursor/page params. klaw_web's feed is hard-capped at 200 videos until a cursor API lands. Add when catalogs grow.
+- **Type sharing across repos** — `klow_admin/src/lib/constants.ts`, `klow_server/src/common/constants.ts`, and `klow_web/src/lib/types.ts` are intentional hand-mirrored copies. A future shared workspace package will replace this.
+- **Pagination** — list endpoints clamp to `take ≤ 200` but have no cursor/page params. klow_web's feed is hard-capped at 200 videos until a cursor API lands. Add when catalogs grow.

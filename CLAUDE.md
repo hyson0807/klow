@@ -70,6 +70,11 @@ cd klow_admin && npm run dev           # http://localhost:3000
 cd klow_web && npm run dev             # http://localhost:3001
 ```
 
+## Prisma Migrations
+
+- **반드시 `npx prisma migrate dev --name <이름>`만 사용한다.** `migrate deploy`, 수동 SQL 파일 생성, `db push` 등은 사용하지 않는다.
+- 이 명령은 interactive 프롬프트가 필요하므로, non-interactive 환경에서 실패하면 사용자에게 직접 실행을 요청한다.
+
 ## When Working Here
 
 - **Documentation tasks** (architecture, planning, cross-repo design notes) → write in `docs/` from this workspace root.
