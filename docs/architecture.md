@@ -142,7 +142,7 @@ export class ProductsService {
 
 `klow_server/src/modules/products/product-selects.ts` centralizes the lean field set used by list/card views:
 
-- `PRODUCT_LIST_SELECT` — everything needed to render a product card. Detail-only fields (`ingredients`, `howToUse`, `detailImages`, `recommendedFor`, `concerns`, `sourceUrl`, `totalSold`, `volume`, `step`) are intentionally excluded to keep list payloads small.
+- `PRODUCT_LIST_SELECT` — everything needed to render a product card. Detail-only fields (`detailImages`, `recommendedFor`, `concerns`, `sourceUrl`, `totalSold`, `volume`, `step`) are intentionally excluded to keep list payloads small.
 - `DISCOVER_SCORING_SELECT` — `PRODUCT_LIST_SELECT` + `concerns` + `recommendedFor`, used by the discover scoring pipeline.
 
 This is the single place to edit if list payload shape needs to change.
@@ -208,9 +208,11 @@ This is the single place to edit if list payload shape needs to change.
 - `GET    /v1/shop/today?take=N` → `{ concern, products }`: latest products whose `concerns` array contains the configured Today's Pick concern (take clamped 1..50, default 10)
 
 **Discover** — personalized recommendations (read-only)
-- `GET    /v1/discover?skinType=&concern=` → `{ persona, recommended, bestsellers, skinTwinCreators, fallback }`
-  - When neither param is supplied, returns a **non-personalized fallback** (`fallback: true`): latest products + bestsellers, no creators.
-  - Otherwise scores products (skin-type match, concern overlap, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. Concerns are expanded through `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) before querying.
+- `GET    /v1/discover?skinType=&concerns=` → `{ persona, recommended, bestsellers, skinTwinCreators, fallback }`
+  - `concerns` is a CSV of concern keywords (e.g. `concerns=hydration,acne,pore`). Legacy single `concern` query param is still accepted for backward compatibility.
+  - When no params are supplied, returns a **non-personalized fallback** (`fallback: true`): latest products + bestsellers, no creators.
+  - Otherwise scores products (skin-type match, concern overlap × 14, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. More overlap → higher rank.
+  - `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) is applied **only when a single concern is supplied**. With multi-select, the user's exact choices are honored without broadening.
 
 **Concierge Requests** — user K-beauty product sourcing requests
 - `POST   /v1/concierge-requests` — public, no guard. Requires `imageUrl` or `product` (at least one). Creates a pending request.
@@ -240,7 +242,7 @@ ConciergeRequest (standalone — no FK relations)
 
 | Model           | Purpose                                                                 |
 |-----------------|-------------------------------------------------------------------------|
-| `Product`       | K-beauty product. Carries FOMO fields (`stockLeft`, `viewersNow`, `totalSold`), merchandising flags (`isHero`, `isLoss`, `tip`), persona tags (`recommendedFor`, `concerns`), and detail-page content (`detailImages`, `ingredients`, `howToUse`, `detailDescription`, `volume`, `videoClipUrl`, `sourceUrl`). `brand` is a denormalized string cache of the linked `Brand.name`; `brandId` is the authoritative FK. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
+| `Product`       | K-beauty product. Carries FOMO fields (`stockLeft`, `viewersNow`, `totalSold`), merchandising flags (`isHero`, `isLoss`, `tip`), persona tags (`recommendedFor`, `concerns`), and detail-page content (`detailImages`, `detailDescription`, `volume`, `videoClipUrl`, `sourceUrl`). `brand` is a denormalized string cache of the linked `Brand.name`; `brandId` is the authoritative FK. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
 | `Brand`         | K-beauty brand. `name` is unique; `initial`, `tagline`, `logoUrl`, `order` power the admin's brand directory. Renames cascade into `Product.brand` inside a transaction. Delete detaches products (`brandId → null`) rather than blocking. |
 | `ShopSettings`  | Singleton row (`id = "default"`) storing merchandising config. Today only `todaysPickConcern` (a `CONCERNS` value). Created lazily on first read. Powers `/v1/shop/today`. |
 | `Creator`       | Influencer profile: handle, story, profile/hero images, social URLs, follower count, `skinType`, `concerns`, `country`, `heroVideoUrl`. |
