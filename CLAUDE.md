@@ -43,6 +43,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | klow_web pages                | `klow_web/src/app/` (feed, product, creator, shop, discover, concierge, my)                             |
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
+| Admin toast feedback          | `klow_admin/src/components/Toast.tsx` (`useToast()`) + wired into `klow_admin/src/hooks/useFormState.ts` |
 | Legacy KLOW mock data         | `KLOW/data/mock.ts`                                                                                     |
 | Legacy KLOW pages             | `KLOW/app/`                                                                                             |
 
@@ -56,6 +57,17 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 - **R2 quirk:** AWS SDK v3.729+ adds CRC32 checksums that R2 cannot validate. `r2.service.ts` sets `requestChecksumCalculation: 'WHEN_REQUIRED'` to disable this. If presigned uploads break, check this first.
 - **CORS:** `klow_server/src/main.ts` already whitelists `http://localhost:*` via regex, so both admin (3000) and klow_web (3001) work out of the box. Swap to an explicit origin list before deploy.
 - **Auth:** Currently NONE (admin and user guards are no-op stubs in `klow_server/src/common/guards/`). Will be added later.
+
+## Admin UI Convention — Toast Feedback (required)
+
+어드민(`klow_admin`)의 모든 **등록 / 수정 / 삭제 / 오류**는 반드시 토스트로 사용자에게 표시한다. 조용히 리다이렉트하거나 인라인 텍스트로만 표시하지 않는다. (배경: 브랜드 미선택으로 서버가 `400 brand too_small`을 돌려줬는데 인라인 에러만 떠서 원인 파악이 늦어졌던 사례.)
+
+- 토스트 시스템: `klow_admin/src/components/Toast.tsx` — `<ToastProvider>`가 `app/layout.tsx`에 이미 붙어있고, 컴포넌트에서는 `useToast()`로 `success / error / info`를 호출한다.
+- CRUD 폼은 `klow_admin/src/hooks/useFormState.ts`가 이미 토스트를 자동으로 띄우므로 폼마다 따로 배선할 필요 없음.
+- `useFormState`를 쓰지 않는 플로우(예: `shop-settings`, `concierge-requests`, `reviews` 목록, `ReviewManager`)는 `useToast()`를 직접 호출해 동일한 규칙을 지킨다.
+- 서버 에러 메시지는 `api.ts`가 `Error`로 던지므로 `e.message`를 그대로 토스트에 넘기면 충분(추가 파싱 불필요).
+
+자세한 규칙은 `docs/architecture.md`의 **Admin UI Conventions** 섹션 참고.
 
 ## Local Development
 

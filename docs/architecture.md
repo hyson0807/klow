@@ -311,6 +311,22 @@ The R2 bucket itself also has a CORS policy allowing PUT from local dev ports. I
 
 ---
 
+## Admin UI Conventions
+
+### Toast feedback for all mutations
+
+`klow_admin` must surface **every create / update / delete** and **every error** via a toast — not with silent redirects, not with inline-only `error` text. The original motivation was a support ticket where a product save returned `400 brand too_small`, but the form only rendered a quiet red line below the button and the user blamed the server instead of the missing brand selection.
+
+- The toast context lives at `klow_admin/src/components/Toast.tsx`. It is mounted once in `app/layout.tsx` via `<ToastProvider>` and consumed via `useToast()` — returning `success(msg)`, `error(msg)`, `info(msg)`, and the lower-level `show(kind, msg)`.
+- The shared CRUD hook `klow_admin/src/hooks/useFormState.ts` already emits the right toasts for forms built on top of it (ProductForm, BrandForm, CreatorForm, VideoForm). Create/edit/delete success and failure all flow through there — you should not have to wire it per-form.
+- For **ad-hoc admin flows that bypass `useFormState`** (e.g. `shop-settings`, `concierge-requests`, `reviews` moderation, `ReviewManager`), call `useToast()` directly in the page/component. Error toasts replace the old inline `error` state; success toasts replace silent list-refreshes.
+- Errors from the server are thrown by `api.ts` as `Error(message)`. The message is usually the server's JSON body (e.g. `API 400: {"error":"validation failed",…}`), so forwarding `e.message` into the toast is enough — no extra parsing required.
+- **Not** to be used for: background list fetches (use inline `불러오는 중…` placeholders), form field validation hints (use inline `<Field>` helper text), or anything truly silent. Toasts are for _actions the user just took_.
+
+The goal: no admin action ever happens in silence, and every failure tells the user why.
+
+---
+
 ## Request Flow Examples
 
 ### Example 1: Admin creates a product
