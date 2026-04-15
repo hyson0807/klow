@@ -185,6 +185,7 @@ This is the single place to edit if list payload shape needs to change.
 - `PATCH  /admin/creators/:id`
 - `DELETE /admin/creators/:id`  (cascade deletes videos)
 - `GET    /v1/creators` + `GET /v1/creators/:id`
+- `GET    /v1/creators/:id/products` — 해당 크리에이터의 모든 릴스에 태그된 제품을 중복 제거하여 최신 Video.updatedAt 순으로 반환 (`PRODUCT_LIST_SELECT` 필드, take 200)
 
 **Videos** — full CRUD with VideoProduct join
 - `GET    /admin/videos`
