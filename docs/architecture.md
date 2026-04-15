@@ -96,6 +96,7 @@ klow_server/
 │       ├── videos/                  # VideoProduct join transactions
 │       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
 │       ├── concierge/               # user K-beauty concierge requests (public POST + admin list/status)
+│       ├── orders/                  # checkout MVP (public POST + admin list/detail/status — no gateway yet)
 │       ├── shop/                    # ShopSettings singleton + /v1/shop/today
 │       ├── discover/                # read-only personalized recommendations (/v1/discover)
 │       ├── upload/                  # R2Service + presigned URL endpoint
@@ -119,6 +120,7 @@ Some modules intentionally diverge from the two-controller shape:
 - `discover/` — read-only personalization, has only `PublicDiscoverController` at `/v1/discover`.
 - `upload/` — admin-only presign endpoint, no public surface.
 - `concierge/` — public controller accepts POST only (user submits request); admin controller handles list/status/delete.
+- `orders/` — public controller accepts POST only (checkout submit); admin controller handles list/detail/status. No DELETE (use `cancelled` status). No payment gateway — this is an MVP where the team follows up by email after submission.
 
 Example (`products` module):
 
@@ -215,6 +217,12 @@ This is the single place to edit if list payload shape needs to change.
   - Otherwise scores products (skin-type match, concern overlap × 14, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. More overlap → higher rank.
   - `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) is applied **only when a single concern is supplied**. With multi-select, the user's exact choices are honored without broadening.
 
+**Orders** — checkout MVP (no payment gateway; team emails the customer after submission)
+- `POST   /v1/orders` — public, no guard. Body: `{ email, fullName, phone, country, addressLine1, addressLine2?, city, postalCode, note?, items: [{productId, quantity}] }`. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, and computes `subtotal` + `itemCount` itself. Lookup + insert share a `$transaction`. Returns `{ id }`.
+- `GET    /admin/orders` (filters: `?status=pending|processing|shipped|completed|cancelled`, `?take=N`, `?skip=N`; returns orders with `items[]` included, sorted by `createdAt desc, id desc` for stable pagination)
+- `GET    /admin/orders/:id`
+- `PATCH  /admin/orders/:id/status` — body `{ status }`, enum `pending → processing → shipped → completed | cancelled`
+
 **Concierge Requests** — user K-beauty product sourcing requests
 - `POST   /v1/concierge-requests` — public, no guard. Requires `imageUrl` or `product` (at least one). Creates a pending request.
 - `GET    /admin/concierge-requests` (filter: `?status=pending|replied|completed`)
@@ -235,6 +243,7 @@ Brand (1) ──< Product (N) ──< Review (N)
                  │
                  └──< VideoProduct (N) ── Video (N) ──> Creator (1)
 
+Order (1) ──< OrderItem (N)       (OrderItem.productId is NOT a FK — snapshots survive product deletion)
 ShopSettings (singleton, id = "default")
 ConciergeRequest (standalone — no FK relations)
 ```
@@ -251,6 +260,8 @@ ConciergeRequest (standalone — no FK relations)
 | `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
+| `Order` | Checkout submission (MVP — no payment gateway). Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), plus server-computed `subtotal` and `itemCount` and an `OrderStatus` enum. Indexed on `status`, `createdAt`, `email`. |
+| `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice` are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
 
 ### Enums (Postgres-native)
 
@@ -258,6 +269,7 @@ ConciergeRequest (standalone — no FK relations)
 
 - `ProductCategoryKey` — `cleanser | toner | serum | cream | mist | suncream | mask`
 - `ConciergeStatus` — `pending | replied | completed`
+- `OrderStatus` — `pending | processing | shipped | completed | cancelled`
 
 The string-based `CONCERNS` constant lives in `src/common/constants.ts` and is shared by `ShopSettings.todaysPickConcern` and `CreatorInput.concerns`.
 
@@ -460,13 +472,15 @@ Replace the no-op stubs in `klow_server/src/common/guards/`:
 Route signatures don't change. Only the guard implementations change.
 
 ### Payment system
-Add new modules under `klow_server/src/modules/`:
-- `cart/` — `GET/POST/DELETE /v1/cart` (user JWT)
-- `orders/` — `POST /v1/orders` (create), `GET /admin/orders` (admin view)
-- `payment/` — `POST /v1/payment/checkout` (Toss/Stripe session)
-- `webhooks/` — `POST /webhooks/toss`, `POST /webhooks/stripe` (signature-verified, no auth guard)
 
-All four modules share the same `PrismaService` and the same database. Order state is updated by webhooks and read by both admin and user surfaces.
+`orders/` is already in place as an **MVP without a payment gateway**: klow_web's `/checkout` page collects the shipping address and `POST /v1/orders` snapshots the cart, then the KLOW team follows up by email (the admin `/orders` tab is the operator view for this). Cart state stays client-side in zustand (`klow-web-cart` in localStorage) — there is no server `cart/` module yet.
+
+To promote to a real gateway, layer on top without touching `orders/`'s contract:
+- `payment/` — `POST /v1/payment/checkout` (Toss/Stripe session); writes the returned `paymentIntentId` onto the existing `Order`.
+- `webhooks/` — `POST /webhooks/toss`, `POST /webhooks/stripe` (signature-verified, no auth guard). Webhook advances `Order.status` out of `pending`.
+- (Optional) `cart/` — `GET/POST/DELETE /v1/cart` (user JWT) once carts need to survive across devices.
+
+All modules share the same `PrismaService`. Order state ends up updated by webhooks and read by both admin and user surfaces.
 
 ### Mobile native app (RN / iOS)
 Calls the same `/v1/*` endpoints. No new server code unless mobile needs new endpoints. If mobile needs auth, the same `UserGuard` works.
@@ -479,7 +493,7 @@ Add `@nestjs/bull` (Redis) or Temporal worker. Same `PrismaService`, same module
 ## Out of Scope (For Now)
 
 - **Auth implementation** — guards are no-op stubs
-- **Payment integration** — modules planned but not built
+- **Payment gateway integration** — the `orders/` module exists but runs as an MVP (no Toss/Stripe session, no card capture on-page). Customers see a notice that the KLOW team will follow up by email; operators move the order through the `OrderStatus` enum manually in the admin.
 - **Legacy `KLOW/` retirement** — still shipping its mock-based prototype; `klow_web` is the real public client going forward.
 - **Production deployment / CI/CD** — local dev only
 - **Type sharing across repos** — `klow_admin/src/lib/constants.ts`, `klow_server/src/common/constants.ts`, and `klow_web/src/lib/types.ts` are intentional hand-mirrored copies. A future shared workspace package will replace this.
