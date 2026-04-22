@@ -49,7 +49,7 @@ const CONCERN_EXPANSION: Record<string, string[]> = {
   pore: ['pore', 'dead_skin', 'acne'],
   whitening: ['whitening', 'brightening'],
   antiaging: ['antiaging', 'wrinkle', 'elasticity'],
-  glow: ['glow', 'brightening', 'hydration'],
+  glass_skin: ['glass_skin', 'brightening', 'hydration'],
 };
 ```
 
@@ -108,4 +108,4 @@ const CONCERN_EXPANSION: Record<string, string[]> = {
 | `dead_skin` | 각질 |
 | `whitening` | 미백 |
 | `antiaging` | 안티에이징 |
-| `glow` | 광채 |
+| `glass_skin` | 광채 (Glass-Skin) |
