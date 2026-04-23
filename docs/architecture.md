@@ -283,7 +283,7 @@ EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 
 | Model           | Purpose                                                                 |
 |-----------------|-------------------------------------------------------------------------|
-| `Product`       | K-beauty product. Carries FOMO fields (`stockLeft`, `viewersNow`, `totalSold`), merchandising flags (`isHero`, `isLoss`, `tip`), persona tags (`recommendedFor`, `concerns`), and detail-page content (`detailImages`, `detailDescription`, `volume`, `videoClipUrl`, `sourceUrl`). Two JSON arrays power the detail page's ingredient tab (each capped at 3): `keyIngredients` (`{name, effect}[]` — Core Ingredients 카드) and `empathyCards` (`{title, subtitle, ingredients[]}[]` — "이런 사람들!" 탭. 비어 있으면 `klow_web` 상세에서 탭 자체가 숨겨지고 Core Ingredients만 노출). `brand` is a denormalized string cache of the linked `Brand.name`; `brandId` is the authoritative FK. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
+| `Product`       | K-beauty product. Carries FOMO fields (`stockLeft`, `viewersNow`, `totalSold`), merchandising flags (`isHero`, `isLoss`, `tip`), persona tags (`recommendedFor`, `concerns`), and detail-page content (`detailImages`, `detailDescription`, `volume`, `videoClipUrl`, `sourceUrl`). Two JSON arrays power the detail page's ingredient tab (each capped at 3): `keyIngredients` (`{name, effect}[]` — Core Ingredients 카드) and `empathyCards` (`{title, subtitle, ingredients[]}[]` — "이런 사람들!" 탭. 비어 있으면 `klow_web` 상세에서 탭 자체가 숨겨지고 Core Ingredients만 노출). 화장품법 상품정보제공고시용 8개 문자열 필드(`manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone`, 모두 기본값 `""`) — 상세 페이지 하단 접이식 섹션에 노출, 자세한 내용은 Future Expansion > PG 심사 섹션. `brand` is a denormalized string cache of the linked `Brand.name`; `brandId` is the authoritative FK. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
 | `Brand`         | K-beauty brand. `name` is unique; `initial`, `tagline`, `logoUrl`, `order` power the admin's brand directory. Renames cascade into `Product.brand` inside a transaction. Delete detaches products (`brandId → null`) rather than blocking. |
 | `ShopSettings`  | Singleton row (`id = "default"`) storing merchandising config. Today only `todaysPickConcern` (a `CONCERNS` value). Created lazily on first read. Powers `/v1/shop/today`. |
 | `Creator`       | Influencer profile: handle, story, profile/hero images, social URLs, follower count, `skinType`, `concerns`, `country`, `heroVideoUrl`. |
@@ -508,6 +508,18 @@ The module pattern was chosen specifically so that the next four things are addi
 - **비밀번호 재설정**: `/login` 페이지에 링크만 있고 실제 reset 플로우는 미구현.
 - **reCAPTCHA / rate limit**: 회원가입 요청 스팸 방지책은 현재 없음.
 - **만료 Session / EmailVerification 정리 크론**: 현재 없음. 테이블이 무한히 늘지 않도록 주기 작업 추가 필요.
+
+### PG 심사 / 전자상거래법 compliance (scaffolding)
+
+결제 연동 전 PG사 심사에 요구되는 표시·동의·정보제공 요소들은 **구축 완료**. 실제 Toss/Stripe 연동 이전에도 심사 제출이 가능한 상태.
+
+- **전역 푸터** (`klow_web/src/components/layout/Footer.tsx`) — 사업자정보, 고객센터(운영시간 포함), 법적 페이지 링크, ftc.go.kr 통신판매업 조회 링크. Feed(`/`) / 로그인 / 회원가입 / 체크아웃에서는 숨김(자체 레이아웃 또는 fullscreen). `BottomTabBar`의 `VISIBLE_PATHS`를 import해 탭 바가 있는 라우트에서는 겹치지 않게 `mb-[64px]` 처리.
+- **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import.
+- **체크아웃 동의** (`/checkout`) — 주문 검토 · 환불정책 · 결제/배송 처리자 개인정보 제공 3개 체크박스 필수. 모두 체크해야 "Place order" 버튼 활성.
+- **FAQ 페이지** (`/faq`) — 주문·배송·환불·결제 4개 카테고리 아코디언. `/my` Help center 메뉴에서 링크.
+- **상품정보제공고시** (화장품법 대응) — `Product` 모델에 `manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone` 8개 String 필드(기본값 `""`) 추가. klow_admin 상품 폼에서 입력, klow_web 상품 상세 하단 접이식 "Product information notice" 섹션에서 표시. 비워두면 "contact seller" fallback.
+
+아직 남은 것: PG사 선정 및 실제 결제 연동 — Payment system 섹션 참고.
 
 ### Payment system
 
