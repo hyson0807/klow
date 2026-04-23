@@ -34,7 +34,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 |-------------------------------|---------------------------------------------------------------------------------------------------------|
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
-| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload, concierge) |
+| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload, concierge, orders, auth, cart) |
 | Server validation (zod)       | `klow_server/src/common/validation.ts`                                                                  |
 | Shared product field selects  | `klow_server/src/modules/products/product-selects.ts`                                                   |
 | Admin pages                   | `klow_admin/src/app/` (products, brands, creators, videos, reviews, concierge-requests, shop-settings)  |
@@ -44,6 +44,8 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
 | klow_web 인증 훅              | `klow_web/src/hooks/useSession.ts`, `klow_web/src/hooks/useAuthGate.ts`                                 |
+| klow_web 세션 동기화          | `klow_web/src/hooks/useSessionSync.ts` (+ `components/common/SessionSyncMount.tsx` 레이아웃 마운트)      |
+| klow_web 장바구니 스토어      | `klow_web/src/store/useCartStore.ts` (`syncedUserId` 기반 자동 서버 replication)                        |
 | klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
 | 서버 인증 모듈                | `klow_server/src/modules/auth/` (service, controller, password/session/email, google strategy)         |
 | UserGuard + CurrentUser       | `klow_server/src/common/guards/user.guard.ts`, `klow_server/src/common/decorators/current-user.decorator.ts` |
@@ -61,6 +63,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 - **R2 quirk:** AWS SDK v3.729+ adds CRC32 checksums that R2 cannot validate. `r2.service.ts` sets `requestChecksumCalculation: 'WHEN_REQUIRED'` to disable this. If presigned uploads break, check this first.
 - **CORS:** `klow_server/src/main.ts` already whitelists `http://localhost:*` via regex, so both admin (3000) and klow_web (3001) work out of the box. Swap to an explicit origin list before deploy.
 - **Auth (user):** 이메일+비밀번호(OTP 이메일 인증) + Google OAuth. DB `Session` + httpOnly 쿠키(`klow_sid`). `UserGuard`는 실제 세션 검증(klow_server `src/modules/auth/`). klow_web은 `useSession` / `useAuthGate` 훅으로 게이트한다. 자세한 규칙은 `docs/architecture.md`의 **User Authentication** 섹션 참고.
+- **User profile & cart 영속화:** `User`에 `country/skinType/concerns` + `CartItem` 테이블. 비로그인 상태에서 입력된 온보딩/카트는 클라이언트 `localStorage`에만 있다가, 로그인 직후 `SessionSyncMount` 훅이 `PATCH /v1/auth/me` + `PUT /v1/cart/merge`(수량 max-merge)로 서버에 승격하고 이후에는 카트 스토어 mutation이 자동으로 `/v1/cart/*`에 replicate된다. Me 탭은 닉네임·국가·피부타입·고민 편집을 `PATCH /v1/auth/me`로 처리한다.
 - **Auth (admin):** `AdminGuard`는 여전히 no-op 스텁. 이후 NextAuth 등으로 배선 예정.
 
 ## Admin UI Convention — Toast Feedback (required)

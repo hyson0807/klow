@@ -160,8 +160,8 @@ This is the single place to edit if list payload shape needs to change.
 | Surface  | Prefix     | Caller                  | Methods                       | Guard                                                |
 |----------|------------|-------------------------|-------------------------------|-------------------------------------------------------|
 | Admin    | `/admin/*` | klow_admin              | GET / POST / PATCH / DELETE   | `AdminGuard` (stub)                                   |
-| Public   | `/v1/*`    | klow_web                | GET + POST                    | 엔드포인트별 — 읽기 계열은 없음, 주문/인증·me는 `UserGuard` |
-| Auth     | `/v1/auth/*` | klow_web              | GET + POST                    | 쿠키 기반 세션(쓰기 엔드포인트는 자체적으로 검증)      |
+| Public   | `/v1/*`    | klow_web                | GET + POST + PATCH + PUT + DELETE | 엔드포인트별 — 읽기 계열은 없음, 주문 / `PATCH /auth/me` / `/cart/*`는 `UserGuard` |
+| Auth     | `/v1/auth/*` | klow_web              | GET + POST + PATCH            | 쿠키 기반 세션(쓰기 엔드포인트는 자체적으로 검증)      |
 
 ### Endpoints
 
@@ -234,16 +234,24 @@ This is the single place to edit if list payload shape needs to change.
 - `PATCH  /admin/concierge-requests/:id` — update status (`pending` → `replied` → `completed`)
 - `DELETE /admin/concierge-requests/:id`
 
+**Cart** — 로그인 사용자 장바구니 (전 엔드포인트 `UserGuard` 필수)
+- `GET    /v1/cart` → `{ items: CartLine[] }`. `CartLine`은 `{ productId, quantity, name, brand, image, price, salePrice, discount }` — 현재 Product 값으로 조인하여 반환한다(저장된 가격이 아니라 서버의 최신 가격이 기준).
+- `POST   /v1/cart` — body `{ productId, quantity }`. `(userId, productId)` upsert. FK 위반(`P2003`)은 `404 product not found`로 변환. 응답은 `{ ok: true }`(클라이언트가 낙관적 업데이트로 선반영하므로 전체 리스트를 돌려주지 않는다).
+- `DELETE /v1/cart/:productId` — 단일 라인 삭제. 없어도 조용히 통과. `{ ok: true }`.
+- `DELETE /v1/cart` — 전체 비우기. `{ ok: true }`.
+- `PUT    /v1/cart/merge` — body `{ items: [{productId, quantity}] }` (최대 100). 로그인 직후 로컬 카트를 서버로 끌어올릴 때 사용. 존재하지 않는 productId는 무시, 동일 productId는 중복 제거, 수량은 `max(local, server)`로 병합(다른 기기에서 추가한 아이템이 덮어쓰여 사라지지 않도록). 단일 `$transaction`으로 실행 후 최종 카트 `{ items }`를 반환.
+
 **Upload**
 - `POST   /admin/upload` → `{ uploadUrl, publicUrl, key }` (R2 presigned PUT URL, valid 10 min). Allowed content types: `image/{webp,jpeg,png,gif}` or `video/{mp4,quicktime,webm}` — SVG is intentionally rejected (XSS risk).
 
 **Auth** — 이메일/비밀번호(OTP 인증) + Google OAuth, DB 세션 + httpOnly 쿠키
 - `POST   /v1/auth/send-verification` — body `{ email }`. 6자리 OTP를 해시해 `EmailVerification`에 저장하고 Resend로 발송. `RESEND_API_KEY`가 없으면 서버 콘솔에 코드 로깅(dev 폴백).
 - `POST   /v1/auth/verify-email` — body `{ email, code }`. OTP 검증 성공 시 15분짜리 `signupToken`(opaque)을 발급. 5회 실패 시 해당 OTP 레코드 잠금.
-- `POST   /v1/auth/signup` — body `{ email, password, nickname, emailVerificationToken }`. 비밀번호는 `argon2id` 해시. 성공 시 `Session` 생성 + `klow_sid` 쿠키 설정 + `{ user }` 반환.
+- `POST   /v1/auth/signup` — body `{ email, password, nickname, emailVerificationToken, country?, skinType?, concerns? }`. 비밀번호는 `argon2id` 해시. 비로그인 상태에서 수집한 스킨 프로필(`country/skinType/concerns`)이 있으면 가입과 동시에 저장. 성공 시 `Session` 생성 + `klow_sid` 쿠키 설정 + `{ user }` 반환.
 - `POST   /v1/auth/login` — body `{ email, password }`. argon2 검증 후 세션 쿠키 설정 + `{ user }` 반환.
 - `POST   /v1/auth/logout` — 현재 세션 쿠키를 읽어 DB `Session` 삭제 + 쿠키 클리어.
-- `GET    /v1/auth/me` — `UserGuard` 없이 쿠키만 확인. 세션 있으면 `{ user }`, 없으면 401.
+- `GET    /v1/auth/me` — `UserGuard` 없이 쿠키만 확인. 세션 있으면 `{ user }`(스킨 프로필 포함), 없으면 401.
+- `PATCH  /v1/auth/me` — **`UserGuard` 필수**. body `{ nickname?, country?, skinType?, concerns? }`. 각 필드는 `undefined`면 유지, `null`이면 초기화, 값이 있으면 덮어쓰기. `concerns`는 `CONCERNS` enum으로 검증.
 - `GET    /v1/auth/google?returnTo=/...` — returnTo를 서버 쿠키(`klow_return_to`, 10분)에 임시 저장 후 `/v1/auth/google/authorize`로 302. passport-google-oauth20이 Google 동의 화면으로 리다이렉트.
 - `GET    /v1/auth/google/callback` — Google에서 돌아온 code 검증 → `findOrCreateGoogleUser` (googleId 우선, 없으면 email 매칭, 없으면 신규) → 세션 쿠키 설정 → `FRONTEND_URL + returnTo`로 302.
 
@@ -263,6 +271,7 @@ Brand (1) ──< Product (N) ──< Review (N) >── User (1, nullable)
 User (1) ──< Session (N)           (Session.token은 opaque, 쿠키로 전달)
 User (1) ──< Order (N, nullable)   (신규 주문은 userId 필수; 기존 게스트 주문은 null 보존)
 User (1) ──< Review (N, nullable)
+User (1) ──< CartItem (N) >── Product (1)   (userId+productId 유니크, 양쪽 cascade)
 
 Order (1) ──< OrderItem (N)       (OrderItem.productId is NOT a FK — snapshots survive product deletion)
 ShopSettings (singleton, id = "default")
@@ -284,9 +293,10 @@ EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
 | `Order` | Checkout submission (MVP — no payment gateway). Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), plus server-computed `subtotal` and `itemCount` and an `OrderStatus` enum. Indexed on `status`, `createdAt`, `email`. |
 | `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice` are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
-| `User` | 공개 사용자 계정. `email` unique, `passwordHash?`(Google-only 사용자는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`. `Order.userId` / `Review.userId`와 nullable 관계(기존 레코드 보존). |
+| `User` | 공개 사용자 계정. `email` unique, `passwordHash?`(Google-only 사용자는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`. 스킨 프로필 필드(`country?`, `skinType?`, `concerns: String[]`)는 비로그인 상태에서 입력된 값을 로그인 시 `PATCH /v1/auth/me` 또는 회원가입 payload로 끌어올려 저장한다. `Order.userId` / `Review.userId`와 nullable 관계(기존 레코드 보존). |
 | `Session` | DB 기반 세션. `token`(opaque 32-byte base64url) unique, `expiresAt`, `userAgent`/`ip`. `klow_sid` 쿠키로 전달. 로그아웃은 행 삭제로 즉시 무효화. User 삭제 시 cascade. |
 | `EmailVerification` | 회원가입용 OTP와 `signupToken`을 둘 다 담는 임시 테이블(`purpose` 컬럼으로 구분: `signup-otp` / `signup-token`). 코드/토큰은 argon2로 해시. `expiresAt`(OTP 10분, 토큰 15분), `consumedAt`, `attempts`(5회 초과 시 잠금). 현재 만료 로우 정리 크론은 없음. |
+| `CartItem` | 로그인 사용자의 장바구니 라인. `(userId, productId)` 유니크 + `quantity`. `User` / `Product` 삭제 시 cascade. 비로그인 카트는 클라이언트 `useCartStore`(localStorage) 에만 존재하고, 로그인 직후 `PUT /v1/cart/merge`가 수량을 `max(local, server)`로 병합해 서버로 승격한다. 이후 `add/remove/update`는 낙관적 로컬 업데이트 + 백그라운드 `/v1/cart/*` 호출로 단일 소스를 유지. |
 
 ### Enums (Postgres-native)
 
