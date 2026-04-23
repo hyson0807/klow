@@ -40,7 +40,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | Admin pages                   | `klow_admin/src/app/` (products, brands, creators, videos, reviews, concierge-requests, shop-settings)  |
 | Admin API client              | `klow_admin/src/lib/api.ts`                                                                             |
 | Admin upload helper           | `klow_admin/src/lib/upload.ts`                                                                          |
-| klow_web pages                | `klow_web/src/app/` (feed, product, creator, shop, discover, concierge, my)                             |
+| klow_web pages                | `klow_web/src/app/` (feed, videos, product, creator, shop, discover, concierge, cart, checkout, my)     |
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
 | klow_web 인증 훅              | `klow_web/src/hooks/useSession.ts`, `klow_web/src/hooks/useAuthGate.ts`                                 |
