@@ -18,8 +18,9 @@ KLOW is a TikTok-style K-beauty commerce platform. The stack is split across **f
                 │  klow_server               │
                 │  NestJS 10  (port 4000)    │
                 │  • zod validation          │
-                │  • Admin/User guards       │
-                │  • REST API                │
+                │  • AdminGuard(stub) /      │
+                │    UserGuard(session 쿠키) │
+                │  • REST API + /v1/auth/*   │
                 └────┬───────────────────┬───┘
                      │                   │
                      ▼                   ▼
@@ -81,10 +82,13 @@ klow_server/
 │   │   ├── validation.ts            # zod schemas (ProductInput, BrandInput, ShopSettingsInput, ...)
 │   │   ├── zod-validation.pipe.ts   # ZodValidationPipe<T> generic pipe
 │   │   ├── prisma-utils.ts          # orNotFound() helper for P2025
+│   │   ├── decorators/
+│   │   │   └── current-user.decorator.ts  # @CurrentUser() — UserGuard가 붙은 라우트 전용
 │   │   └── guards/
 │   │       ├── admin.guard.ts       # AdminGuard (no-op stub for now)
-│   │       └── user.guard.ts        # UserGuard (no-op stub for now)
+│   │       └── user.guard.ts        # UserGuard — klow_sid 쿠키 → Session 검증 → req.user
 │   └── modules/
+│       ├── auth/                    # 이메일/비밀번호(OTP) + Google OAuth + 세션
 │       ├── products/
 │       │   ├── products.module.ts
 │       │   ├── products.service.ts          # all Product business logic
@@ -153,10 +157,11 @@ This is the single place to edit if list payload shape needs to change.
 
 ## URL Surfaces
 
-| Surface  | Prefix     | Caller                  | Methods                       | Guard                   |
-|----------|------------|-------------------------|-------------------------------|-------------------------|
-| Admin    | `/admin/*` | klow_admin              | GET / POST / PATCH / DELETE   | `AdminGuard` (stub)     |
-| Public   | `/v1/*`    | klow_web                | GET + POST (concierge)        | none / `UserGuard` later |
+| Surface  | Prefix     | Caller                  | Methods                       | Guard                                                |
+|----------|------------|-------------------------|-------------------------------|-------------------------------------------------------|
+| Admin    | `/admin/*` | klow_admin              | GET / POST / PATCH / DELETE   | `AdminGuard` (stub)                                   |
+| Public   | `/v1/*`    | klow_web                | GET + POST                    | 엔드포인트별 — 읽기 계열은 없음, 주문/인증·me는 `UserGuard` |
+| Auth     | `/v1/auth/*` | klow_web              | GET + POST                    | 쿠키 기반 세션(쓰기 엔드포인트는 자체적으로 검증)      |
 
 ### Endpoints
 
@@ -218,7 +223,7 @@ This is the single place to edit if list payload shape needs to change.
   - `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) is applied **only when a single concern is supplied**. With multi-select, the user's exact choices are honored without broadening.
 
 **Orders** — checkout MVP (no payment gateway; team emails the customer after submission)
-- `POST   /v1/orders` — public, no guard. Body: `{ email, fullName, phone, country, addressLine1, addressLine2?, city, postalCode, note?, items: [{productId, quantity}] }`. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, and computes `subtotal` + `itemCount` itself. Lookup + insert share a `$transaction`. Returns `{ id }`.
+- `POST   /v1/orders` — **requires `UserGuard`**. Body: `{ fullName, phone, country, addressLine1, addressLine2?, city, postalCode, note?, items: [{productId, quantity}] }`. `email` / `userId`는 세션에서 주입되므로 클라이언트가 보내지 않는다. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, and computes `subtotal` + `itemCount` itself. Lookup + insert share a `$transaction`. Returns `{ id }`.
 - `GET    /admin/orders` (filters: `?status=pending|processing|shipped|completed|cancelled`, `?take=N`, `?skip=N`; returns orders with `items[]` included, sorted by `createdAt desc, id desc` for stable pagination)
 - `GET    /admin/orders/:id`
 - `PATCH  /admin/orders/:id/status` — body `{ status }`, enum `pending → processing → shipped → completed | cancelled`
@@ -232,6 +237,18 @@ This is the single place to edit if list payload shape needs to change.
 **Upload**
 - `POST   /admin/upload` → `{ uploadUrl, publicUrl, key }` (R2 presigned PUT URL, valid 10 min). Allowed content types: `image/{webp,jpeg,png,gif}` or `video/{mp4,quicktime,webm}` — SVG is intentionally rejected (XSS risk).
 
+**Auth** — 이메일/비밀번호(OTP 인증) + Google OAuth, DB 세션 + httpOnly 쿠키
+- `POST   /v1/auth/send-verification` — body `{ email }`. 6자리 OTP를 해시해 `EmailVerification`에 저장하고 Resend로 발송. `RESEND_API_KEY`가 없으면 서버 콘솔에 코드 로깅(dev 폴백).
+- `POST   /v1/auth/verify-email` — body `{ email, code }`. OTP 검증 성공 시 15분짜리 `signupToken`(opaque)을 발급. 5회 실패 시 해당 OTP 레코드 잠금.
+- `POST   /v1/auth/signup` — body `{ email, password, nickname, emailVerificationToken }`. 비밀번호는 `argon2id` 해시. 성공 시 `Session` 생성 + `klow_sid` 쿠키 설정 + `{ user }` 반환.
+- `POST   /v1/auth/login` — body `{ email, password }`. argon2 검증 후 세션 쿠키 설정 + `{ user }` 반환.
+- `POST   /v1/auth/logout` — 현재 세션 쿠키를 읽어 DB `Session` 삭제 + 쿠키 클리어.
+- `GET    /v1/auth/me` — `UserGuard` 없이 쿠키만 확인. 세션 있으면 `{ user }`, 없으면 401.
+- `GET    /v1/auth/google?returnTo=/...` — returnTo를 서버 쿠키(`klow_return_to`, 10분)에 임시 저장 후 `/v1/auth/google/authorize`로 302. passport-google-oauth20이 Google 동의 화면으로 리다이렉트.
+- `GET    /v1/auth/google/callback` — Google에서 돌아온 code 검증 → `findOrCreateGoogleUser` (googleId 우선, 없으면 email 매칭, 없으면 신규) → 세션 쿠키 설정 → `FRONTEND_URL + returnTo`로 302.
+
+`SESSION_COOKIE_NAME` (기본 `klow_sid`), `SESSION_TTL_DAYS` (기본 30), `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL`, `FRONTEND_URL`, `RESEND_API_KEY`, `EMAIL_FROM`은 `klow_server/.env`에서 설정. Google 자격증명이 비어 있으면 부팅은 되지만 `/v1/auth/google`에 들어가면 passport가 실패한다.
+
 ---
 
 ## Data Model
@@ -239,13 +256,18 @@ This is the single place to edit if list payload shape needs to change.
 ### Relationship Diagram
 
 ```
-Brand (1) ──< Product (N) ──< Review (N)
+Brand (1) ──< Product (N) ──< Review (N) >── User (1, nullable)
                  │
                  └──< VideoProduct (N) ── Video (N) ──> Creator (1)
+
+User (1) ──< Session (N)           (Session.token은 opaque, 쿠키로 전달)
+User (1) ──< Order (N, nullable)   (신규 주문은 userId 필수; 기존 게스트 주문은 null 보존)
+User (1) ──< Review (N, nullable)
 
 Order (1) ──< OrderItem (N)       (OrderItem.productId is NOT a FK — snapshots survive product deletion)
 ShopSettings (singleton, id = "default")
 ConciergeRequest (standalone — no FK relations)
+EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 ```
 
 ### Entities
@@ -262,6 +284,9 @@ ConciergeRequest (standalone — no FK relations)
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
 | `Order` | Checkout submission (MVP — no payment gateway). Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), plus server-computed `subtotal` and `itemCount` and an `OrderStatus` enum. Indexed on `status`, `createdAt`, `email`. |
 | `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice` are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
+| `User` | 공개 사용자 계정. `email` unique, `passwordHash?`(Google-only 사용자는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`. `Order.userId` / `Review.userId`와 nullable 관계(기존 레코드 보존). |
+| `Session` | DB 기반 세션. `token`(opaque 32-byte base64url) unique, `expiresAt`, `userAgent`/`ip`. `klow_sid` 쿠키로 전달. 로그아웃은 행 삭제로 즉시 무효화. User 삭제 시 cascade. |
+| `EmailVerification` | 회원가입용 OTP와 `signupToken`을 둘 다 담는 임시 테이블(`purpose` 컬럼으로 구분: `signup-otp` / `signup-token`). 코드/토큰은 argon2로 해시. `expiresAt`(OTP 10분, 토큰 15분), `consumedAt`, `attempts`(5회 초과 시 잠금). 현재 만료 로우 정리 크론은 없음. |
 
 ### Enums (Postgres-native)
 
@@ -465,11 +490,14 @@ npx prisma studio          # opens GUI at http://localhost:5555
 The module pattern was chosen specifically so that the next four things are additive, not refactors:
 
 ### Authentication
-Replace the no-op stubs in `klow_server/src/common/guards/`:
-- `AdminGuard` → verify NextAuth cookie / session token from klow_admin
-- `UserGuard` → verify user JWT from klow_web
 
-Route signatures don't change. Only the guard implementations change.
+**User-side 인증은 구축 완료** — `klow_server/src/modules/auth/`가 이메일+비밀번호(OTP 인증) + Google OAuth를 제공하고, DB `Session` + httpOnly 쿠키(`klow_sid`)로 세션을 관리한다. `UserGuard`는 쿠키에서 세션을 조회해 `request.user`에 `PublicUser`를 실어주며, `@CurrentUser()` 데코레이터로 핸들러가 꺼내 쓴다. klow_web은 네 진입점(Cart 탭, Me 탭, 상품 상세의 Add to cart / Buy now)에 `useAuthGate` / `useRequireAuth` 훅으로 게이트를 건다.
+
+아직 남은 것:
+- **AdminGuard**: 여전히 no-op 스텁. klow_admin 쪽 NextAuth 등으로 붙일 예정.
+- **비밀번호 재설정**: `/login` 페이지에 링크만 있고 실제 reset 플로우는 미구현.
+- **reCAPTCHA / rate limit**: 회원가입 요청 스팸 방지책은 현재 없음.
+- **만료 Session / EmailVerification 정리 크론**: 현재 없음. 테이블이 무한히 늘지 않도록 주기 작업 추가 필요.
 
 ### Payment system
 
@@ -492,7 +520,8 @@ Add `@nestjs/bull` (Redis) or Temporal worker. Same `PrismaService`, same module
 
 ## Out of Scope (For Now)
 
-- **Auth implementation** — guards are no-op stubs
+- **Admin auth** — `AdminGuard`는 아직 no-op 스텁(사용자 인증은 구축 완료).
+- **비밀번호 재설정 / reCAPTCHA / auth rate-limit / 만료 세션 정리 크론** — Authentication 섹션 참고.
 - **Payment gateway integration** — the `orders/` module exists but runs as an MVP (no Toss/Stripe session, no card capture on-page). Customers see a notice that the KLOW team will follow up by email; operators move the order through the `OrderStatus` enum manually in the admin.
 - **Legacy `KLOW/` retirement** — still shipping its mock-based prototype; `klow_web` is the real public client going forward.
 - **Production deployment / CI/CD** — local dev only

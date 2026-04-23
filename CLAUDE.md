@@ -43,6 +43,10 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | klow_web pages                | `klow_web/src/app/` (feed, product, creator, shop, discover, concierge, my)                             |
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
+| klow_web 인증 훅              | `klow_web/src/hooks/useSession.ts`, `klow_web/src/hooks/useAuthGate.ts`                                 |
+| klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
+| 서버 인증 모듈                | `klow_server/src/modules/auth/` (service, controller, password/session/email, google strategy)         |
+| UserGuard + CurrentUser       | `klow_server/src/common/guards/user.guard.ts`, `klow_server/src/common/decorators/current-user.decorator.ts` |
 | Admin toast feedback          | `klow_admin/src/components/Toast.tsx` (`useToast()`) + wired into `klow_admin/src/hooks/useFormState.ts` |
 | Legacy KLOW mock data         | `KLOW/data/mock.ts`                                                                                     |
 | Legacy KLOW pages             | `KLOW/app/`                                                                                             |
@@ -56,7 +60,8 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 - **Object storage:** Cloudflare R2 bucket `klow`, public base `https://pub-cac46f90807b402a9079c58c5e8287bb.r2.dev`
 - **R2 quirk:** AWS SDK v3.729+ adds CRC32 checksums that R2 cannot validate. `r2.service.ts` sets `requestChecksumCalculation: 'WHEN_REQUIRED'` to disable this. If presigned uploads break, check this first.
 - **CORS:** `klow_server/src/main.ts` already whitelists `http://localhost:*` via regex, so both admin (3000) and klow_web (3001) work out of the box. Swap to an explicit origin list before deploy.
-- **Auth:** Currently NONE (admin and user guards are no-op stubs in `klow_server/src/common/guards/`). Will be added later.
+- **Auth (user):** 이메일+비밀번호(OTP 이메일 인증) + Google OAuth. DB `Session` + httpOnly 쿠키(`klow_sid`). `UserGuard`는 실제 세션 검증(klow_server `src/modules/auth/`). klow_web은 `useSession` / `useAuthGate` 훅으로 게이트한다. 자세한 규칙은 `docs/architecture.md`의 **User Authentication** 섹션 참고.
+- **Auth (admin):** `AdminGuard`는 여전히 no-op 스텁. 이후 NextAuth 등으로 배선 예정.
 
 ## Admin UI Convention — Toast Feedback (required)
 
