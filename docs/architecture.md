@@ -520,6 +520,7 @@ The module pattern was chosen specifically so that the next four things are addi
 - **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import.
 - **체크아웃 동의** (`/checkout`) — 주문 검토 · 환불정책 · 결제/배송 처리자 개인정보 제공 3개 체크박스 필수. 모두 체크해야 "Place order" 버튼 활성.
 - **FAQ 페이지** (`/faq`) — 주문·배송·환불·결제 4개 카테고리 아코디언. `/my` Help center 메뉴에서 링크.
+- **상품 상세 환불·배송 안내 카드** (`klow_web/src/app/product/[id]/_components/ShippingRefundInfo.tsx`) — 배송(국제배송 포함·2–3주)·반품/교환(7일 청약철회)·환불(영업일 3일) 요약 + `/legal/refund` 본문 링크. 가이드의 "실물 상품에 환불 정보, 배송/교환 정보 노출" 요건 대응.
 - **상품정보제공고시** (화장품법 대응) — `Product` 모델에 `manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone` 8개 String 필드(기본값 `""`) 추가. klow_admin 상품 폼에서 입력, klow_web 상품 상세 하단 접이식 "Product information notice" 섹션에서 표시. 비워두면 "contact seller" fallback.
 
 아직 남은 것: PG사 선정 및 실제 결제 연동 — Payment system 섹션 참고.
