@@ -516,7 +516,7 @@ The module pattern was chosen specifically so that the next four things are addi
 
 결제 연동 전 PG사 심사에 요구되는 표시·동의·정보제공 요소들은 **구축 완료**. 실제 Toss/Stripe 연동 이전에도 심사 제출이 가능한 상태.
 
-- **전역 푸터** (`klow_web/src/components/layout/Footer.tsx`) — 사업자정보, 고객센터(운영시간 포함), 법적 페이지 링크, ftc.go.kr 통신판매업 조회 링크. Feed(`/`) / 로그인 / 회원가입 / 체크아웃에서는 숨김(자체 레이아웃 또는 fullscreen). `BottomTabBar`의 `VISIBLE_PATHS`를 import해 탭 바가 있는 라우트에서는 겹치지 않게 `mb-[64px]` 처리.
+- **전역 푸터** (`klow_web/src/components/layout/Footer.tsx`) — 사업자정보, 고객센터(운영시간 포함), 법적 페이지 링크, ftc.go.kr 통신판매업 조회 링크. 로그인 / 회원가입에서만 숨김(fullscreen 레이아웃). 메인(`/`)·체크아웃 포함 모든 일반 라우트에서 노출 — PG 심사 가이드의 "메인+결제 페이지 상시 노출" 요건 대응. `BottomTabBar`의 `VISIBLE_PATHS`를 import해 탭 바가 있는 라우트에는 `mb-[64px]`, 체크아웃의 fixed `Place order` CTA가 있는 라우트에는 `mb-[96px]` 처리해 겹치지 않게 한다.
 - **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import.
 - **체크아웃 동의** (`/checkout`) — 주문 검토 · 환불정책 · 결제/배송 처리자 개인정보 제공 3개 체크박스 필수. 모두 체크해야 "Place order" 버튼 활성.
 - **FAQ 페이지** (`/faq`) — 주문·배송·환불·결제 4개 카테고리 아코디언. `/my` Help center 메뉴에서 링크.
