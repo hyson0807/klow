@@ -34,12 +34,17 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 |-------------------------------|---------------------------------------------------------------------------------------------------------|
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
-| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload, concierge, orders, auth, cart) |
+| Server modules                | `klow_server/src/modules/` (products, brands, creators, videos, reviews, shop, discover, stats, upload, concierge, orders, auth, admin-auth, cart) |
 | Server validation (zod)       | `klow_server/src/common/validation.ts`                                                                  |
 | Shared product field selects  | `klow_server/src/modules/products/product-selects.ts`                                                   |
-| Admin pages                   | `klow_admin/src/app/` (products, brands, creators, videos, reviews, concierge-requests, shop-settings)  |
-| Admin API client              | `klow_admin/src/lib/api.ts`                                                                             |
+| Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, creators, videos, reviews, orders, concierge-requests, shop-settings, admins) |
+| Admin pages (공개)            | `klow_admin/src/app/login/`, `klow_admin/src/app/accept-invite/[token]/`                                |
+| Admin API client              | `klow_admin/src/lib/api.ts` (credentials:'include' + 401 자동 /login 리다이렉트)                         |
 | Admin upload helper           | `klow_admin/src/lib/upload.ts`                                                                          |
+| Admin 인증 클라이언트         | `klow_admin/src/lib/admin-auth.ts`, `klow_admin/src/hooks/useCurrentAdmin.ts`, `klow_admin/src/hooks/useIdleLogout.ts` |
+| Admin 인증 모듈               | `klow_server/src/modules/admin-auth/` (service, controller, admins controller, totp, invitation, audit interceptor) |
+| AdminGuard + CurrentAdmin     | `klow_server/src/common/guards/admin.guard.ts`, `klow_server/src/common/guards/super-admin.guard.ts`, `klow_server/src/common/decorators/current-admin.decorator.ts` |
+| Admin 시드 스크립트           | `klow_server/prisma/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
 | klow_web pages                | `klow_web/src/app/` (feed, videos, product, creator, shop, discover, concierge, cart, checkout, my)     |
 | klow_web API client           | `klow_web/src/lib/api.ts`                                                                               |
 | klow_web TanStack Query hooks | `klow_web/src/hooks/`                                                                                   |
@@ -64,7 +69,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 - **CORS:** `klow_server/src/main.ts` already whitelists `http://localhost:*` via regex, so both admin (3000) and klow_web (3001) work out of the box. Swap to an explicit origin list before deploy.
 - **Auth (user):** 이메일+비밀번호(OTP 이메일 인증) + Google OAuth. DB `Session` + httpOnly 쿠키(`klow_sid`). `UserGuard`는 실제 세션 검증(klow_server `src/modules/auth/`). klow_web은 `useSession` / `useAuthGate` 훅으로 게이트한다. 자세한 규칙은 `docs/architecture.md`의 **User Authentication** 섹션 참고.
 - **User profile & cart 영속화:** `User`에 `country/skinType/concerns` + `CartItem` 테이블. 비로그인 상태에서 입력된 온보딩/카트는 클라이언트 `localStorage`에만 있다가, 로그인 직후 `SessionSyncMount` 훅이 `PATCH /v1/auth/me` + `PUT /v1/cart/merge`(수량 max-merge)로 서버에 승격하고 이후에는 카트 스토어 mutation이 자동으로 `/v1/cart/*`에 replicate된다. Me 탭은 닉네임·국가·피부타입·고민 편집을 `PATCH /v1/auth/me`로 처리한다.
-- **Auth (admin):** `AdminGuard`는 여전히 no-op 스텁. 이후 NextAuth 등으로 배선 예정.
+- **Auth (admin):** Email + Password (argon2id) + TOTP 2FA. `Admin` / `AdminSession` / `AdminInvitation` / `AdminLoginAttempt` / `AdminAuditLog` 테이블 + httpOnly 쿠키(`klow_admin_sid`, 24h, 30분 idle). `AdminGuard`가 실제 세션 검증(klow_server `src/modules/admin-auth/`). 슈퍼관리자 초대 기반 프로비저닝 (공개 가입 없음, 시드로 첫 super → `/admins`에서 초대). 로그인 실패 5회 → 15분 락. 모든 admin mutation은 `AdminAuditInterceptor`가 `AdminAuditLog`에 자동 기록(GET 제외, password/code/token 류 redact). TOTP secret은 AES-256-GCM 암호화(`ADMIN_TOTP_ENCRYPTION_KEY` 환경변수, 회전 금지).
 
 ## Admin UI Convention — Toast Feedback (required)
 
