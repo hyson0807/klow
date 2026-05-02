@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────────────────────────
 KLOW/
 klow_admin/
+klow_brand/
 klow_server/
 klow_web/
 
