@@ -2,10 +2,12 @@
 
 PG사 심사 통과 + 실제 결제 도입을 위해 각 레포에 추가/수정해야 할 항목과 결제 플로우를 큰 그림으로 정리한 문서. 세부 코드 설계는 진행하면서 PR 단위로 추가한다.
 
-- **PG사:** 포트원(PortOne) V2
-- **결제 수단:** 카드(필수, 카드사 심사 대상) · 카카오페이 · 네이버페이 등 포트원 채널로 추가
-- **통화:** KRW
-- **현재 상태:** `/v1/orders` MVP만 구축. 결제창 호출 자체가 코드에 없음 → 카드사 심사 차단 사유
+- **PG사:** 포트원(PortOne) V2 + 나이스정보통신(NICE) 채널
+- **결제 수단:** 카드(필수, 카드사 심사 대상). 외국인 발급 카드도 NICE 채널 단일 경로로 처리 — 카드사가 자체 환율로 사용자 통화 환산 청구.
+- **통화 (저장):** DB 의 모든 가격(`Product.price/salePrice`, `Order.subtotal`, `OrderItem.unitPrice`)은 **KRW 정수**. NICE 가 KRW 외 통화로 settle 하지 않기 때문.
+- **통화 (표시):** klow_web 은 외국인 타깃이므로 기본 USD 표시 (`formatPrice` = KRW → USD). 카트 합계·체크아웃 Total·Place order 버튼·주문 상세 Total 처럼 **실제 청구 금액이 중요한 자리에는 `formatKrw` 부제 동시 표시**. 환율은 `NEXT_PUBLIC_USD_KRW_RATE` 환경변수 (기본 1380, 수동 갱신).
+- **결제창 locale:** `requestPayment` 에 `locale: 'EN_US'` 명시해서 외국인이 PortOne overlay 를 영어로 본다.
+- **현재 상태:** PortOne SDK 호출 + `/v1/payment/prepare`·`/v1/payment/complete` + 환불까지 구현 완료. 가격 KRW 마이그레이션(`20260505120000_price_to_krw_backfill`) 적용 완료.
 
 ---
 
