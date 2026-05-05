@@ -35,7 +35,7 @@ KLOW is a TikTok-style K-beauty commerce platform. The stack is split across **f
 The server was extracted from `klow_admin` (which originally owned Prisma directly) for three reasons:
 
 1. **Single source of truth.** Multiple clients (admin + public webapp + future mobile) need the same data and the same validation rules. Duplicating Prisma + zod across three projects was already painful at three; it would be unmanageable at five.
-2. **Payment system is coming.** Cart/orders/webhooks need a stable home that's reachable from multiple clients and from third-party services (Toss, Stripe). They belong in the server, not in any one client.
+2. **Payment system already lives here.** Cart/orders/payment/webhooks need a stable home that's reachable from multiple clients and from PortOne callbacks. They belong in the server, not in any one client. (Today: PortOne V2 + 나이스정보통신 NICE 채널.)
 3. **Auth boundary.** Eventually admin will use NextAuth (cookies) and the public app will use user JWTs. Centralizing both behind one server with two URL prefixes (`/admin/*`, `/v1/*`) keeps that clean.
 
 ---
@@ -100,8 +100,9 @@ klow_server/
 │       ├── videos/                  # VideoProduct join transactions
 │       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
 │       ├── concierge/               # user K-beauty concierge requests (public POST + admin list/status)
-│       ├── orders/                  # checkout MVP (public POST + admin list/detail/status — no gateway yet)
-│       ├── shop/                    # ShopSettings singleton + /v1/shop/today
+│       ├── orders/                  # checkout (public POST + admin list/detail/status/refund); paid → PortOne refund on cancel
+│       ├── payment/                  # PortOne V2 prepare/complete + /webhooks/portone (Standard Webhooks 검증)
+│       ├── shop/                    # ShopSettings singleton + /v1/shop/today + /v1/shop/fx-rate
 │       ├── discover/                # read-only personalized recommendations (/v1/discover)
 │       ├── upload/                  # R2Service + presigned URL endpoint
 │       └── stats/                   # /admin/stats counts
@@ -124,7 +125,8 @@ Some modules intentionally diverge from the two-controller shape:
 - `discover/` — read-only personalization, has only `PublicDiscoverController` at `/v1/discover`.
 - `upload/` — admin-only presign endpoint, no public surface.
 - `concierge/` — public controller accepts POST only (user submits request); admin controller handles list/status/delete.
-- `orders/` — public controller accepts POST only (checkout submit); admin controller handles list/detail/status. No DELETE (use `cancelled` status). No payment gateway — this is an MVP where the team follows up by email after submission.
+- `orders/` — public controller accepts POST + GET mine/:id + PATCH cancel; admin controller handles list/detail/status + POST refund. No DELETE (use `cancelled` status). `cancel`이 paid 주문이면 `payment/` 의 `refundByOrderId` 를 거쳐 PortOne 환불 → `refunded` 전이.
+- `payment/` — `PaymentController` (UserGuard) 가 `POST /v1/payment/prepare` 와 `POST /v1/payment/complete` 만 노출. `PaymentWebhookController` 는 `/webhooks/portone` 에 매핑돼 Standard Webhooks 시그니처 검증 후 멱등 처리. 두 엔트리 모두 동일 `PaymentService` 사용 — `Order.pgTid @unique` 로 멱등 키 관리.
 
 Example (`products` module):
 
@@ -222,14 +224,25 @@ This is the single place to edit if list payload shape needs to change.
   - Otherwise scores products (skin-type match, concern overlap × 14, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. More overlap → higher rank.
   - `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) is applied **only when a single concern is supplied**. With multi-select, the user's exact choices are honored without broadening.
 
-**Orders** — checkout MVP (no payment gateway; team emails the customer after submission)
+**Orders** — 결제와 주문 라이프사이클 (모든 가격은 KRW 정수)
 - `POST   /v1/orders` — **requires `UserGuard`**. Body: `{ fullName, phone, country, addressLine1, addressLine2?, city, postalCode, note?, items: [{productId, quantity}] }`. `email` / `userId`는 세션에서 주입되므로 클라이언트가 보내지 않는다. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, and computes `subtotal` + `itemCount` itself. Lookup + insert share a `$transaction`. Returns `{ id }`.
-- `GET    /v1/orders/mine` — **requires `UserGuard`**. Returns the caller's 50 most recent orders (`createdAt desc, id desc`) with `items[]` included.
+- `GET    /v1/orders/mine` — **requires `UserGuard`**. Returns the caller's 50 most recent orders (`createdAt desc, id desc`) with `items[]` included. `paymentStatus` 포함.
 - `GET    /v1/orders/:id` — **requires `UserGuard`**. Ownership-checked: returns 404 when `order.userId !== currentUser.id`.
-- `PATCH  /v1/orders/:id/cancel` — **requires `UserGuard`**. Ownership-checked. Only allowed while `status === 'pending'`; otherwise 400. Sets status to `cancelled` and returns the updated order.
-- `GET    /admin/orders` (filters: `?status=pending|processing|shipped|completed|cancelled`, `?take=N`, `?skip=N`; returns orders with `items[]` included, sorted by `createdAt desc, id desc` for stable pagination)
+- `PATCH  /v1/orders/:id/cancel` — **requires `UserGuard`**. Ownership-checked. `paymentStatus === 'paid'` 이면 `payment/` 의 `refundByOrderId` 호출 → PortOne cancel API → `refunded` 전이. `pending` 이면 단순 상태 변경. `paid` 이후·운영자 출고 처리 후에는 400 으로 막고 사용자에게 이메일 안내를 권장.
+- `GET    /admin/orders` (filters: `?status=...`, `?paymentStatus=...`, `?take=N`, `?skip=N`; orders with `items[]` included, sorted `createdAt desc, id desc` for stable pagination)
 - `GET    /admin/orders/:id`
 - `PATCH  /admin/orders/:id/status` — body `{ status }`, enum `pending → processing → shipped → completed | cancelled`
+- `POST   /admin/orders/:id/refund` — body `{ reason }`. paid 주문에 대해 운영자가 직접 환불 (사용자 취소 외 케이스). 사유는 필수, `AdminAuditLog` 자동 기록.
+
+**Payment** — PortOne V2 + NICE 채널 (자세한 흐름은 `payment-integration.md` 참고)
+- `POST   /v1/payment/prepare` — **requires `UserGuard`**. body `{ orderId, cardType: 'domestic'|'international' }`. 서버가 `Order.subtotal` 을 KRW 로 그대로 사용해서 `paymentId` 발급 + `Order.pgTid` 갱신. 응답 `{ paymentId, totalAmount, currency: 'KRW', storeId, channelKey, orderName, customer }`. `cardType` 으로 NICE 도메스틱/해외 channelKey 선택.
+- `POST   /v1/payment/complete` — **requires `UserGuard`**. body `{ paymentId }`. 서버가 PortOne `GET /payments/{id}` 를 직접 조회해 `payment.amount.total === order.subtotal` 검증. 불일치 시 즉시 PortOne `cancel` 호출 + `failed` 전이. 일치 + 상태 PAID 면 `paid` 전이. 이미 paid 면 idempotent 응답.
+- `POST   /webhooks/portone` — **인증 없음, raw body 필요**. PortOne Server SDK 의 Standard Webhooks 시그니처 검증 (`PORTONE_WEBHOOK_SECRET`). `Transaction.Paid/Cancelled/PartialCancelled/Failed` 만 처리하고 그 외(billing key, ready, dispute 등) 는 200 으로 무시. 처리 실패 시 5xx 로 응답해 PortOne 재시도(최대 5회 exponential backoff) 유도. `main.ts` 가 `/webhooks/` 경로의 CSRF/Origin 검사를 skip.
+
+**Shop**
+- `GET    /v1/shop/today` — `ShopSettings.todaysPickConcern` 에 매칭되는 제품 N개 반환.
+- `GET    /v1/shop/fx-rate` — `{ usdKrwRate, updatedAt }`. klow_web 부팅 시 가져가서 USD 표시 환산에 사용.
+- `GET    /admin/shop/settings`, `PATCH /admin/shop/settings` — partial 업데이트. `todaysPickConcern` 와 `usdKrwRate` 를 독립 갱신 가능.
 
 **Concierge Requests** — user K-beauty product sourcing requests
 - `POST   /v1/concierge-requests` — public, no guard. Requires `imageUrl` or `product` (at least one). Creates a pending request.
@@ -288,14 +301,14 @@ EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 |-----------------|-------------------------------------------------------------------------|
 | `Product`       | K-beauty product. Carries FOMO fields (`stockLeft`, `viewersNow`, `totalSold`), merchandising flags (`isHero`, `isLoss`, `tip`), persona tags (`recommendedFor`, `concerns`), and detail-page content (`detailImages`, `detailDescription`, `volume`, `videoClipUrl`, `sourceUrl`). Two JSON arrays power the detail page's ingredient tab (each capped at 3): `keyIngredients` (`{name, effect}[]` — Core Ingredients 카드) and `empathyCards` (`{title, subtitle, ingredients[]}[]` — "이런 사람들!" 탭. 비어 있으면 `klow_web` 상세에서 탭 자체가 숨겨지고 Core Ingredients만 노출). 화장품법 상품정보제공고시용 8개 문자열 필드(`manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone`, 모두 기본값 `""`) — 상세 페이지 하단 접이식 섹션에 노출, 자세한 내용은 Future Expansion > PG 심사 섹션. `brand` is a denormalized string cache of the linked `Brand.name`; `brandId` is the authoritative FK. `rating` and `reviewCount` are **server-managed aggregates** computed from `Review` — never accepted from admin input. |
 | `Brand`         | K-beauty brand. `name` is unique; `initial`, `tagline`, `logoUrl`, `order` power the admin's brand directory. Renames cascade into `Product.brand` inside a transaction. Delete detaches products (`brandId → null`) rather than blocking. |
-| `ShopSettings`  | Singleton row (`id = "default"`) storing merchandising config. Today only `todaysPickConcern` (a `CONCERNS` value). Created lazily on first read. Powers `/v1/shop/today`. |
+| `ShopSettings`  | Singleton row (`id = "default"`) storing merchandising config. `todaysPickConcern` (a `CONCERNS` value, powers `/v1/shop/today`) + `usdKrwRate` (Float, default 1380, 운영 중 어드민이 갱신; klow_web 가 KRW→USD 환산 표시에 사용). 두 필드는 partial PATCH 로 독립 갱신. Created lazily on first read. |
 | `Creator`       | Influencer profile: handle, story, profile/hero images, social URLs, follower count, `skinType`, `concerns`, `country`, `heroVideoUrl`. |
 | `Video`         | Short-form reel. References one `Creator` (N:1) and N `Product`s (N:M) via `VideoProduct`. Carries `themes` (enum array) and `forSkinTypes` for discovery. |
 | `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
-| `Order` | Checkout submission (MVP — no payment gateway). Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), plus server-computed `subtotal` and `itemCount` and an `OrderStatus` enum. Indexed on `status`, `createdAt`, `email`. |
-| `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice` are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
+| `Order` | Checkout submission. Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), 서버 계산 `subtotal`(**KRW 정수**) + `itemCount`, `OrderStatus`, 그리고 PortOne 결제 필드 (`paymentStatus` enum `pending|paid|failed|cancelled|refunded`, `paymentMethod?`, `pgProvider?`, `pgTid? @unique`, `paidAt?`, `cancelledAt?`). `pgTid` 가 PortOne paymentId. Indexed on `status`, `paymentStatus`, `createdAt`, `email`, `userId`. |
+| `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice`(**KRW 정수**) are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
 | `User` | 공개 사용자 계정. `email` unique, `passwordHash?`(Google-only 사용자는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`. 스킨 프로필 필드(`country?`, `skinType?`, `concerns: String[]`)는 비로그인 상태에서 입력된 값을 로그인 시 `PATCH /v1/auth/me` 또는 회원가입 payload로 끌어올려 저장한다. `Order.userId` / `Review.userId`와 nullable 관계(기존 레코드 보존). |
 | `Session` | DB 기반 세션. `token`(opaque 32-byte base64url) unique, `expiresAt`, `userAgent`/`ip`. `klow_sid` 쿠키로 전달. 로그아웃은 행 삭제로 즉시 무효화. User 삭제 시 cascade. |
 | `EmailVerification` | 회원가입용 OTP와 `signupToken`을 둘 다 담는 임시 테이블(`purpose` 컬럼으로 구분: `signup-otp` / `signup-token`). 코드/토큰은 argon2로 해시. `expiresAt`(OTP 10분, 토큰 15분), `consumedAt`, `attempts`(5회 초과 시 잠금). 현재 만료 로우 정리 크론은 없음. |
@@ -308,6 +321,7 @@ EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 - `ProductCategoryKey` — `cleanser | toner | serum | cream | mist | suncream | mask`
 - `ConciergeStatus` — `pending | replied | completed`
 - `OrderStatus` — `pending | processing | shipped | completed | cancelled`
+- `PaymentStatus` — `pending | paid | failed | cancelled | refunded`
 
 The string-based `CONCERNS` constant lives in `src/common/constants.ts` and is shared by `ShopSettings.todaysPickConcern` and `CreatorInput.concerns`.
 
@@ -512,9 +526,9 @@ The module pattern was chosen specifically so that the next four things are addi
 - **reCAPTCHA / rate limit**: 회원가입 요청 스팸 방지책은 현재 없음.
 - **만료 Session / EmailVerification 정리 크론**: 현재 없음. 테이블이 무한히 늘지 않도록 주기 작업 추가 필요.
 
-### PG 심사 / 전자상거래법 compliance (scaffolding)
+### PG 심사 / 전자상거래법 compliance
 
-결제 연동 전 PG사 심사에 요구되는 표시·동의·정보제공 요소들은 **구축 완료**. 실제 Toss/Stripe 연동 이전에도 심사 제출이 가능한 상태.
+PortOne(NICE) 채널로 실 결제까지 연결된 상태. 카드사 심사 통과 요건의 표시·동의·정보제공 요소들이 모두 구축돼 있다.
 
 - **전역 푸터** (`klow_web/src/components/layout/Footer.tsx`) — 사업자정보, 고객센터(운영시간 포함), 법적 페이지 링크, ftc.go.kr 통신판매업 조회 링크. 로그인 / 회원가입에서만 숨김(fullscreen 레이아웃). 메인(`/`)·체크아웃 포함 모든 일반 라우트에서 노출 — PG 심사 가이드의 "메인+결제 페이지 상시 노출" 요건 대응. `BottomTabBar`의 `VISIBLE_PATHS`를 import해 탭 바가 있는 라우트에는 `mb-[64px]`, 체크아웃의 fixed `Place order` CTA가 있는 라우트에는 `mb-[96px]` 처리해 겹치지 않게 한다.
 - **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import.
@@ -524,18 +538,16 @@ The module pattern was chosen specifically so that the next four things are addi
 - **상품 상세 환불·배송 안내 카드** (`klow_web/src/app/product/[id]/_components/ShippingRefundInfo.tsx`) — 배송(국제배송 포함·2–3주)·반품/교환(7일 청약철회)·환불(영업일 3일) 요약 + `/legal/refund` 본문 링크. 가이드의 "실물 상품에 환불 정보, 배송/교환 정보 노출" 요건 대응.
 - **상품정보제공고시** (화장품법 대응) — `Product` 모델에 `manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone` 8개 String 필드(기본값 `""`) 추가. klow_admin 상품 폼에서 입력, klow_web 상품 상세 하단 접이식 "Product information notice" 섹션에서 표시. 비워두면 "contact seller" fallback.
 
-아직 남은 것: PG사 선정 및 실제 결제 연동 — Payment system 섹션 참고.
+### Payment system (PortOne V2 + NICE)
 
-### Payment system
+자세한 흐름·핵심 원칙·환경 변수는 `payment-integration.md` 참고. 요약:
 
-`orders/` is already in place as an **MVP without a payment gateway**: klow_web's `/checkout` page collects the shipping address and `POST /v1/orders` snapshots the cart, then the KLOW team follows up by email (the admin `/orders` tab is the operator view for this). Cart state stays client-side in zustand (`klow-web-cart` in localStorage) — there is no server `cart/` module yet. Users can review their orders at `/orders` (`GET /v1/orders/mine` + `GET /v1/orders/:id`) and cancel while `pending` (`PATCH /v1/orders/:id/cancel`).
-
-To promote to a real gateway, layer on top without touching `orders/`'s contract:
-- `payment/` — `POST /v1/payment/checkout` (Toss/Stripe session); writes the returned `paymentIntentId` onto the existing `Order`.
-- `webhooks/` — `POST /webhooks/toss`, `POST /webhooks/stripe` (signature-verified, no auth guard). Webhook advances `Order.status` out of `pending`.
-- (Optional) `cart/` — `GET/POST/DELETE /v1/cart` (user JWT) once carts need to survive across devices.
-
-All modules share the same `PrismaService`. Order state ends up updated by webhooks and read by both admin and user surfaces.
+- **PG사:** 포트원(PortOne) V2 + 나이스정보통신(NICE) 채널. NICE 가 KRW 외 통화로 settle 하지 않으므로 DB 의 모든 가격(`Product.price/salePrice`, `Order.subtotal`, `OrderItem.unitPrice`) 은 KRW 정수로 저장한다.
+- **외국인 타깃 표시:** klow_web `formatPrice(krw)` 가 어드민이 운영 중에 갱신하는 `ShopSettings.usdKrwRate` 로 USD 환산 표시. 결제 직전·직후 화면(카트 합계, 체크아웃 Total, Place order 버튼, 주문 상세 Total) 에는 `formatKrw` 부제 동시 표시. PortOne 결제창은 `locale: 'EN_US'` + 카드 종류(domestic/international) 토글로 외국 발급 카드를 NICE 해외결제 채널에 라우팅.
+- **검증의 진실은 서버:** `prepare`/`complete` 모두 `Order.subtotal` 만 신뢰한다. `complete` 가 PortOne `GET /payments/{id}` 로 직접 조회해 금액 일치 검증; 불일치 시 즉시 cancel + `failed` 전이.
+- **웹훅은 보강용:** `POST /webhooks/portone` 이 Standard Webhooks 시그니처 검증 후 `Transaction.Paid/Cancelled/PartialCancelled/Failed` 만 멱등 처리. 메인 경로는 어디까지나 `complete`.
+- **취소·환불:** `PATCH /v1/orders/:id/cancel` (사용자) 와 `POST /admin/orders/:id/refund` (운영자) 가 모두 `payment.refundByOrderId` 를 거쳐 PortOne cancel 호출 → `refunded` 전이. paid 이전 단계는 PG 호출 없이 단순 상태 변경.
+- **카트:** klow_web 의 zustand 카트가 로그인 시 `PUT /v1/cart/merge` 로 서버에 승격 (자세한 내용은 Cart 섹션). 결제 시점에 서버는 카트가 아닌 `POST /v1/orders` 의 items 만 신뢰.
 
 ### Mobile native app (RN / iOS)
 Calls the same `/v1/*` endpoints. No new server code unless mobile needs new endpoints. If mobile needs auth, the same `UserGuard` works.
@@ -549,7 +561,8 @@ Add `@nestjs/bull` (Redis) or Temporal worker. Same `PrismaService`, same module
 
 - **Admin auth** — `AdminGuard`는 아직 no-op 스텁(사용자 인증은 구축 완료).
 - **비밀번호 재설정 / reCAPTCHA / auth rate-limit / 만료 세션 정리 크론** — Authentication 섹션 참고.
-- **Payment gateway integration** — the `orders/` module exists but runs as an MVP (no Toss/Stripe session, no card capture on-page). Customers see a notice that the KLOW team will follow up by email; operators move the order through the `OrderStatus` enum manually in the admin.
+- **다중 결제수단 (간편결제·해외 PG):** 현재 PortOne(NICE) 채널의 카드 결제만 노출. 카카오페이/네이버페이/Stripe 등은 PortOne 채널을 추가하고 `payMethod` 분기만 늘리면 되지만 아직 미연결.
+- **FX 자동 갱신:** `usdKrwRate` 는 어드민이 수동으로 갱신. 매일 오전에 외부 FX API 로 자동 업데이트하는 cron 은 미구축.
 - **Legacy `KLOW/` retirement** — still shipping its mock-based prototype; `klow_web` is the real public client going forward.
 - **Production deployment / CI/CD** — local dev only
 - **Type sharing across repos** — `klow_admin/src/lib/constants.ts`, `klow_server/src/common/constants.ts`, and `klow_web/src/lib/types.ts` are intentional hand-mirrored copies. A future shared workspace package will replace this.
