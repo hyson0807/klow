@@ -47,9 +47,10 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | AdminGuard + CurrentAdmin     | `klow_server/src/common/guards/admin.guard.ts`, `klow_server/src/common/guards/super-admin.guard.ts`, `klow_server/src/common/decorators/current-admin.decorator.ts` |
 | Admin 시드 스크립트           | `klow_server/prisma/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
 | klow_web pages                | `klow_web/src/app/` (feed, videos, product, creator, shop, discover, concierge, cart, checkout, my)     |
-| klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, login, onboarding/{brand,products}, dashboard/products/{new,[id]/edit}) |
+| klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, onboarding/{brand,products}, dashboard/products/{new,[id]/edit}) |
 | klow_brand API client         | `klow_brand/src/lib/api.ts` + `klow_brand/src/lib/upload.ts`                                            |
 | klow_brand 인증 훅            | `klow_brand/src/hooks/useBrandSession.ts`, `klow_brand/src/hooks/useRequireBrandAuth.ts`                |
+| klow_brand 로그인/가입 UI     | `klow_brand/src/app/signup/` + `klow_brand/src/components/{LoginModal,SignupModal,Modal}.tsx` (/login 페이지 없음 — 헤더/CTA에서 모달로 처리) |
 | Brand 인증 모듈               | `klow_server/src/modules/brand-auth/` (service, controller, brand-session 쿠키 헬퍼)                    |
 | Brand 신청 / 제품 모듈        | `klow_server/src/modules/brand-applications/` (public + admin 컨트롤러, 승인/거부 트랜잭션)              |
 | BrandGuard + CurrentBrandUser | `klow_server/src/common/guards/brand.guard.ts`, `klow_server/src/common/decorators/current-brand.decorator.ts` |
