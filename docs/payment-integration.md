@@ -1,4 +1,10 @@
-# Payment Integration Plan
+# Payment Integration Plan (historical)
+
+> **⚠️ 이 문서는 PortOne 도입을 검토하던 시점(2026-03 ~ 04)의 기획 문서로, 현재 운영 상태와 다릅니다.**
+>
+> 실제 도입된 PG 는 **Eximbay** (해외 카드 acquiring, 통화 USD) 이며, 결제 플로우·엔드포인트·환불·webhook·동의/심사 안전망 등 **현재 상태의 상세 설명은 [`architecture.md`](./architecture.md) 의 "Payment system" / "PG 심사 / 전자상거래법 compliance" 섹션을 참고**하세요. 본 문서는 PortOne 검토 흔적을 보존하기 위해 그대로 둡니다.
+
+---
 
 PG사 심사 통과 + 실제 결제 도입을 위해 각 레포에 추가/수정해야 할 항목과 결제 플로우를 큰 그림으로 정리한 문서. 세부 코드 설계는 진행하면서 PR 단위로 추가한다.
 
