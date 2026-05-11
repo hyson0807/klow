@@ -537,10 +537,11 @@ PG 는 **Eximbay** (해외 카드 acquiring, 결제 통화 USD). `orders/` + `pa
 2. `POST /v1/payment/prepare` — Order ownership + paymentStatus=pending + 동의 3종 재검증. Eximbay `/v1/payments/ready` 호출 후 `fgkey` 발급, SDK 호출에 필요한 payment/merchant/buyer/url/settings 를 echo. `amountUsd` 는 `subtotal / fxRateSnapshot` 으로 산출 — admin 이 환율을 갱신해도 이 주문의 USD 금액은 흔들리지 않는다.
 3. klow_web 이 Eximbay JS SDK 를 동적 로드(`klow_web/src/lib/eximbay.ts`)해 `EXIMBAY.request_pay()` 호출. `settings.display_type='R'` 으로 같은 탭 결제창.
 4. Eximbay 가 `return_url` (`klow_web/api/eximbay/return` route handler) 로 GET 또는 form POST. handler 가 querystring 으로 정규화 후 `/checkout/redirect` (page) 로 303 redirect.
-5. `/checkout/redirect` 가 rescode 분기:
-   - `rescode='0000'` → `POST /v1/payment/verify` (querystring 흘림). 서버가 Eximbay `/v1/payments/verify` 로 재조회 + `fxRateSnapshot` 기준 amount mismatch (≤ $0.01) 검증 + paymentStatus `pending→paid` updateMany (멱등). 성공 시 카트 clear → `/checkout/success`.
-   - `rescode≠'0000'` 또는 verify throw → `POST /v1/payment/report-failure` → paymentStatus `pending→failed` (note 에 사유·시각 부착) → `/checkout/failed`.
-6. (보강) `POST /webhooks/eximbay` — Eximbay 가 외부 IP 에서 직접 POST. `EXIMBAY_WEBHOOK_IPS` env 화이트리스트 통과만 처리. 같은 `parseAndMarkPaid` 경로 공유, paymentStatus 가 이미 paid 면 멱등 skip. 응답 본문 `rescode=0000&resmsg=Success` 안 보내면 Eximbay 가 retry 한다.
+5. `/checkout/redirect` 가 rescode 분기 — 결과를 3 state 로 구분한다:
+   - **결제 성공 확정** (`rescode='0000'` + `POST /v1/payment/verify` 성공): 서버가 Eximbay `/v1/payments/verify` 로 재조회 + `fxRateSnapshot` 기준 amount mismatch (≤ $0.01) 검증 + `markPaid` 가 `updateMany({where: paymentStatus=pending})` 의 count 를 확인. count=1 이면 정상 전이, count=0 이면 DB 상태 재조회해서 `paid + 같은 pgTid` 면 멱등 성공, 그 외 상태(failed/cancelled/refunded/다른 pgTid)는 error 로그 + throw. 성공 시 카트 clear → `/checkout/success`.
+   - **PG 명시 실패** (`rescode≠'0000'`): 사용자가 결제창을 닫았거나 카드 승인이 거절된 경우. `POST /v1/payment/report-failure` → paymentStatus `pending→failed` (note 에 사유·시각 부착) → `/checkout/failed` (단정적 실패 안내). 재시도는 새 Order 생성으로 강제.
+   - **결과 불명** (`rescode='0000'` + verify 실패: 네트워크/서버 장애/상태 충돌): 카드는 청구됐을 가능성이 있으므로 `report-failure` 호출 금지. 사용자를 `/orders/{id}?awaitingVerification=1` 로 라우팅 → 페이지가 실제 `paymentStatus` 를 보여주고 webhook 으로 늦게 paid 확정될 시간을 허용. amber 배너로 "결제 확인 중" 안내.
+6. (보강) `POST /webhooks/eximbay` — Eximbay 가 외부 IP 에서 직접 POST. `EXIMBAY_WEBHOOK_IPS` env 화이트리스트 통과만 처리(운영에서 비어있으면 부팅 시 console.warn). 같은 `parseAndMarkPaid` 경로 공유 — verify 와 동시 도착해도 markPaid 의 count 분기로 멱등 처리. 응답 본문 `rescode=0000&resmsg=Success` 안 보내면 Eximbay 가 retry 한다. 상태 충돌(failed/cancelled 로 이미 전이된 주문에 paid webhook) 은 9999 회신 + error 로그 — 운영자 수동 정리 필요.
 
 환불은 `payment.refundOrder({id, pgProvider, pgTid, subtotal, fxRateSnapshot}, reason)` 가 Eximbay `/v1/payments/{pgTid}/cancel` (refund_type='F', 전액) 호출. 호출자(`orders.cancelByUser` / `orders.refundByAdmin`) 가 PG 성공 후 자체 where 절(updateMany)로 paid→refunded 전이 — PG 호출 성공 후 DB 갱신 직전 크래시 시 PG↔DB drift 가능성 있음 (v1 허용, 운영 단계 outbox/idempotency_key 도입 예정).
 
@@ -549,10 +550,10 @@ PG 는 **Eximbay** (해외 카드 acquiring, 결제 통화 USD). `orders/` + `pa
 - **fxRateSnapshot** — admin 환율 변경과 주문 결제 시점 사이의 drift 차단.
 - **동의 이중 가드** — Zod literal(true) + service 재검증.
 - **Webhook IP 화이트리스트** — 위조 webhook 으로 markPaid 트리거 차단. 운영 IP 변경 시 `EXIMBAY_WEBHOOK_IPS` 갱신.
-- **paid 전이 멱등성** — `updateMany({where: paymentStatus=pending})` 라 verify 와 webhook 이 동시 도착해도 두 번째는 count=0.
-- **결제 실패 명시 전이** — pending 으로 stale 방치되는 주문 차단. 재시도는 새 Order 생성으로 강제.
+- **paid 전이 정합성** — `updateMany({where: paymentStatus=pending})` 의 count 를 검사. count=1 정상, count=0 + (paid + 같은 pgTid) 멱등, 그 외 throw. "성공 응답은 나갔는데 DB 는 실패/취소" 같은 거짓 성공을 차단.
+- **결제 실패 분리** — PG 명시 실패만 `failed` 로 확정 마킹. verify 자체 실패는 결과 불명으로 두고 `/orders/{id}` 의 paymentStatus 가 진실. 카드 청구됐는데 DB 만 failed 가 되는 데이터 부정합 방지.
 
-To-do (not blocking review): partial refund, Eximbay payload 서명 검증, abandoned-pending order cleanup cron, outbox 기반 환불.
+To-do (not blocking review): partial refund, abandoned-pending order cleanup cron, outbox 기반 환불, payment 모듈 unit test (markPaid 정상 전이 / count=0 멱등 / count=0 충돌 / amount mismatch / webhook IP 차단).
 
 ### Mobile native app (RN / iOS)
 Calls the same `/v1/*` endpoints. No new server code unless mobile needs new endpoints. If mobile needs auth, the same `UserGuard` works.
