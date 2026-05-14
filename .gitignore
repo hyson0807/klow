@@ -7,6 +7,7 @@ klow_admin/
 klow_brand/
 klow_server/
 klow_web/
+image-card/
 
 # ── OS / editor ──────────────────────────────────────────────────
 .DS_Store
