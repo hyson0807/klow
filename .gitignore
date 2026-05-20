@@ -7,7 +7,12 @@ klow_admin/
 klow_brand/
 klow_server/
 klow_web/
+klowpro/
+klowsaas/
 image-card/
+
+# ── Tooling caches ───────────────────────────────────────────────
+.playwright-mcp/
 
 # ── OS / editor ──────────────────────────────────────────────────
 .DS_Store
