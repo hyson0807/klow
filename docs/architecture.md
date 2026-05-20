@@ -35,7 +35,7 @@ KLOW is a TikTok-style K-beauty commerce platform. The stack is split across **f
 The server was extracted from `klow_admin` (which originally owned Prisma directly) for three reasons:
 
 1. **Single source of truth.** Multiple clients (admin + public webapp + future mobile) need the same data and the same validation rules. Duplicating Prisma + zod across three projects was already painful at three; it would be unmanageable at five.
-2. **Payment system already lives here.** Cart/orders/payment/webhooks need a stable home that's reachable from multiple clients and from external payment-provider callbacks. They belong in the server, not in any one client. (Today: **Eximbay** sandbox merchant — `payment-integration.md` 참고.)
+2. **Payment system already lives here.** Cart/orders/payment/webhooks need a stable home that's reachable from multiple clients and from external payment-provider callbacks (Eximbay `status_url`). They belong in the server, not in any one client — admin + public webapp + future mobile all read/write through the same `/v1/*` and `/admin/*` surfaces. (Today: **Eximbay** sandbox merchant — `payment-integration.md` 참고.)
 3. **Auth boundary.** Eventually admin will use NextAuth (cookies) and the public app will use user JWTs. Centralizing both behind one server with two URL prefixes (`/admin/*`, `/v1/*`) keeps that clean.
 
 ---
@@ -100,8 +100,8 @@ klow_server/
 │       ├── videos/                  # VideoProduct join transactions
 │       ├── reviews/                 # auto-aggregates Product.rating/reviewCount
 │       ├── concierge/               # user K-beauty concierge requests (public POST + admin list/status)
-│       ├── orders/                  # checkout (public POST + admin list/detail/status/refund); paid 환불은 Eximbay PG cancel 호출 → DB refunded 전이
-│       ├── payment/                  # Eximbay /v1/payment/{prepare,verify} + /webhooks/eximbay (status_url)
+│       ├── orders/                  # public POST + admin list/detail/status/cancel/refund; paid 환불은 Eximbay PG cancel 호출 → DB refunded 전이
+│       ├── payment/                  # /v1/payment/{prepare,verify,report-failure} + /webhooks/eximbay (status_url)
 │       ├── shop/                    # ShopSettings singleton + /v1/shop/today + /v1/shop/fx-rate
 │       ├── discover/                # read-only personalized recommendations (/v1/discover)
 │       ├── upload/                  # R2Service + presigned URL endpoint
@@ -125,8 +125,8 @@ Some modules intentionally diverge from the two-controller shape:
 - `discover/` — read-only personalization, has only `PublicDiscoverController` at `/v1/discover`.
 - `upload/` — admin-only presign endpoint, no public surface.
 - `concierge/` — public controller accepts POST only (user submits request); admin controller handles list/status/delete.
-- `orders/` — public controller accepts POST + GET mine/:id + PATCH cancel; admin controller handles list/detail/status + POST refund. No DELETE (use `cancelled` status). `paid` 주문의 cancel/refund 는 `OrdersService` 가 `PaymentService.cancelByPg` 로 Eximbay 환불 API 를 먼저 호출하고 성공 시 DB `paymentStatus='refunded'` + `status='cancelled'` 로 전이한다. 외부 I/O 라 transaction 밖. PG 호출과 DB updateMany 사이 race 는 운영 단계에서 outbox 로 보강 예정.
-- `payment/` — Eximbay 통합. `PublicPaymentController(/v1/payment/*)` 가 `prepare`(FGKey 발급 + echo 본문) / `verify`(return_url 의 querystring 을 백엔드로 흘려 받아 Eximbay verify API 호출 후 DB `pending → paid` race-free 전이) 를 처리하고, `WebhookPaymentController(/webhooks/eximbay)` 가 status_url 을 받아 동일 멱등 update 를 호출한다. PG 통화는 USD (subtotal/usdKrwRate). `pgProvider='eximbay'`, `pgTid=transaction_id` 매핑.
+- `orders/` — public controller accepts POST (checkout submit) + GET mine/[id] + PATCH cancel; admin controller handles list/detail/status + POST refund. No DELETE (use `cancelled` status). `paid` 주문의 cancel/refund 는 `OrdersService` 가 `PaymentService.cancelByPg` 로 Eximbay 환불 API 를 먼저 호출하고 성공 시 DB `paymentStatus='refunded'` + `status='cancelled'` 로 전이한다. 외부 I/O 라 transaction 밖. PG 호출과 DB updateMany 사이 race 는 운영 단계에서 outbox 로 보강 예정. (자세한 흐름은 Payment system 섹션 참고.)
+- `payment/` — Eximbay 통합. `PublicPaymentController` at `/v1/payment/{prepare,verify,report-failure}` (UserGuard) — `prepare`(FGKey 발급 + echo 본문) / `verify`(return_url 의 querystring 을 백엔드로 흘려 받아 Eximbay verify API 호출 후 DB `pending → paid` race-free 전이) / `report-failure`(pending → failed 멱등 전이). `WebhookPaymentController(/webhooks/eximbay)` 가 status_url 을 받아 동일 멱등 update 를 호출 (no guard, IP whitelist instead). 모두 `PaymentService` 로 위임 — Eximbay API client + markPaid/reportFailure/refundOrder 보유. Imports `AuthModule`. PG 통화는 USD (subtotal/usdKrwRate). `pgProvider='eximbay'`, `pgTid=transaction_id` 매핑.
 
 Example (`products` module):
 
@@ -224,8 +224,8 @@ This is the single place to edit if list payload shape needs to change.
   - Otherwise scores products (skin-type match, concern overlap × 14, review-count social proof) and ranks creators whose `skinType`/`concerns` match the persona. More overlap → higher rank.
   - `CONCERN_EXPANSION` (e.g. `hydration → [hydration, soothing]`) is applied **only when a single concern is supplied**. With multi-select, the user's exact choices are honored without broadening.
 
-**Orders** — 결제와 주문 라이프사이클 (모든 가격은 KRW 정수)
-- `POST   /v1/orders` — **requires `UserGuard`**. Body: `{ fullName, phone, country, addressLine1, addressLine2?, city, postalCode, note?, items: [{productId, quantity}] }`. `email` / `userId`는 세션에서 주입되므로 클라이언트가 보내지 않는다. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, and computes `subtotal` + `itemCount` itself. Lookup + insert share a `$transaction`. Returns `{ id }`.
+**Orders** — checkout + Eximbay PG integration (가격은 모두 KRW 정수, 자세한 결제 흐름은 Payment system 섹션 참고)
+- `POST   /v1/orders` — **requires `UserGuard`**. Body: `{ fullName, phone, country, addressLine1, addressLine2?, city, postalCode, items: [{productId, quantity}], agreedToTerms: true, agreedToRefund: true, agreedToPgDataSharing: true }`. `phone` 은 유통 사양상 숫자와 `+`, `-`, `(`, `)` 만 허용(공백 불가), 길이 4~20 — Zod 정규식 `/^[+\-()0-9]+$/` 로 강제하고 `Order.phone` 컬럼 `VARCHAR(20)` 와 길이 일치. `email` / `userId` 는 세션에서, `agreementIp` 는 `x-forwarded-for` 첫 hop 에서 서버가 직접 채운다. Zod 가 동의 3종을 `literal(true)` 로 강제. Server re-looks up each `productId`, rejects unknown ones with 400, snapshots `productName/productImage/productBrand/unitPrice` from the DB (ignoring any client-side prices), merges duplicate productIds, computes `subtotal` + `itemCount`, and stamps `termsAgreedAt` / `refundAgreedAt` / `pgDataSharingAgreedAt` (same Date) + `fxRateSnapshot` (당시 `ShopSettings.usdKrwRate`). Lookup + insert share a `$transaction`. Returns `{ id }`.
 - `GET    /v1/orders/mine` — **requires `UserGuard`**. Returns the caller's 50 most recent orders (`createdAt desc, id desc`) with `items[]` included. `paymentStatus` 포함.
 - `GET    /v1/orders/:id` — **requires `UserGuard`**. Ownership-checked: returns 404 when `order.userId !== currentUser.id`.
 - `PATCH  /v1/orders/:id/cancel` — **requires `UserGuard`**. Ownership-checked. `pending` 이면 단순 상태 변경, `paid` 이면 Eximbay `/v1/payments/{tid}/cancel` 환불 호출 후 `paymentStatus='refunded'` + `status='cancelled'` 전이. `shipped`/`completed`/`cancelled` 는 가드로 차단(400) — 발송 이후엔 RMA(반품) 절차로 안내.
@@ -308,8 +308,10 @@ EmailVerification (standalone — purpose-tagged OTP/signupToken 레코드)
 | `Review`        | Per-product user review. Mutations recompute `Product.rating` (avg) and `reviewCount` in the same Prisma transaction. |
 | `VideoProduct`  | Explicit join table. Composite PK `(videoId, productId)` + `order` field for drag-reorder. Cascades on delete. |
 | `ConciergeRequest` | User-submitted K-beauty product sourcing request. Standalone (no FK). Fields: `imageUrl?`, `product?`, `brand?`, `note?`, `status` (`ConciergeStatus` enum: `pending` → `replied` → `completed`). At least `imageUrl` or `product` is required (enforced by Zod). |
-| `Order` | Checkout submission. Stores customer contact + shipping address (`email`, `fullName`, `phone`, `country`, `addressLine1/2`, `city`, `postalCode`, `note`), 서버 계산 `subtotal`(**KRW 정수** — customer KRW), `itemCount`, `OrderStatus`, 그리고 PG 독립적인 결제 필드 (`paymentStatus` enum `pending|paid|failed|cancelled|refunded`, `paymentMethod?`, `pgProvider?`, `pgTid? @unique`, `paidAt?`, `cancelledAt?`). 현재 PG 는 Eximbay 라 `pgProvider='eximbay'` + `pgTid=Eximbay transaction_id`. Eximbay 청구 통화는 USD 라 `subtotal/usdKrwRate` 를 사용 시점에 환산. Indexed on `status`, `paymentStatus`, `createdAt`, `email`, `userId`. |
-| `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice`(**KRW 정수**) are snapshotted at order time so the row survives product rename/delete. Cascades on Order delete. |
+| `Order` | Checkout + Eximbay 결제. 고객 정보·배송지 (`email`, `fullName`, `phone @db.VarChar(20)`, `country`, `addressLine1/2`, `city`, `postalCode`), 서버 계산값 `subtotal` (**KRW 정수** — customer KRW) + `itemCount`, `OrderStatus` enum + `PaymentStatus` enum (`pending/paid/failed/cancelled/refunded`). 결제 메타 (`paymentMethod`, `pgProvider='eximbay'`, `pgTid @unique` = Eximbay transaction_id, `paidAt`, `cancelledAt`). 결제 실패 사유는 `paymentFailureReason @db.VarChar(500)` 컬럼에 운영 디버그용으로 분리 보관(고객 메모는 제거). PG 심사 audit 필드 — 약관 동의 시점 `termsAgreedAt` / `refundAgreedAt` / `pgDataSharingAgreedAt` + `agreementIp` + 시점 환율 스냅샷 `fxRateSnapshot` (Float?). Eximbay 청구 통화는 USD 라 `subtotal/fxRateSnapshot` 으로 호출 시점에 환산. 배송비는 `shippingFeeKrw` + `shippingFeeUsdSnapshot` = 캐리어 단가 × 카트의 distinct `brandId` 수 — 한 브랜드 = 한 EFS 송장이라 브랜드별로 배송비가 곱해서 청구된다. 인덱스: `status`, `paymentStatus`, `createdAt`, `email`, `userId`. |
+| `OrderItem` | Line item on an `Order`. `productId` is stored as a plain string (no FK) and `productName/productImage/productBrand/unitPrice`(**KRW 정수**) are snapshotted at order time so the row survives product rename/delete. `shipmentItem` 1:1 으로 한 `Shipment` 그룹에 묶일 수 있다. Cascades on Order delete. |
+| `Shipment` | 브랜드 단위 EFS 송장 (= 한 주문 안에서 같은 brand 의 `OrderItem` 들이 묶인 발송 단위). 1 (orderId, brandId) → 최대 1 active Shipment. `carrier`/`efsServiceType`(요청 시점 스냅샷), `efsTrackingNumber @unique`, `localCarrierName`/`localTrackingNumber`(EFS newCreateShipment 회신), `status` (`pending`/`submitted`/`failed`), `requestPayload` JSON + `responseRaw`(audit). 어드민 발급/재시도(`/admin/shipments/*`)는 모두 그룹 단위. 브랜드는 자기 `brandId` 의 송장만 조회. |
+| `ShipmentItem` | `Shipment` ↔ `OrderItem` 1:N 조인. `orderItemId @unique` 가 한 라인은 최대 1 송장에만 속함을 강제 + 동시 발급 race 방지. Shipment delete 시 cascade. EFS 24번 itemCapsule `{...},{...}` 의 각 캡슐이 1 ShipmentItem 에 대응. |
 | `User` | 공개 사용자 계정. `email` unique, `passwordHash?`(Google-only 사용자는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`. 스킨 프로필 필드(`country?`, `skinType?`, `concerns: String[]`)는 비로그인 상태에서 입력된 값을 로그인 시 `PATCH /v1/auth/me` 또는 회원가입 payload로 끌어올려 저장한다. `Order.userId` / `Review.userId`와 nullable 관계(기존 레코드 보존). |
 | `Session` | DB 기반 세션. `token`(opaque 32-byte base64url) unique, `expiresAt`, `userAgent`/`ip`. `klow_sid` 쿠키로 전달. 로그아웃은 행 삭제로 즉시 무효화. User 삭제 시 cascade. |
 | `EmailVerification` | 회원가입용 OTP와 `signupToken`을 둘 다 담는 임시 테이블(`purpose` 컬럼으로 구분: `signup-otp` / `signup-token`). 코드/토큰은 argon2로 해시. `expiresAt`(OTP 10분, 토큰 15분), `consumedAt`, `attempts`(5회 초과 시 잠금). 현재 만료 로우 정리 크론은 없음. |
@@ -529,26 +531,46 @@ The module pattern was chosen specifically so that the next four things are addi
 
 ### PG 심사 / 전자상거래법 compliance
 
-결제 시스템은 Eximbay 로 도입되어 있고, 카드사 심사 통과 요건의 표시·동의·정보제공 요소들도 그대로 구축돼 있다.
+결제 연동 + PG사(Eximbay) 심사에 요구되는 표시·동의·정보제공·트레이서빌리티 요소를 모두 구축한 상태. 자세한 결제 흐름은 Payment system 섹션 참고.
 
 - **전역 푸터** (`klow_web/src/components/layout/Footer.tsx`) — 사업자정보, 고객센터(운영시간 포함), 법적 페이지 링크, ftc.go.kr 통신판매업 조회 링크. 로그인 / 회원가입에서만 숨김(fullscreen 레이아웃). 메인(`/`)·체크아웃 포함 모든 일반 라우트에서 노출 — PG 심사 가이드의 "메인+결제 페이지 상시 노출" 요건 대응. `BottomTabBar`의 `VISIBLE_PATHS`를 import해 탭 바가 있는 라우트에는 `mb-[64px]`, 체크아웃의 fixed `Place order` CTA가 있는 라우트에는 `mb-[96px]` 처리해 겹치지 않게 한다.
-- **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import.
-- **체크아웃 동의** (`/checkout`) — 주문 검토 · 이용약관(`/legal/terms`) · 환불정책 · 결제/배송 처리자 개인정보 제공 4개 체크박스 필수. 모두 체크해야 "Place order" 버튼 활성.
+- **사업자 정보 단일 소스** — `klow_web/src/app/legal/_content/documents.ts`가 `BUSINESS_INFO` / `CONTACT_EMAIL` / `CONTACT_PHONE` / `CS_HOURS` / `COMPANY` 를 export. Footer, FAQ, 상품 상세 StatutoryInfo 모두 여기서 import. 같은 파일에 5개 약관 문서(`terms` / `privacy` / `youth` / `refund` / `business`)를 `{ en, ko }` 번들로 보관 — `LegalDocumentBundle` 타입.
+- **이중언어 약관** — `/legal/[slug]?lang=ko` (한국어), 기본 영문. 상단 EN/KO 토글이 같은 슬러그 내에서 언어만 전환. PG 심사원이 직접 확인하는 한국어 본문(이용약관·개인정보처리방침·환불정책 등)을 운영 약관과 동일 데이터 소스로 제공. `LEGAL_MENU` 의 label 도 `{ en, ko }` 객체.
+- **체크아웃 동의** (`/checkout`) — 주문 검토 · 이용약관(`/legal/terms`) · 환불정책 · 결제/배송 처리자(Eximbay) 개인정보 제공 4개 체크박스 필수. 모두 체크해야 "Place order" 버튼 활성. 서버는 `agreedToTerms` / `agreedToRefund` / `agreedToPgDataSharing` 를 Zod `literal(true)` 로 강제하고 `Order.termsAgreedAt` / `refundAgreedAt` / `pgDataSharingAgreedAt` / `agreementIp` 4 컬럼에 동의 시각·IP 를 박아 분쟁 증거로 보관. `payment.prepare()` 가 동일 가드를 한 번 더 적용해 어떤 우회 경로로도 동의 없이는 결제창이 안 뜬다.
 - **주문 상세 고객 지원 카드** (`klow_web/src/app/orders/[id]/page.tsx` "Need help?") — 이메일 · 고객센터 전화 · `/legal/refund` 진입을 한 카드에 묶어 결제 후 분쟁 시 사용자 진입점을 제공.
 - **FAQ 페이지** (`/faq`) — 주문·배송·환불·결제 4개 카테고리 아코디언. `/my` Help center 메뉴에서 링크.
 - **상품 상세 환불·배송 안내 카드** (`klow_web/src/app/product/[id]/_components/ShippingRefundInfo.tsx`) — 배송(국제배송 포함·2–3주)·반품/교환(7일 청약철회)·환불(영업일 3일) 요약 + `/legal/refund` 본문 링크. 가이드의 "실물 상품에 환불 정보, 배송/교환 정보 노출" 요건 대응.
 - **상품정보제공고시** (화장품법 대응) — `Product` 모델에 `manufacturer`, `countryOfOrigin`, `expiryInfo`, `ingredients`, `precautions`, `qualityAssuranceStandard`, `functionalCertification`, `customerServicePhone` 8개 String 필드(기본값 `""`) 추가. klow_admin 상품 폼에서 입력, klow_web 상품 상세 하단 접이식 "Product information notice" 섹션에서 표시. 비워두면 "contact seller" fallback.
+- **위탁업체 표기** — Privacy Policy §5 (entrustment) 에 Amazon Web Services, Inc. / Cloudflare, Inc. / Eximbay Co., Ltd.(주식회사 엑심베이) 를 법인명으로 명시 — 개인정보보호법 §26 의무.
 
 ### Payment system (Eximbay)
 
 현재 결제 시스템은 **Eximbay 테스트 머천트**로 동작한다. 자세한 내용은 `payment-integration.md` 참고. 요약:
 
-- **모듈:** `klow_server/src/modules/payment/` — `PaymentService` (prepare/verify/markPaid/refundOrder) + `PublicPaymentController(/v1/payment/*)` + `WebhookPaymentController(/webhooks/eximbay)`. `klow_web` 은 `lib/eximbay.ts` 가 SDK 동적 로드, SDK 는 `display_type='R'` 로 같은 탭에서 결제 화면으로 이동. Eximbay 의 form POST 도착을 받기 위해 `/api/eximbay/return` route handler 가 querystring 으로 정규화한 뒤 `/checkout/redirect` (verify 호출 + 카트 clear) 로 303 redirect.
-- **DB 가격 저장 단위:** `Product.price/salePrice`, `Order.subtotal`, `OrderItem.unitPrice` 모두 customer KRW 정수. Eximbay 호출 시점에만 `subtotal/usdKrwRate` 로 USD 소수 2자리로 환산. 환불도 같은 산식.
-- **PG 매핑:** `Order.pgProvider='eximbay'`, `pgTid=Eximbay transaction_id` (unique), `paymentMethod=Eximbay 코드(P101 등)`.
-- **환불:** `PATCH /v1/orders/:id/cancel` (paid 분기) / `POST /admin/orders/:id/refund` 양쪽이 `PaymentService.refundOrder` 로 Eximbay `/v1/payments/{tid}/cancel` 을 호출 (nested `payment`/`refund` body 형식, `refund_type='F'`) → 성공 시 DB `paymentStatus='refunded'` + `status='cancelled'`. 외부 I/O 라 transaction 밖. v1 단계에선 PG↔DB race(서버 크래시) 허용. 어드민 환불 모달은 `paymentStatus` 가 `paid`/`pending` 일 때만 노출되며, `failed`/`refunded`/`cancelled` 는 사유와 함께 차단 안내.
-- **카트:** klow_web 의 zustand 카트는 그대로 — 로그인 시 `PUT /v1/cart/merge` 로 서버에 승격, 결제 시 `POST /v1/orders` 의 items 가 진실. verify 성공 시 `/checkout/redirect` 가 `useCartStore.clearCart()` 를 호출해 로컬 + 서버 카트를 모두 비운다.
-- **운영 TODO:** `/webhooks/eximbay` source IP whitelist, outbox/idempotency_key, `Order.paidFxRate` 컬럼 추가, 라이브 키 전환.
+PG 는 **Eximbay** (해외 카드 acquiring, 결제 통화 USD). `orders/` + `payment/` 모듈이 결제 흐름 전체를 담당한다. 카트는 클라이언트 zustand(`klow-web-cart` localStorage) + 로그인 후 서버 `cart/` 모듈로 replicate.
+
+흐름:
+1. `POST /v1/orders` — 카트 + 배송지 + 동의 3 boolean (`literal(true)`) 으로 Order 생성. 서버는 동의 시점·IP 와 시점 `ShopSettings.usdKrwRate` 를 `Order.fxRateSnapshot` 으로 박는다. `Order.subtotal` 은 customer KRW (settlement→customer 환산 후) 정수.
+2. `POST /v1/payment/prepare` — Order ownership + paymentStatus=pending + 동의 3종 재검증. Eximbay `/v1/payments/ready` 호출 후 `fgkey` 발급, SDK 호출에 필요한 payment/merchant/buyer/url/settings 를 echo. `amountUsd` 는 `subtotal / fxRateSnapshot` 으로 산출 — admin 이 환율을 갱신해도 이 주문의 USD 금액은 흔들리지 않는다.
+3. klow_web 이 Eximbay JS SDK 를 동적 로드(`klow_web/src/lib/eximbay.ts`)해 `EXIMBAY.request_pay()` 호출. `settings.display_type='R'` 으로 같은 탭 결제창.
+4. Eximbay 가 `return_url` (`klow_web/api/eximbay/return` route handler) 로 GET 또는 form POST. handler 가 querystring 으로 정규화 후 `/checkout/redirect` (page) 로 303 redirect.
+5. `/checkout/redirect` 가 rescode 분기 — 결과를 3 state 로 구분한다:
+   - **결제 성공 확정** (`rescode='0000'` + `POST /v1/payment/verify` 성공): 서버가 Eximbay `/v1/payments/verify` 로 재조회 + `fxRateSnapshot` 기준 amount mismatch (≤ $0.01) 검증 + `markPaid` 가 `updateMany({where: paymentStatus=pending})` 의 count 를 확인. count=1 이면 정상 전이, count=0 이면 DB 상태 재조회해서 `paid + 같은 pgTid` 면 멱등 성공, 그 외 상태(failed/cancelled/refunded/다른 pgTid)는 error 로그 + throw. 성공 시 카트 clear → `/checkout/success`.
+   - **PG 명시 실패** (`rescode≠'0000'`): 사용자가 결제창을 닫았거나 카드 승인이 거절된 경우. `POST /v1/payment/report-failure` → paymentStatus `pending→failed` (`paymentFailureReason` 컬럼에 사유·시각 부착, 고객 메모와 분리된 운영 디버그용) → `/checkout/failed` (단정적 실패 안내). 재시도는 새 Order 생성으로 강제.
+   - **결과 불명** (`rescode='0000'` + verify 실패: 네트워크/서버 장애/상태 충돌): 카드는 청구됐을 가능성이 있으므로 `report-failure` 호출 금지. 사용자를 `/orders/{id}?awaitingVerification=1` 로 라우팅 → 페이지가 실제 `paymentStatus` 를 보여주고 webhook 으로 늦게 paid 확정될 시간을 허용. amber 배너로 "결제 확인 중" 안내.
+6. (보강) `POST /webhooks/eximbay` — Eximbay 가 외부 IP 에서 직접 POST. `EXIMBAY_WEBHOOK_IPS` env 화이트리스트 통과만 처리(운영에서 비어있으면 부팅 시 console.warn). 같은 `parseAndMarkPaid` 경로 공유 — verify 와 동시 도착해도 markPaid 의 count 분기로 멱등 처리. 응답 본문 `rescode=0000&resmsg=Success` 안 보내면 Eximbay 가 retry 한다. 상태 충돌(failed/cancelled 로 이미 전이된 주문에 paid webhook) 은 9999 회신 + error 로그 — 운영자 수동 정리 필요.
+
+환불은 `payment.refundOrder({id, pgProvider, pgTid, subtotal, fxRateSnapshot}, reason)` 가 Eximbay `/v1/payments/{pgTid}/cancel` (refund_type='F', 전액) 호출. 호출자(`orders.cancelByUser` / `orders.refundByAdmin`) 가 PG 성공 후 자체 where 절(updateMany)로 paid→refunded 전이 — PG 호출 성공 후 DB 갱신 직전 크래시 시 PG↔DB drift 가능성 있음 (v1 허용, 운영 단계 outbox/idempotency_key 도입 예정).
+
+핵심 안전망:
+- **금액 진실은 서버** — 클라가 보낸 금액은 일체 신뢰 안 함. prepare/verify/refund 모두 `Order.subtotal` + `Order.fxRateSnapshot` 기준.
+- **fxRateSnapshot** — admin 환율 변경과 주문 결제 시점 사이의 drift 차단.
+- **동의 이중 가드** — Zod literal(true) + service 재검증.
+- **Webhook IP 화이트리스트** — 위조 webhook 으로 markPaid 트리거 차단. 운영 IP 변경 시 `EXIMBAY_WEBHOOK_IPS` 갱신.
+- **paid 전이 정합성** — `updateMany({where: paymentStatus=pending})` 의 count 를 검사. count=1 정상, count=0 + (paid + 같은 pgTid) 멱등, 그 외 throw. "성공 응답은 나갔는데 DB 는 실패/취소" 같은 거짓 성공을 차단.
+- **결제 실패 분리** — PG 명시 실패만 `failed` 로 확정 마킹. verify 자체 실패는 결과 불명으로 두고 `/orders/{id}` 의 paymentStatus 가 진실. 카드 청구됐는데 DB 만 failed 가 되는 데이터 부정합 방지.
+
+To-do (not blocking review): partial refund, abandoned-pending order cleanup cron, outbox 기반 환불, payment 모듈 unit test (markPaid 정상 전이 / count=0 멱등 / count=0 충돌 / amount mismatch / webhook IP 차단).
 
 ### Mobile native app (RN / iOS)
 Calls the same `/v1/*` endpoints. No new server code unless mobile needs new endpoints. If mobile needs auth, the same `UserGuard` works.
