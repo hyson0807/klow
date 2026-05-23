@@ -1,14 +1,46 @@
 # Brand Subscription — 설계
 
+> ## ⚠️ PG 교체 (2026-05): 토스페이먼츠 → NHN KCP 자동결제(배치키)
+>
+> 토스페이먼츠 심사 대기 기간이 길어 **PG 를 NHN KCP 자동결제(배치키)로 교체**했다.
+> **자동결제 cron/dunning·환불·해지·카드교체·재가입 로직과 도메인 모델은 그대로** 두고,
+> PG 호출 계층(어댑터)·결제창(프론트)·에러 분류만 교체했다. 아래 본문 중 토스 전용 서술
+> (SDK `requestBillingAuth`/`authKey`, `customerKey`, `paymentKey`, Basic 인증, webhook 등)은
+> **이 배너의 매핑으로 대체**된다 — 본문은 원 설계 이력으로 남겨둔다.
+>
+> | 항목 | 토스 (이전) | NHN KCP (현재) |
+> |---|---|---|
+> | 서버 인증 | `Authorization: Basic base64(secret:)` | 본문에 서비스 인증서 `kcp_cert_info`(PEM 직렬화) + 취소 시 개인키 SHA256withRSA 서명 `kcp_sign_data` |
+> | 카드 등록 | SDK `requestBillingAuth` → `authKey`(query) | 결제창(JS form) → `enc_data`/`enc_info`/`tran_cd`(콜백). PC=팝업 콜백 / 모바일=거래등록 후 PayUrl submit → Ret_URL POST |
+> | 빌링키 발급 | `POST /v1/billing/authorizations/issue` | `POST /gw/enc/v1/payment` → `batch_key`(16byte) |
+> | 정기 청구 | `POST /v1/billing/{billingKey}` → `paymentKey` | `POST /gw/hub/v1/payment` (bt_batch_key + `bt_group_id`) → `tno`(14byte) |
+> | 키 삭제 | `DELETE /v1/billing/authorizations/{key}` | `POST /gw/hub/v1/payment` (pay_method=BATCH, tx_type=10005010) |
+> | 환불 | `POST /v1/payments/{paymentKey}/cancel` | `POST /gw/mod/v1/cancel` (`tno` + `mod_type`(STSC/STPC) + RSA 서명) |
+> | 고객 식별 | per-brand `customerKey`(SDK init) | **개념 없음** — 결제 `ordr_idxx`(주문번호, 결제 시 서버 생성) + 머천트 `group_id`. `Brand.tossCustomerKey`→`pgCustomerKey`(결제 준비 게이트 플래그로만 유지) |
+> | 성공 판정 | `status==='DONE'` | 응답 `res_cd==='0000'` (HTTP 200 + 본문코드) |
+> | webhook | `/webhooks/subscription/toss` (stub) | **불필요** — PG-API 가 동기 응답 |
+> | 클라 SDK | `@tosspayments/tosspayments-sdk` | npm SDK 없음 — `kcp_spay_hub.js` 결제창(PC) + 모바일 거래등록 |
+> | 에러 분류 | 토스 code (INVALID_*/REJECT_*) | KCP `res_cd` (CC04/CC54=permanent, CC10/CC07=transient, 8044/8049=upstream) — `classifyKcpError` |
+>
+> **코드 위치:** 서버 어댑터 `klow_server/src/modules/subscription/kcp-billing.adapter.ts`,
+> 프론트 결제창 `klow_brand/src/lib/kcp-billing.ts`, 모바일 리턴 브릿지
+> `klow_brand/src/lib/kcp-return-bridge.ts` + `klow_brand/src/app/api/kcp/return/{start,change-card}/route.ts`,
+> 결제창 파라미터 발급 `POST /v1/brand/subscription/checkout-prepare`.
+>
+> **코드 외 의존성(KCP):** 자동결제 계약 + 그룹아이디(상점관리자 발급) + 서비스 인증서/개인키(인증센터) +
+> 취소 API용 서버 IP 화이트리스트(고정 egress IP) + 본인확인 인증결과 URL 등록.
+> 테스트는 KCP 테스트 서버(`stg-spl`/`testspay`/`testsmpay`)로 가능(실청구 없음), 단 테스트 자격증명은
+> KCP 연동 단계에서 발급받는다.
+
 > **상태:** **Phase 1~4 + Phase 5 어드민 운영 도구 구현 완료.**
 > - Phase 1 (결합 트랜잭션): `POST /v1/brand/subscription/start` 가 빌링키 발급 + 첫 결제 + 자동 입점 승인
 > - Phase 2 (노출 게이트): `PURCHASABLE_PRODUCT_WHERE` 3분기 (가입 brand 의 active 구독 / 어드민 brand 면제 / legacy 통과)
 > - Phase 3 (셀프 관리): `/settings/subscription` 페이지 + `GET / cancel / change-card` endpoint
 > - Phase 4 (정기 청구): 일일 KST 자정 cron + dunning(0/1/3/7일, 4회 정책) + 어드민 progress bar
-> - Phase 5 일부 (운영 도구): `/admin/brand-subscriptions` 어드민 페이지 + 강제 해지 + 강제 환불(토스 cancel API) + 정책 위반 차단(brand reject + 구독 자동 종료 묶음)
-> - **남은 Phase 5:** webhook (`/webhooks/subscription/toss`) + 세금계산서 + 운영자 알림 채널 (Slack/이메일)
+> - Phase 5 일부 (운영 도구): `/admin/brand-subscriptions` 어드민 페이지 + 강제 해지 + 강제 환불(KCP 거래취소 API) + 정책 위반 차단(brand reject + 구독 자동 종료 묶음)
+> - **남은 Phase 5:** 세금계산서 + 운영자 알림 채널 (Slack/이메일). (PG 동기 응답이라 webhook 은 불필요 — 위 배너 참고)
 >
-> 본 문서는 결정이 굳어질 때마다 섹션을 보강해나가는 **살아있는 설계 문서**다. 토스페이먼츠 빌링키 + 단일 플랜(₩30,000/월) + 입점 신청과 결제의 결합으로 운영된다.
+> 본 문서는 결정이 굳어질 때마다 섹션을 보강해나가는 **살아있는 설계 문서**다. NHN KCP 자동결제(배치키) + 단일 플랜(₩30,000/월) + 입점 신청과 결제의 결합으로 운영된다.
 
 ---
 
@@ -734,30 +766,35 @@ async reject(@Param('id') id, @CurrentAdmin() admin, @Body() body) {
 **`klow_server/.env`:**
 
 ```
-TOSS_BILLING_API_BASE=https://api.tosspayments.com  # sandbox/live 동일 (키로만 구분)
-TOSS_BILLING_CLIENT_KEY=test_ck_...                 # 브라우저 SDK (클라에 노출 OK)
-TOSS_BILLING_SECRET_KEY=test_sk_...                 # 서버 전용, Basic base64("{key}:") 콜론 포함
-SUBSCRIPTION_MONTHLY_PRICE_KRW=30000                # 미설정 시 코드 기본값 30000
+# PG-API / 거래등록 / PC결제창 base — 테스트↔운영 base 만 교체
+KCP_PG_API_BASE=https://stg-spl.kcp.co.kr            # 운영: https://spl.kcp.co.kr
+KCP_SMPAY_BASE=https://testsmpay.kcp.co.kr           # 모바일 거래등록. 운영: https://smpay.kcp.co.kr
+KCP_PAY_JS_URL=https://testspay.kcp.co.kr/plugin/kcp_spay_hub.js  # 운영: https://spay.kcp.co.kr/...
+KCP_SITE_CD=                                         # 가맹점 사이트코드 (5byte)
+KCP_GROUP_ID=                                        # 자동결제 그룹아이디 (상점관리자 발급)
+KCP_CERT_PEM=                                         # 서비스 인증서 (멀티라인/escape 모두 허용 — 어댑터가 1줄 직렬화)
+KCP_PRIVATE_KEY=                                      # 거래취소 서명용 개인키 (SHA256withRSA)
+KCP_PRIVATE_KEY_PASSWORD=                             # 개인키 비밀번호 (없으면 비움)
+SUBSCRIPTION_MONTHLY_PRICE_KRW=30000                 # 미설정 시 코드 기본값 30000
 SUBSCRIPTION_PLAN_CODE=brand_standard
 SUBSCRIPTION_ORDER_NAME_PREFIX=KLOW 브랜드 멤버십
 ```
 
-**`klow_brand/.env.local`:**
+**`klow_brand/.env.local`:** 별도 KCP 키 불필요. 결제창 호출에 필요한 site_cd/group_id/PayUrl 등은
+서버 `POST /v1/brand/subscription/checkout-prepare` 가 내려준다 (`NEXT_PUBLIC_API_URL` 만 있으면 됨).
 
-```
-NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY=test_ck_...   # klow_server 의 CLIENT_KEY 와 동일 값
-```
-
-> 토스 자동결제용 키는 [개발자센터 > API 키](https://developers.tosspayments.com/my/api-keys) 에서 발급. **자동결제(빌링) 계약된 MID** 의 키여야 `NOT_SUPPORTED_METHOD` 에러를 피할 수 있다. 가입 전에도 문서 페이지의 공개 테스트 키로 테스트 가능.
+> KCP 자동결제는 **별도 계약 서비스**. 테스트 자격증명(test site_cd + 테스트 인증서)은 KCP 연동 단계에서
+> 발급받는다(토스 sandbox 처럼 즉시 셀프서비스는 아님). 그룹아이디는 상점관리자에서 본인이 직접 발급(승인 불필요).
 
 ### webhook 시크릿은 없다
 
-토스가 서명 검증을 미제공하므로 환경변수에 webhook secret 항목이 없다. 멱등 + 토스 조회 API 재검증 모델이 보안 모델 자체다. ([토스 webhook 통합](#토스-webhook-통합) 참고)
+KCP PG-API 는 동기 응답(`res_cd`)이라 별도 webhook/서명 검증이 없다. 멱등(`ordr_idxx`) + 동기 응답 코드 검증이 보안 모델 자체다.
 
-### 빌링키와 PCI scope
+### 배치키와 PCI scope
 
-- **빌링키는 평문 저장.** PG 가 발급한 토큰이고, 도용되어도 매핑된 `customerKey` 없이는 결제 불가. 추가 암호화는 키 노출 시 customerKey 도 같이 노출되므로 이중 방어 가치 낮음. admin TOTP secret(서버 단독으로 OTP 검증) 과 위협 모델 다름.
-- **카드 번호는 절대 서버로 들어오지 않는다** — 토스 SDK 가 토스 도메인에서 입력받고 클라엔 `authKey` 만 온다. klow_server 는 `billingKey` 토큰만 다룸. PCI scope 밖.
+- **배치키(`pgBillingKey`)는 평문 저장.** PG 가 발급한 토큰이고, 도용되어도 `group_id` + 서비스 인증서 없이는 결제 불가.
+- **카드 번호는 절대 서버로 들어오지 않는다** — KCP 결제창이 KCP 도메인에서 입력받고 클라엔 `enc_data`(암호화 블롭)와 마스킹된 `card_mask_no` 만 온다. klow_server 는 `batch_key` 토큰만 다룸. PCI scope 밖.
+- **취소 서명 개인키(`KCP_PRIVATE_KEY`)는 서버 전용** — 노출 시 임의 취소가 가능하므로 admin TOTP secret 급으로 관리.
 
 ---
 
