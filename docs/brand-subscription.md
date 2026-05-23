@@ -340,7 +340,7 @@ klow_server/src/modules/
   - 계좌 3: `bankName`(40자), `bankAccountHolder`(40자), `bankAccountNumber`(40자, `/^[0-9-]+$/`)
 - 미달 시 `400 brand_not_ready_for_payment` + 비어있는 필드 목록을 응답에 명시 (어드민·디버그용)
 
-**Brand 의 다른 필드는 결제 게이트 아님.** `name`, `slug`, `logoUrl`, `description`, `tagline`, `accentColor`, `homepageUrl`, `targetCountries` 등은 결제 시점에 비어있어도 결제 가능. 결제 후 활성화된 상태에서 BrandTab/DesignTab 등으로 채워나가는 흐름. **OnboardingGate 의 7필드만이 결제 자격의 게이트.**
+**Brand 의 다른 필드는 결제 게이트 아님.** `name`, `slug`, `description`, `tagline`, `accentColor`, `logosCircle`/`logosWide`/`logosTall` 등은 결제 시점에 비어있어도 결제 가능. 결제 후 활성화된 상태에서 BrandTab/DesignTab 등으로 채워나가는 흐름. **OnboardingGate 의 7필드만이 결제 자격의 게이트.**
 
 **검증 일관성:** OnboardingGate 의 클라 검증과 서버 `BrandSubmitForReviewInputT` 가 이미 동일한 7필드를 검증하므로, submit-for-review 가 통과한 brand 는 사실상 모두 이 가드를 통과한다. 가드는 방어선이지 1차 검증이 아님.
 
