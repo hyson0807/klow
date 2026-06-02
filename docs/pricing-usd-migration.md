@@ -160,19 +160,29 @@ flowchart TD
 
 ### 단계 5 — 파괴적 정리 (별도 PR) · ⏸ 보류 중
 
-USD 3컬럼 `NOT NULL` 승격 + KRW 4컬럼(`subtotal`, `OrderItem.unitPrice`, `shippingFeeKrw`,
-`shippingFeeUsdSnapshot`) DROP. 단독 마이그레이션으로 수행.
+운영 안정 확인 후 **단일 마이그레이션**으로 아래 deprecated 컬럼들을 한꺼번에 정리한다.
 
-> **상태 (2026-06 기준): 보류.** 단계 1–4 는 각 repo `staging` 브랜치에 커밋됨(`klow_server`
-> `f3a4465` 외). 아직 배포·운영 검증 전이라 DROP 을 하면 dual-write 롤백 안전망이 사라진다.
+**(a) 주문 USD 정본화 잔여 (이 문서 #3):**
+- USD 3컬럼 `NOT NULL` 승격 + KRW 4컬럼(`Order.subtotal`, `OrderItem.unitPrice`,
+  `Order.shippingFeeKrw`, `Order.shippingFeeUsdSnapshot`) DROP.
+
+**(b) Product.price 제거 (#7 후속 — discount 고객가 재정의):**
+- `Product.price`(현재 nullable deprecated) DROP. 코드는 이미 price 미사용 — listPriceUsd 는
+  `customerPriceUsd ÷ (1 − discount/100)` 로 파생, discount 는 직접 입력값.
+- 코드 전환 커밋: `klow_server` `72fbc6f` + web/admin/brand. 마이그레이션 `..._product_price_nullable_deprecate` 가 nullable 까지 적용됨 → 남은 건 `ALTER TABLE "Product" DROP COLUMN "price"`.
+- 가격 모델 전체는 [`pricing-model.md`](./pricing-model.md) 참고.
+
+> **상태 (2026-06 기준): 보류.** 위 (a)(b) 코드 전환은 각 repo `staging` 에 커밋됨. 아직 배포·운영
+> 검증 전이라 DROP 하면 (a) dual-write 롤백 안전망이 사라진다.
 >
 > **착수 전제조건 (모두 충족 시에만 진행):**
-> 1. 단계 1–4 가 운영에 배포되어 실주문으로 며칠간 안정 동작 확인 (USD 청구·EFS·정산 정상).
+> 1. 코드가 운영에 배포되어 실주문으로 며칠간 안정 동작 확인 (USD 청구·EFS·정산·상품가 정상).
 > 2. `totalUsd`/`unitPriceUsd`/`shippingFeeUsd` 가 전 주문 non-null 재확인 (§6-7 invariant).
 > 3. 배포 후 신규 주문도 dual-write 로 KRW·USD 모두 채워지는지 확인.
+> 4. (b)는 `Product.price` 참조가 코드 전역에서 0인지 grep 재확인.
 >
-> 충족 후: USD 컬럼 `NOT NULL` 승격 → KRW 4컬럼 DROP 을 **단일 마이그레이션**으로. 롤백은
-> §7 참고(DROP 후엔 `totalUsd × fxRateSnapshot` 역산, ±1원 오차).
+> 충족 후 단일 마이그레이션: USD 컬럼 `NOT NULL` 승격 → KRW 4컬럼 + `Product.price` DROP.
+> (a) 롤백은 §7(역산 ±1원). (b)는 price 가 이미 미사용이라 롤백 불필요.
 
 ---
 
