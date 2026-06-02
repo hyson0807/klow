@@ -158,10 +158,21 @@ flowchart TD
 - **`klow_brand`** — 정산 화면은 KRW(`settlementPriceKrw`) 유지 — **변경 없음(확인만)**.
 - **`KLOW`(legacy)** — `data/mock.ts` 기반이라 **해당 없음**.
 
-### 단계 5 — 파괴적 정리 (별도 PR)
+### 단계 5 — 파괴적 정리 (별도 PR) · ⏸ 보류 중
 
 USD 3컬럼 `NOT NULL` 승격 + KRW 4컬럼(`subtotal`, `OrderItem.unitPrice`, `shippingFeeKrw`,
-`shippingFeeUsdSnapshot`) DROP. 단계 3–4 배포 안정화 확인 후 단독 마이그레이션으로 수행.
+`shippingFeeUsdSnapshot`) DROP. 단독 마이그레이션으로 수행.
+
+> **상태 (2026-06 기준): 보류.** 단계 1–4 는 각 repo `staging` 브랜치에 커밋됨(`klow_server`
+> `f3a4465` 외). 아직 배포·운영 검증 전이라 DROP 을 하면 dual-write 롤백 안전망이 사라진다.
+>
+> **착수 전제조건 (모두 충족 시에만 진행):**
+> 1. 단계 1–4 가 운영에 배포되어 실주문으로 며칠간 안정 동작 확인 (USD 청구·EFS·정산 정상).
+> 2. `totalUsd`/`unitPriceUsd`/`shippingFeeUsd` 가 전 주문 non-null 재확인 (§6-7 invariant).
+> 3. 배포 후 신규 주문도 dual-write 로 KRW·USD 모두 채워지는지 확인.
+>
+> 충족 후: USD 컬럼 `NOT NULL` 승격 → KRW 4컬럼 DROP 을 **단일 마이그레이션**으로. 롤백은
+> §7 참고(DROP 후엔 `totalUsd × fxRateSnapshot` 역산, ±1원 오차).
 
 ---
 
