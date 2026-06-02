@@ -127,7 +127,7 @@ Eximbay 가 server-side로 같은 querystring 을 form-urlencoded POST. `verify`
 | `Order.paymentMethod` | Eximbay payment_method 코드 (예: `P101` 카드) |
 | `Order.paidAt` | verify 성공 시점 |
 | `Order.cancelledAt` | refund/cancel 시점 |
-| `Order.subtotal` | customer KRW (변경 없음 — Eximbay amount 는 `subtotal/fxRate` 로 USD 환산) |
+| `Order.subtotal` | customer KRW (변경 없음 — Eximbay amount 는 `subtotal/fxRate` 로 USD 환산) — 이 환산을 없애고 USD 정본으로 옮기는 풀 전환 설계는 [`pricing-usd-migration.md`](./pricing-usd-migration.md) 참고 |
 
 스키마/마이그레이션 변경 없음.
 
