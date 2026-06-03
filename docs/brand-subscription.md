@@ -1,5 +1,40 @@
 # Brand Subscription — 설계
 
+> ## ⚠️ PG 교체 (2026-06): NHN KCP → NicePay 포스타트(NEW v2 REST) 빌링
+>
+> NHN KCP 가 **구독(정기)결제를 지원하지 않는다**고 회신해 **PG 를 NicePay 포스타트**
+> (start.nicepay.co.kr / `api.nicepay.co.kr`, NEW v2 REST)로 교체했다. **cron/dunning·환불·해지·
+> 카드교체·재가입 로직과 도메인 모델은 그대로** 두고, PG 호출 계층(어댑터)·결제 입력 UI·에러 분류만
+> 교체했다. 아래 두 번째 배너(토스→KCP) 및 본문 중 KCP 전용 서술은 **이 배너의 매핑으로 대체**된다.
+>
+> | 항목 | NHN KCP (이전) | NicePay 포스타트 (현재) |
+> |---|---|---|
+> | 서버 인증 | 본문 서비스 인증서(PEM) + 취소 RSA 서명 | `Authorization: Basic Base64(clientKey:secretKey)` 헤더 |
+> | 카드 등록 | 결제창(JS) → `enc_data`/`enc_info`/`tran_cd` 콜백 (PC 팝업 / 모바일 거래등록→리턴브릿지) | **결제창 없음** — klow_brand 카드 입력 폼 → 서버가 카드정보를 secretKey 로 AES-256(encMode A2) 암호화한 `encData` 로 발급 |
+> | 빌키 발급 | `POST /gw/enc/v1/payment` → `batch_key`(16byte) | `POST /v1/subscribe/regist` → `bid`(≤30byte) |
+> | 정기 청구 | `POST /gw/hub/v1/payment` (bt_batch_key + group_id) → `tno` | `POST /v1/subscribe/{bid}/payments` (cardQuota:0, useShopInterest:false) → `tid` + `status:"paid"` |
+> | 키 삭제 | `POST /gw/hub/v1/payment` (tx_type=10005010) | `POST /v1/subscribe/{bid}/expire` |
+> | 환불 | `POST /gw/mod/v1/cancel` (tno + RSA 서명) | `POST /v1/payments/{tid}/cancel` (reason + cancelAmt) |
+> | 망취소 | (없음) | `POST /v1/payments/netcancel` — 승인 타임아웃 시 1h 내 orphan 승인 방지(신규) |
+> | 성공 판정 | `res_cd==='0000'` | `resultCode==='0000'` (청구는 `status==='paid'` 동반) |
+> | 고객 식별 | 개념 없음 (ordr_idxx + group_id) | 개념 없음 (`orderId`). `Brand.pgCustomerKey` 는 결제 준비 게이트 플래그로 유지 |
+> | 에러 분류 | KCP res_cd (CCxx/8xxx) | NicePay resultCode (3xxx 카드 / Fxxx 빌링 / 2xxx 공통) — `classifyNicepayError` |
+> | 클라 SDK | `kcp_spay_hub.js`(PC) + 모바일 거래등록·리턴브릿지 | **없음** — 카드 입력 폼만(`CardEntryForm`). 결제창/리턴브릿지/`checkout-prepare` 전부 제거 |
+>
+> **코드 위치:** 서버 어댑터 `klow_server/src/modules/subscription/nicepay-billing.adapter.ts`,
+> 카드 입력 폼 `klow_brand/src/components/studio/CardEntryForm.tsx`(PaymentWallPanel·설정 카드변경 모달·
+> ResubscribeChoiceModal 새 카드에서 재사용), 에러 메시지 `klow_brand/src/lib/nicepay-billing.ts`.
+> start payload 가 결제창 콜백(enc_data) → 카드필드(cardNo/expYear/expMonth/idNo/cardPw)로 바뀜
+> (`validation.ts`). `BillingKey.pgBillingKey`=bid, `SubscriptionInvoice.pgTid`=tid, `provider`=`'nicepay'`.
+>
+> **카드정보 취급(PCI, 신규):** 포스타트엔 결제창 빌키발급이 없어 카드 원문이 브라우저→klow_server(TLS)로
+> 전달된다. 서버는 즉시 AES 암호화해 NicePay 로 보내고 **원문은 저장/로깅하지 않는다**(DB엔 bid+카드사명+끝4자리).
+> 운영 전 TLS 강제 · 요청 본문 로깅 금지 · NicePay IP 보안(고정 egress IP) · SAQ A-EP 범위 인지 필요.
+>
+> **코드 외 의존성(NicePay):** 포스타트 가맹점 + 빌링(정기결제) 사용 신청(빌링 미사용=F117 거절) +
+> 가맹점관리자에서 clientKey/secretKey 발급. 샌드박스(`sandbox-api.nicepay.co.kr`)로 실청구 없이 TEST 가능
+> (빌키발급/승인/삭제 모두 지원, 응답은 임의 값). Node 샘플: `github.com/nicepayments/nicepay-node`.
+
 > ## ⚠️ PG 교체 (2026-05): 토스페이먼츠 → NHN KCP 자동결제(배치키)
 >
 > 토스페이먼츠 심사 대기 기간이 길어 **PG 를 NHN KCP 자동결제(배치키)로 교체**했다.
@@ -37,7 +72,7 @@
 > - Phase 2 (노출 게이트): `PURCHASABLE_PRODUCT_WHERE` 3분기 (가입 brand 의 active 구독 / 어드민 brand 면제 / legacy 통과)
 > - Phase 3 (셀프 관리): `/settings/subscription` 페이지 + `GET / cancel / change-card` endpoint
 > - Phase 4 (정기 청구): 일일 KST 자정 cron + dunning(0/1/3/7일, 4회 정책) + 어드민 progress bar
-> - Phase 5 일부 (운영 도구): `/admin/brand-subscriptions` 어드민 페이지 + 강제 해지 + 강제 환불(KCP 거래취소 API) + 정책 위반 차단(brand reject + 구독 자동 종료 묶음)
+> - Phase 5 일부 (운영 도구): `/admin/brand-subscriptions` 어드민 페이지 + 강제 해지 + 강제 환불(NicePay 취소 API) + 정책 위반 차단(brand reject + 구독 자동 종료 묶음)
 > - **남은 Phase 5:** 세금계산서 + 운영자 알림 채널 (Slack/이메일). (PG 동기 응답이라 webhook 은 불필요 — 위 배너 참고)
 >
 > 본 문서는 결정이 굳어질 때마다 섹션을 보강해나가는 **살아있는 설계 문서**다. NHN KCP 자동결제(배치키) + 단일 플랜(₩30,000/월) + 입점 신청과 결제의 결합으로 운영된다.
@@ -763,38 +798,38 @@ async reject(@Param('id') id, @CurrentAdmin() admin, @Body() body) {
 
 ### 신규 환경변수
 
+> ⚠️ 아래 env 블록은 **NicePay 포스타트 교체(2026-06)로 갱신됨**. 이전 KCP_* 변수는 모두 제거됐다.
+
 **`klow_server/.env`:**
 
 ```
-# PG-API / 거래등록 / PC결제창 base — 테스트↔운영 base 만 교체
-KCP_PG_API_BASE=https://stg-spl.kcp.co.kr            # 운영: https://spl.kcp.co.kr
-KCP_SMPAY_BASE=https://testsmpay.kcp.co.kr           # 모바일 거래등록. 운영: https://smpay.kcp.co.kr
-KCP_PAY_JS_URL=https://testspay.kcp.co.kr/plugin/kcp_spay_hub.js  # 운영: https://spay.kcp.co.kr/...
-KCP_SITE_CD=                                         # 가맹점 사이트코드 (5byte)
-KCP_GROUP_ID=                                        # 자동결제 그룹아이디 (상점관리자 발급)
-KCP_CERT_PEM=                                         # 서비스 인증서 (멀티라인/escape 모두 허용 — 어댑터가 1줄 직렬화)
-KCP_PRIVATE_KEY=                                      # 거래취소 서명용 개인키 (SHA256withRSA)
-KCP_PRIVATE_KEY_PASSWORD=                             # 개인키 비밀번호 (없으면 비움)
+# NicePay 포스타트 API base — 샌드박스↔운영 base 만 교체
+NICEPAY_API_BASE=https://sandbox-api.nicepay.co.kr   # 운영: https://api.nicepay.co.kr
+NICEPAY_CLIENT_KEY=                                  # 클라이언트 키 (Basic 인증 앞부분)
+NICEPAY_SECRET_KEY=                                  # 시크릿 키 (Basic 인증 + encData AES 키 + signData). 클라 노출 금지
 SUBSCRIPTION_MONTHLY_PRICE_KRW=30000                 # 미설정 시 코드 기본값 30000
 SUBSCRIPTION_PLAN_CODE=brand_standard
 SUBSCRIPTION_ORDER_NAME_PREFIX=KLOW 브랜드 멤버십
 ```
 
-**`klow_brand/.env.local`:** 별도 KCP 키 불필요. 결제창 호출에 필요한 site_cd/group_id/PayUrl 등은
-서버 `POST /v1/brand/subscription/checkout-prepare` 가 내려준다 (`NEXT_PUBLIC_API_URL` 만 있으면 됨).
+**`klow_brand/.env.local`:** PG 관련 키 불필요(`NEXT_PUBLIC_API_URL` 만). 카드 입력은 폼에서 받아
+서버 `POST /v1/brand/subscription/start` 로 보낸다 — JS SDK·결제창 호출이 없어 public 키가 없다.
 
-> KCP 자동결제는 **별도 계약 서비스**. 테스트 자격증명(test site_cd + 테스트 인증서)은 KCP 연동 단계에서
-> 발급받는다(토스 sandbox 처럼 즉시 셀프서비스는 아님). 그룹아이디는 상점관리자에서 본인이 직접 발급(승인 불필요).
+> NicePay 포스타트는 **빌링(정기결제) 사용 신청**이 필요하다(빌링 미사용=F117 거절). 키는 가맹점관리자
+> → 개발정보에서 확인. 샌드박스(`sandbox-api.nicepay.co.kr`)는 회원가입 후 셀프서비스로 즉시 TEST 가능(실청구 없음).
 
 ### webhook 시크릿은 없다
 
-KCP PG-API 는 동기 응답(`res_cd`)이라 별도 webhook/서명 검증이 없다. 멱등(`ordr_idxx`) + 동기 응답 코드 검증이 보안 모델 자체다.
+NicePay 빌링 API 는 동기 응답(`resultCode`)이라 별도 webhook/서명 검증이 필수는 아니다. 멱등(`orderId`) +
+동기 응답 코드 검증 + (옵션) `signData`/`signature` 위변조 검증이 보안 모델이다.
 
-### 배치키와 PCI scope
+### 빌키와 PCI scope (NicePay 교체 후 변경됨)
 
-- **배치키(`pgBillingKey`)는 평문 저장.** PG 가 발급한 토큰이고, 도용되어도 `group_id` + 서비스 인증서 없이는 결제 불가.
-- **카드 번호는 절대 서버로 들어오지 않는다** — KCP 결제창이 KCP 도메인에서 입력받고 클라엔 `enc_data`(암호화 블롭)와 마스킹된 `card_mask_no` 만 온다. klow_server 는 `batch_key` 토큰만 다룸. PCI scope 밖.
-- **취소 서명 개인키(`KCP_PRIVATE_KEY`)는 서버 전용** — 노출 시 임의 취소가 가능하므로 admin TOTP secret 급으로 관리.
+- **빌키(`pgBillingKey`=bid)는 평문 저장.** PG 토큰이고, 도용되어도 `secretKey` 없이는 결제 불가.
+- **카드 번호가 서버로 들어온다(변경점).** 포스타트엔 결제창 빌키발급이 없어 카드 원문이 브라우저→klow_server(TLS)로
+  전달된다. 서버는 즉시 AES-256 암호화해 `/v1/subscribe/regist` 로 보내고 **원문을 저장/로깅하지 않는다**(DB엔 bid+카드사명+끝4자리).
+  → 운영 전 TLS 강제 · 요청 본문 로깅 금지 · NicePay IP 보안(고정 egress IP) · **PCI-DSS SAQ A-EP 범위 진입 인지**.
+- **`NICEPAY_SECRET_KEY` 는 서버 전용** — encData 암호화 키이자 Basic 인증 자격증명. 노출 시 임의 결제·취소가 가능하므로 admin TOTP secret 급으로 관리.
 
 ---
 
