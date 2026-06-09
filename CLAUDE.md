@@ -47,6 +47,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | AdminGuard + CurrentAdmin     | `klow_server/src/common/guards/admin.guard.ts`, `klow_server/src/common/guards/super-admin.guard.ts`, `klow_server/src/common/decorators/current-admin.decorator.ts` |
 | Admin 시드 스크립트           | `klow_server/prisma/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
 | klow_web pages                | `klow_web/src/app/` (feed, videos, product, creator, shop, discover, concierge, cart, checkout, my)     |
+| klow_web UI i18n (앱 전역)    | `klow_web/src/i18n/` (en 단일 원본 → `npm run i18n:fill` 로 ja/zh/vi/th/id/ru 생성) + `useT`/`useLabels` 훅. 가이드: [`klow_web/docs/i18n.md`](./klow_web/docs/i18n.md) |
 | klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, onboarding/{brand,products}, dashboard/products/{new,[id]/edit}) |
 | klow_brand API client         | `klow_brand/src/lib/api.ts` + `klow_brand/src/lib/upload.ts`                                            |
 | klow_brand 인증 훅            | `klow_brand/src/hooks/useBrandSession.ts`, `klow_brand/src/hooks/useRequireBrandAuth.ts`                |
