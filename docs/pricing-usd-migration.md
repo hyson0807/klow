@@ -158,31 +158,33 @@ flowchart TD
 - **`klow_brand`** — 정산 화면은 KRW(`settlementPriceKrw`) 유지 — **변경 없음(확인만)**.
 - **`KLOW`(legacy)** — `data/mock.ts` 기반이라 **해당 없음**.
 
-### 단계 5 — 파괴적 정리 (별도 PR) · ⏸ 보류 중
+### 단계 5 — 파괴적 정리 · ✅ 완료
 
-운영 안정 확인 후 **단일 마이그레이션**으로 아래 deprecated 컬럼들을 한꺼번에 정리한다.
+deprecated 컬럼들을 정리 완료. (a)(b) 각각 단독 마이그레이션으로 수행했다.
 
-**(a) 주문 USD 정본화 잔여 (이 문서 #3):**
-- USD 3컬럼 `NOT NULL` 승격 + KRW 4컬럼(`Order.subtotal`, `OrderItem.unitPrice`,
-  `Order.shippingFeeKrw`, `Order.shippingFeeUsdSnapshot`) DROP.
+**(a) 주문 USD 정본화 잔여 (이 문서 #3) · ✅ 완료:**
+- USD 3컬럼(`totalUsd`/`unitPriceUsd`/`shippingFeeUsd`) `NOT NULL` 승격 + KRW 4컬럼
+  (`Order.subtotal`, `OrderItem.unitPrice`, `Order.shippingFeeKrw`, `Order.shippingFeeUsdSnapshot`) DROP.
+- 마이그레이션 `usd_canonical_drop_krw_ledger`. 실주문 0 + 기존 전 주문 USD non-null(불변식 위반 0)
+  확인 후 dual-write·legacy fallback 코드를 4개 repo 에서 전부 제거하고 DROP.
+- 화면 ₩ 보조표기는 제거(USD 단일 노출)했고, 국내 KRW 결제는 `totalUsd × fxRateSnapshot` 라
+  영향 없음(`payment.service.krwAmountOf`). 누적매출·주문확인메일도 USD 로 전환.
 
-**(b) Product.price 제거 (#7 후속 — discount 고객가 재정의):**
-- `Product.price`(현재 nullable deprecated) DROP. 코드는 이미 price 미사용 — listPriceUsd 는
-  `customerPriceUsd ÷ (1 − discount/100)` 로 파생, discount 는 직접 입력값.
-- 코드 전환 커밋: `klow_server` `72fbc6f` + web/admin/brand. 마이그레이션 `..._product_price_nullable_deprecate` 가 nullable 까지 적용됨 → 남은 건 `ALTER TABLE "Product" DROP COLUMN "price"`.
+**(b) Product.price 제거 (#7 후속 — discount 고객가 재정의) · ✅ 완료:**
+- `Product.price` DROP **완료**. (a) USD 정본화와 **분리해 단독 진행** — price 는 이미 미사용이라
+  dual-write 롤백 안전망과 무관(롤백 불필요)하기 때문.
+- listPriceUsd 는 `customerPriceUsd ÷ (1 − discount/100)` 로 파생, discount 는 직접 입력값.
+- 코드 전환 커밋: `klow_server` `72fbc6f` + web/admin/brand. 마지막으로 남아있던 `seed.ts` 의
+  `price` 쓰기까지 제거해 **코드 참조 0** 확인 후 schema 에서 필드 삭제 → 단독 마이그레이션
+  `ALTER TABLE "Product" DROP COLUMN "price"`.
 - 가격 모델 전체는 [`pricing-model.md`](./pricing-model.md) 참고.
 
-> **상태 (2026-06 기준): 보류.** 위 (a)(b) 코드 전환은 각 repo `staging` 에 커밋됨. 아직 배포·운영
-> 검증 전이라 DROP 하면 (a) dual-write 롤백 안전망이 사라진다.
+> **상태 (2026-06 기준): (a)(b) 모두 완료.** 실결제 도입 전 단계라 dual-write 롤백 안전망이
+> 불필요해, 운영 배포 대기 없이 staging 에서 바로 DROP 했다. 착수 전 §6-7 불변식(전 주문
+> USD non-null, `Σ라인 + 배송비 = totalUsd`)을 DB 에서 0 위반으로 확인했다.
 >
-> **착수 전제조건 (모두 충족 시에만 진행):**
-> 1. 코드가 운영에 배포되어 실주문으로 며칠간 안정 동작 확인 (USD 청구·EFS·정산·상품가 정상).
-> 2. `totalUsd`/`unitPriceUsd`/`shippingFeeUsd` 가 전 주문 non-null 재확인 (§6-7 invariant).
-> 3. 배포 후 신규 주문도 dual-write 로 KRW·USD 모두 채워지는지 확인.
-> 4. (b)는 `Product.price` 참조가 코드 전역에서 0인지 grep 재확인.
->
-> 충족 후 단일 마이그레이션: USD 컬럼 `NOT NULL` 승격 → KRW 4컬럼 + `Product.price` DROP.
-> (a) 롤백은 §7(역산 ±1원). (b)는 price 가 이미 미사용이라 롤백 불필요.
+> **롤백:** 이미 DROP 됨 — KRW 가 필요하면 `totalUsd × fxRateSnapshot` 역산으로 재구성(§7, ±1원).
+> 정산측 KRW(`settlementPriceKrw`)는 유지되므로 브랜드 지급에는 영향 없음.
 
 ---
 
