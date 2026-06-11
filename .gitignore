@@ -10,7 +10,7 @@ klow_web/
 klowpro/
 klowsaas/
 image-card/
-search/
+klow_search_server/
 
 # ── Tooling caches ───────────────────────────────────────────────
 .playwright-mcp/
