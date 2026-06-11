@@ -1,6 +1,6 @@
 # KLOW Workspace
 
-This directory is the **workspace root** for the KLOW K-beauty platform. It contains five sibling projects, each operated as **its own independent git repository**.
+This directory is the **workspace root** for the KLOW K-beauty platform. It contains six sibling projects, each operated as **its own independent git repository**.
 
 ## Workspace Layout
 
@@ -11,17 +11,18 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 ├── klow_admin/    ← Admin dashboard          (Next.js 14, port 3000, internal CRUD, pure UI client)
 ├── klow_brand/    ← Brand self-onboarding    (Next.js 14, port 3002, posts /v1/brand/*)
 ├── klow_server/   ← Backend API              (NestJS 10, port 4000, owns Prisma + Neon + R2)
+├── search/        ← 인플루언서 검색 SaaS      (server NestJS :4100 + web Next.js :3100, 자체 Neon DB + R2 bucket `search` — 별도 스택, 자세히는 search/CLAUDE.md)
 ├── docs/          ← Workspace docs           (architecture.md and friends)
 ├── CLAUDE.md      ← This file
-└── .gitignore     ← Excludes the 5 subprojects from the workspace repo
+└── .gitignore     ← Excludes the subprojects from the workspace repo
 ```
 
 ## Repo Independence — IMPORTANT
 
 **Each subdirectory is its own git repository with its own history.** The workspace root may be a (separate, lightweight) git repo for docs/CLAUDE.md only.
 
-- **NEVER** stage or commit files inside `KLOW/`, `klow_web/`, `klow_admin/`, `klow_brand/`, or `klow_server/` from the workspace root.
-- The workspace `.gitignore` already excludes these five folders.
+- **NEVER** stage or commit files inside `KLOW/`, `klow_web/`, `klow_admin/`, `klow_brand/`, `klow_server/`, or `search/` from the workspace root.
+- The workspace `.gitignore` already excludes these folders.
 - When working on a specific subproject, **`cd` into that subdir first**. Its own `CLAUDE.md` or `README.md` (if any) takes precedence over this one.
 - When making cross-cutting changes, do them in each repo's own commit/branch — don't try to coordinate via the workspace root.
 
