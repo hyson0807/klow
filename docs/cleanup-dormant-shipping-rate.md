@@ -11,8 +11,9 @@
   - `efsRateKrw`, `emsRateKrw`, `dhlRateKrw` (구 2kg 미러 대표값)
   - `efsFuelSurchargePerKgKrw`, `emsSpecialFeePerKgKrw` (kg당 추가요금)
 
-> `ShippingCountry.carriers` / `enabled` / `efsPartialExclusions` 와 `ShippingExclusion` 테이블은 **유지**
+> `ShippingCountry.enabled` / `efsPartialExclusions` 와 `ShippingExclusion` 테이블은 **유지**
 > (국가 설정 탭·제품/시딩 EFS 제외구역 차단에서 계속 사용).
+> (구 `ShippingCountry.carriers` 컬럼은 별도 마이그레이션 `drop_shipping_country_carriers` 로 이미 제거됨.)
 
 ## 절차 (모든 환경 — dev/staging/prod — 배포가 끝난 뒤)
 
