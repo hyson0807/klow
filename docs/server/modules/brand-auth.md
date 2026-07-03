@@ -22,6 +22,21 @@
 | POST   | `/v1/brand/auth/signup`                 | TIGHT    | 이메일/비밀번호 가입 (+slug→brand draft) + 세션 쿠키  |
 | POST   | `/v1/brand/auth/login`                  | LOOSE    | 이메일/비밀번호 로그인 + 세션 쿠키                    |
 
+### 비밀번호 변경 / 찾기 (2026-07)
+
+`passwordHash` 있는 계정(이메일+비밀번호 가입)만 대상 — 구글/전화 가입 계정은 400 `password_not_set`, 미가입 이메일은 404 `user_not_found` (login 의 명시 에러 관례를 따름, enumeration 은 THROTTLE 로 완화).
+
+| Method | Path                                        | Throttle | 기능                                                  |
+|--------|---------------------------------------------|----------|-------------------------------------------------------|
+| POST   | `/v1/brand/auth/change-password`            | TIGHT    | 현재 비밀번호 확인 후 교체 (세션 쿠키 필요). 현재 세션 **제외** 전 세션 무효화 |
+| POST   | `/v1/brand/auth/password-reset/send-otp`    | TIGHT    | 재설정용 이메일 OTP 발송 (전용 메일 템플릿)           |
+| POST   | `/v1/brand/auth/password-reset/verify-otp`  | LOOSE    | OTP 검증 → reset 단기 토큰 (15분)                     |
+| POST   | `/v1/brand/auth/password-reset/confirm`     | LOOSE    | 새 비밀번호 확정 → **전 세션 무효화 후 새 세션 쿠키 발급(자동 로그인)**. 토큰 1회용 |
+
+- purpose: `brand-password-reset-otp` / `brand-password-reset-token` — 가입과 동일한 `EmailVerificationService` 인프라 재사용 (10분 OTP·5회 시도·15분 토큰).
+- `me`/로그인 응답의 user 에 `hasPassword: boolean` 포함 — klow_brand 설정 페이지가 비밀번호 변경 섹션 노출 분기에 사용.
+- 클라: LoginModal 이메일 폼 하단 "비밀번호를 잊으셨나요?" → 모달 내 `ForgotPasswordFlow` 3스텝(이메일→OTP→새 비밀번호), 설정 페이지 `PasswordSection` 카드.
+
 ### 전화 인증 (메인 플로우)
 
 | Method | Path                                    | Throttle | 기능                                                  |
