@@ -88,7 +88,7 @@ const CONCERN_EXPANSION: Record<string, string[]> = {
 | `klow_web/src/store/useAppStore.ts` | `concernKeywords: string[]` persist |
 | `klow_web/src/hooks/useDiscoverQuery.ts` | 배열을 API로 전달 |
 | `klow_web/src/lib/api.ts` | `?concerns=csv` 쿼리 파라미터 |
-| `klow_web/src/lib/discoverLabels.ts` | `formatConcernList()` 제목 라벨 포맷 |
+| `klow_web/src/i18n/labels.ts` (+ `hooks/useLabel.ts`) | `formatConcernList()` 제목 라벨 포맷 (i18n 이관) |
 | `klow_server/src/modules/discover/public-discover.controller.ts` | `concerns` CSV + 레거시 `concern` 수용 |
 | `klow_server/src/modules/discover/discover.service.ts` | `CONCERN_EXPANSION`, `scoreProduct`, `scoreCreator` |
 

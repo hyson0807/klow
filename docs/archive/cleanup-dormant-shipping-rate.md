@@ -1,5 +1,9 @@
 # Follow-up: dormant 배송 요율 DB 드롭
 
+> **📦 보관 문서 (2026-06-23 완료):** 드롭 마이그레이션(`20260623032631_drop_dormant_shipping_rate`)까지
+> 실행 완료된 일회성 정리 노트. 현행 배송/가격 모델은 [`../pricing-model.md`](../pricing-model.md) 와
+> [`../server/modules/shipping.md`](../server/modules/shipping.md) 참고.
+
 제품 가격을 `ShippingCountry.productLogisticsCostKrw`/`productCarrier`로, 시딩 배송비를 `SeedingRate`(국가×무게)로
 옮기면서 **구 무게×캐리어 요율 인프라의 제품 경로 코드는 전부 제거**했지만, 데이터 유실 위험을 피하려고 **일부 DB 객체는 남겨뒀다**(dormant).
 아래 객체들은 현재 어떤 코드에서도 읽지/쓰지 않는다.
