@@ -2,7 +2,10 @@
 
 - **모듈 경로**: `src/modules/orders/`
 - **결제 통화**: USD
-- **주문 생성 시 저장**: 약관동의(4종) + IP + `fxRateSnapshot` (결제 시점 환율 고정용)
+- **주문 생성 시 저장**: 약관동의(4종) + IP + `fxRateSnapshot` (결제 시점 환율 고정용). 라인 단가·정산가·원가는
+  `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
+- **과청구 가드**: 현지통화 핀(`priceLocal`) 상품인데 목적국 통화의 유효 환율이 없으면 `OrdersService.billingRate`가
+  주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
 - **상태 흐름**: `pending → paid → fulfilled / cancelled / refunded`
 - **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `guest-order-token.ts`(비회원 주문 HMAC 토큰)
 
@@ -24,6 +27,7 @@
 | Method | Path                                | Guard            | 기능                                                                          |
 |--------|-------------------------------------|------------------|-------------------------------------------------------------------------------|
 | POST   | `/v1/orders`                        | OptionalUser     | 주문 생성 (약관 4종 동의 + IP + fxRateSnapshot 저장, `Zod literal(true)` 검증). 비회원이면 `userId=null` + 해당 주문 한정 HMAC 게스트 쿠키 발급 |
+| POST   | `/v1/orders/quote`                  | public           | 결제 전 가격 견적 — 목적국 기준 라인 단가/배송비/합계(read-only). 주문 생성과 **동일 `priceLine`** 이라 견적가 == 청구가. 배송 불가면 `shippable:false` |
 | GET    | `/v1/orders/mine`                   | User             | 내 주문 목록                                                                  |
 | POST   | `/v1/orders/lookup`                 | public (TIGHT)   | 비회원 주문 조회 — `orderId`(cuid) + `email` 매칭                              |
 | POST   | `/v1/orders/guest-cancel/request-otp` | public (TIGHT) | 비회원 취소 1단계 — 주문/이메일 매칭 시에만 OTP 발송. 응답은 항상 `{ ok: true }`(존재 oracle 차단) |

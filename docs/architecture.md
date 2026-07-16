@@ -151,8 +151,8 @@ Source of truth: `klow_server/prisma/schema.prisma` (43 models, 18 native enums)
 
 ### 카탈로그 (Catalog)
 
-- **`Product`** — 판매 제품 마스터. 가격 필드 `salePrice`(KRW 정산가=원가+마진), `costKrw`(원가), `discount`(글로벌 취소선), 공개·판매 게이트 `status`/`hidden`, 통관 `hsCode`/`customsCategoryEn`, FOMO/머천다이징/페르소나 태그(`concerns`, `recommendedFor`) + 상세 콘텐츠. `brand` 는 `Brand.name` 의 denormalized 캐시(권위는 `brandId` FK). `rating`/`reviewCount` 는 `Review` 에서 서버가 파생.
-- **`ProductCountryPrice`** — 제품×국가 가격 오버라이드(`iso2`, `marginKrw?`, `discountPct`). 행 없으면 전국가 기본 상속. `@@unique([productId, iso2])`, Product cascade.
+- **`Product`** — 판매 제품 마스터. 가격 정본 `basePriceUsd`(전국가 기본 판매가 USD 센트, 고정), `costKrw`(원가, 원가 밑 경고 기준), `salePrice`([legacy] 구 정산가 호환), `discount`(글로벌 취소선), 공개·판매 게이트 `status`/`hidden`, 통관 `hsCode`/`customsCategoryEn`, FOMO/머천다이징/페르소나 태그(`concerns`, `recommendedFor`) + 상세 콘텐츠. `brand` 는 `Brand.name` 의 denormalized 캐시(권위는 `brandId` FK). `rating`/`reviewCount` 는 `Review` 에서 서버가 파생.
+- **`ProductCountryPrice`** — 제품×국가 가격 핀(`iso2`, `priceLocal?`(현지통화 고정 판매가), `discountPct`; `marginKrw?` 는 dormant). 핀 있으면 그 국가는 현지통화 고정, 없으면 전국가 기본 `basePriceUsd` 상속. `@@unique([productId, iso2])`, Product cascade.
 - **`Brand`** — 브랜드 storefront + 정산/발송/입점상태/구독 마스터. `slug`, `status`(BrandStatus), 로고 레이아웃, 송화인/계좌 정산 정보, `pgCustomerKey`(결제 준비 게이트). Product·Shipment·Campaign·SeedingLink·BrandUser·BrandSubscription·BillingKey·BrandTranslation 소유.
 - **`Creator`** — 콘텐츠 크리에이터 프로필. `handle`(unique), `skinType`/`concerns`/`country`, `followers`, SNS 핸들. Video[] 소유.
 - **`Video`** — 크리에이터 릴스. `videoUrl`/`thumbnailUrl`, `themes`, `forSkinTypes`. Creator(N:1, cascade), VideoProduct 경유 Product(N:M).
@@ -232,9 +232,9 @@ Source of truth: `klow_server/prisma/schema.prisma` (43 models, 18 native enums)
 
 Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries.
 
-### Pricing (cost + margin + per-country) → [`pricing-model.md`](./pricing-model.md)
+### Pricing (판매가 고정 → 정산 유동) → [`pricing-model.md`](./pricing-model.md)
 
-브랜드/어드민이 **원가(`Product.costKrw`) + 마진**을 입력 → **정산가(`salePrice`) = 원가 + 마진**. **판매가(USD 센트) = `ceil((정산가 + 국가별 2kg 물류비/2) / (1−0.05) / fx × 100)`** — PG 5% 수수료를 `÷0.95` 로 net 회수, 제품 무게는 가격에 영향 없음. 국가별 차등은 `ProductCountryPrice(iso2, marginKrw?, discountPct)` — 국가별 마진 오버라이드 + 국가별 할인(기간 없음, 있으면 글로벌 `Product.discount` 대신 우선, 스택 안 함). 물류비 정본은 `ShippingCountry.productLogisticsCostKrw`(어드민 **물류비용** 탭). **서버가 목적국별 최종가를 계산해 응답에 싣는다** — 공개 read 는 `?country=`(미지정 US 베스트케이스), 응답 `customerPriceUsd`/`listPriceUsd`/`customerDiscountPercent`. 단일 계산 출처는 `product-selects.ts priceLine()` — 표시·주문·견적이 모두 거쳐 **표시가 == 청구가** 보장. 미설정국·EFS 제외구역은 구매 차단.
+**가격 정본은 고정 판매가**다 — 전국가 기본 `Product.basePriceUsd`(USD 센트), 국가별 핀 `ProductCountryPrice.priceLocal`(현지통화 고정, 없으면 기본 상속). **브랜드 정산가(KRW)는 주문 시점 환율로 역산**되어 환율 리스크를 브랜드가 진다: `floor(customerPriceUsd/100 × usdKrwRate × (1−0.05) − 국가별 2kg 물류비/2)`. 역산 정산가 < `costKrw` 면 `belowCost` 경고(구매·저장은 막지 않음). 제품 무게는 가격에 영향 없음. 국가별 할인(`discountPct`, 기간 없음)은 판매가에 `×(1−pct/100)`, 있으면 글로벌 `Product.discount` 대신 우선(스택 안 함). 물류비 정본 `ShippingCountry.productLogisticsCostKrw`(어드민 **물류비용** 탭). **입력 방식은 앱마다 다르지만 저장 정본은 동일**(cost-pricing.ts 미러): **어드민** = 원가 + 기본 판매가(USD) 직접; **브랜드** = 원가 + 마진(KRW) → 기준가 US 물류비 기준 파생, 국가별은 **현지통화 판매가 직접 입력 → priceLocal 핀 그대로 저장**(딱 떨어진 값 유지). **서버가 목적국별 최종가를 계산해 응답에 싣는다**(공개 read `?country=`, 미지정 US 베스트케이스; 응답 `customerPriceUsd`/`listPriceUsd`/`customerDiscountPercent`). 단일 계산 출처 `product-selects.ts priceLine()` — 표시·주문·견적이 모두 거쳐 **표시가 == 청구가** 보장. 미설정국·EFS 제외구역·**핀 국가인데 통화 환율 미해결**은 구매 차단(과청구 방지).
 
 ### Payment — Eximbay consumer checkout → [`payment-integration.md`](./payment-integration.md)
 

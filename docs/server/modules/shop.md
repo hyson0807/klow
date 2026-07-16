@@ -20,5 +20,8 @@
 | Method | Path                       | 기능                                                              |
 |--------|----------------------------|-------------------------------------------------------------------|
 | GET    | `/v1/shop/today`           | 오늘의 추천 상품 (`PUBLIC_PRODUCT_WHERE`, 최대 50개)              |
-| GET    | `/v1/shop/fx-rate`         | 현재 환율 (KRW→USD) — 주문 생성 시점 snapshot 으로 활용           |
-| GET    | `/v1/shop/price-preview`   | 정산가(`settlementKrw`)→소비자 노출가 미리보기. 브랜드/어드민 ProductForm 이 정산가 입력 시 디바운스 호출 |
+| GET    | `/v1/shop/fx-rate`         | 운영 환율 (KRW per USD, `ShopSettings.usdKrwRate`) — 주문 생성 시점 snapshot + 브랜드/어드민 입력 미리보기 환율의 단일 소스 |
+| GET    | `/v1/shop/currency`        | 국가→현지통화(ISO 4217) 맵 + 통화별 환율(1 USD 당 현지통화). 현지통화 표시/입력용 (currency 모듈, `public-currency.controller.ts`) |
+
+> **[2026-07 제거]** 구 `GET /v1/shop/price-preview`(정산가→노출가 미리보기)는 판매가 고정 모델
+> 전환으로 삭제됨. 클라 입력 미리보기는 `/v1/shop/fx-rate` 환율 + `cost-pricing.ts` 미러로 대체.
