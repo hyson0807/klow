@@ -161,7 +161,7 @@ model SubscriptionInvoice {
 **Stage 2 — NicePay PG 호출 (tx 밖, 순차 2건)**
 - `registerBillingKey`: 카드정보를 AES-256-CBC 로 암호화한 `encData`(encMode `A2`) + `signData` 로
   `POST /v1/subscribe/regist` → **bid**. `regOrderId = sha256("reg-{brandId}-{now}")`.
-- `chargeBilling`: `POST /v1/subscribe/{bid}/payments` (amount, `cardQuota:'0'`, `useShopInterest:false`) → **tid**,
+- `chargeBilling`: `POST /v1/subscribe/{bid}/payments` (amount, `cardQuota`(첫 결제만 0/3/6/12, 기본 `'0'`), `useShopInterest:false`) → **tid**,
   `status:'paid'`. `chargeOrderId = sha256("start-{bid}")`. 성공 즉시 `subscription_payment_done ... tid=` 로그.
 - **첫 결제 실패 시 orphan 정리:** 네트워크/타임아웃(NicePay 에러 아님)이면 `netCancel`(1h 내 망취소) → 그리고
   `deleteBillingKey`(bid expire, best-effort). DB 엔 아무 row 도 안 만든다.
