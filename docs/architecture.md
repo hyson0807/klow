@@ -158,7 +158,8 @@ Source of truth: `klow_server/prisma/schema.prisma` (43 models, 18 native enums)
 - **`Video`** — 크리에이터 릴스. `videoUrl`/`thumbnailUrl`, `themes`, `forSkinTypes`. Creator(N:1, cascade), VideoProduct 경유 Product(N:M).
 - **`VideoProduct`** — Video↔Product 명시 조인 + `order`(드래그 정렬용). 복합 PK `(videoId, productId)`, 양쪽 cascade. (extra 컬럼 때문에 implicit N:M 대신 명시 조인.)
 - **`Review`** — 제품 리뷰(한국어 원문). mutation 이 같은 트랜잭션에서 `Product.rating`/`reviewCount` 재계산. Product(cascade)·User(nullable)·ReviewTranslation[].
-- **`ShopSettings`** — 전역 상점 설정 싱글턴(`id="default"`, lazy-create). `usdKrwRate`(KRW→USD 표시 환산), `todaysPickConcern`(`/v1/shop/today`).
+- **`ShopSettings`** — 전역 상점 설정 싱글턴(`id="default"`, lazy-create). `todaysPickConcern`(`/v1/shop/today`), `dhlFuelSurchargeRate`. (`usdKrwRate` 는 정산 정본이 `CurrencyFxRate['KRW']` 로 이관돼 **dormant**.)
+- **`CurrencyFxRate`** — 통화 환율 단일 테이블. `['KRW']` 행 = 브랜드 정산 정본 환율(수동 고정, cron 제외, `resolveFxRate`), 그 외 = USD→현지통화 표시 환율(cron 자동 + 수동 오버라이드). `manualOverride`/`autoRate`/`source`.
 
 ### 주문 / 결제 (Orders & Payment)
 
@@ -370,7 +371,7 @@ The server runs scheduled work (the old "no cron jobs" claim is obsolete):
 
 - **`subscription-billing.cron.ts`** (`subscription` module) — runs at **KST midnight**, charges due `BrandSubscription`s via NicePay (`POST /v1/subscribe/{bid}/payments`), and runs dunning on **days 0/1/3/7** (4 failures → `past_due`). See [`brand-subscription.md`](./brand-subscription.md).
 
-Still absent (genuinely future): expired-`Session`/`EmailVerification`/`PhoneVerification` cleanup, abandoned-pending-order cleanup, and daily FX auto-refresh (`usdKrwRate` is still updated manually by admin). Add via the same `PrismaService` when needed.
+Still absent (genuinely future): expired-`Session`/`EmailVerification`/`PhoneVerification` cleanup, abandoned-pending-order cleanup. (The settlement FX rate `CurrencyFxRate['KRW']` is intentionally manual — cron refreshes only display currencies, not KRW.) Add via the same `PrismaService` when needed.
 
 ---
 
