@@ -188,7 +188,7 @@ DB 전이는 호출자(어드민/사용자/게스트)가 각자 where 절로 수
 | `Order.agreementIp` | 동의를 누른 클라이언트 IP (분쟁 트레이서빌리티) |
 | `Order.paymentFailureReason` | report-failure 가 저장하는 운영 디버깅용 사유(≤500자) |
 | `OrderItem.unitPriceUsd` | USD 센트 — 주문 시점 고객 결제 단가 스냅샷(마크업+수수료 포함) |
-| `OrderItem.settlementPriceKrw` | KRW — 주문 시점 브랜드 정산 단가(= `Product.salePrice`). 브랜드 studio 표시용 |
+| `OrderItem.settlementPriceKrw` | KRW — 주문 시점 브랜드 정산 단가. 청구 USD 에서 주문 시점 환율로 역산(`= 청구USD × fx × 0.95 − 물류비/2`, `settlementKrwFromCustomerUsd`) — `Product.salePrice`(정산가)와 별개 스냅샷 |
 
 스키마는 USD 전환 마이그레이션 이후 안정 — 이 통합 자체가 추가한 신규 마이그레이션은 없다.
 

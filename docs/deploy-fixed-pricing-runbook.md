@@ -7,6 +7,7 @@
 ## 왜 순서가 중요한가
 
 - **노출/구매 게이트가 `basePriceUsd > 0` 로 이관됨** (`product-selects.ts` `PURCHASABLE_PRODUCT_WHERE`).
+  *(2026-07 이후 게이트는 `hasSellablePrice` = `basePriceUsd>0 OR (basePriceFxRate≠null AND salePrice>0)` 로 대체됨 — 아래 런북은 당시 기준.)*
   마이그레이션은 `basePriceUsd` 를 `null` 로 추가하므로, **백필 전에 신 서버가 트래픽을 받으면
   기존 전 제품이 `basePriceUsd=null` → 전부 사라진다.**
 - **현지통화 핀(`priceLocal`)의 청구 USD 는 `CurrencyFxRate` 환율로 산출된다.** 백필이 핀을 현지통화로
