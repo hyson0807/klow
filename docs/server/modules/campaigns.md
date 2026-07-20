@@ -25,7 +25,7 @@
 | GET    | `/v1/brand/campaigns`             | 내 인플루언서 목록(각 item clickCount/purchaseCount/revenueUsd) + KPI(activeCampaigns/totalClicks/totalPurchases/totalRevenueUsd) |
 | POST   | `/v1/brand/campaigns`             | 인플루언서(=캠페인) 생성(`name`/`snsUrl`/`platforms[]`/`countries[]`/`discountPct`/`memo?`) — slug·code·url 발급 |
 | GET    | `/v1/brand/campaigns/:id`         | 상세(플랫 DTO: slug·url·platforms·countries·discountPct·clickCount·purchaseCount·revenueUsd 등) |
-| PATCH  | `/v1/brand/campaigns/:id`         | 중지/재개(`status?`) + 링크 On/Off(`enabled?`, 최소 1필드)                                  |
+| PATCH  | `/v1/brand/campaigns/:id`         | 중지/재개(`status?`) + 링크 On/Off(`enabled?`) + 메모(`memo?`, null=삭제, ≤500자) (최소 1필드) |
 | DELETE | `/v1/brand/campaigns/:id`         | 삭제(일별통계 cascade)                                                                      |
 | GET    | `/v1/brand/campaigns/:id/stats`   | 일자별 유입 시계열(`days=1~90`, 기본 30, dense 제로필)                                       |
 
