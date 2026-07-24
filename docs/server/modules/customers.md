@@ -3,9 +3,9 @@
 - **모듈 경로**: `src/modules/customers/`
 - **데이터 모델**: `User` (auth 모듈 소유)
 - **주 클라이언트**: `klow_admin`
-- **관련 파일**: `customers.service.ts`, `customers.controller.ts`
+- **관련 파일**: `customers.service.ts`, `admin-customers.controller.ts`
 
-## customers.controller.ts (`@Controller('admin/customers')`)
+## admin-customers.controller.ts (`@Controller('admin/customers')`)
 
 > 전체 라우트 `AdminGuard`.
 

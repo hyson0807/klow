@@ -81,7 +81,7 @@ klow_server/
 │   ├── prisma/                      # @Global() PrismaModule + PrismaService singleton
 │   ├── common/
 │   │   ├── constants.ts             # PRODUCT_CATEGORY_KEYS, VIDEO_THEMES, CONCERNS, ...
-│   │   ├── validation.ts            # zod schemas (ProductInput, BrandInput, ...)
+│   │   ├── validation/              # zod schemas — 도메인별 분할(product.ts, brand.ts, order.ts …) + index 배럴
 │   │   ├── zod-validation.pipe.ts   # ZodValidationPipe<T> generic pipe
 │   │   ├── decorators/              # @CurrentUser() / @CurrentAdmin() / @CurrentBrandUser()
 │   │   └── guards/                  # user.guard / admin.guard / super-admin.guard / brand.guard

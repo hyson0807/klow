@@ -2,9 +2,9 @@
 
 - **모듈 경로**: `src/modules/stats/`
 - **주 클라이언트**: `klow_admin` 메인 대시보드
-- **관련 파일**: `stats.controller.ts`
+- **관련 파일**: `admin-stats.controller.ts`
 
-## stats.controller.ts (`@Controller('admin/stats')`)
+## admin-stats.controller.ts (`@Controller('admin/stats')`)
 
 > `AdminGuard`.
 

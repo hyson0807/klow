@@ -37,7 +37,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
 | API 엔드포인트 문서           | `docs/server/README.md` (모듈 색인) + `docs/server/modules/<module>.md` — 컨트롤러 변경 시 함께 갱신     |
 | Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, brand-applications, brand-auth, brand-scraper, brands, campaigns, cart, concierge, creators, curated-influencers, customers, discover, instagram, orders, payment, products, reviews, seeding, settlement, shipments, shipping, shop, stats, subscription, translation, upload, videos) |
-| Server validation (zod)       | `klow_server/src/common/validation.ts`                                                                  |
+| Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | Shared product field selects  | `klow_server/src/modules/products/product-selects.ts`                                                   |
 | Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, brand-subscriptions, brand-withdrawals, creators, videos, reviews, orders, refunds, returns, shipments, tracking, sales-report, settlement, campaigns, influencers, customers, concierge-requests, product-logistics-cost, seeding-cost, shipping-countries, shipping-rates, shop-settings, audit-logs, admins) |
 | Admin pages (공개)            | `klow_admin/src/app/login/`, `klow_admin/src/app/accept-invite/[token]/`                                |
@@ -46,7 +46,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 | Admin 인증 클라이언트         | `klow_admin/src/lib/admin-auth.ts`, `klow_admin/src/hooks/useCurrentAdmin.ts`, `klow_admin/src/hooks/useIdleLogout.ts` |
 | Admin 인증 모듈               | `klow_server/src/modules/admin-auth/` (service, controller, admins controller, totp, invitation, audit interceptor) |
 | AdminGuard + CurrentAdmin     | `klow_server/src/common/guards/admin.guard.ts`, `klow_server/src/common/guards/super-admin.guard.ts`, `klow_server/src/common/decorators/current-admin.decorator.ts` |
-| Admin 시드 스크립트           | `klow_server/prisma/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
+| Admin 시드 스크립트           | `klow_server/prisma/seed/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
 | klow_web pages                | `klow_web/src/app/` (feed, videos, product, creator, `[brandSlug]`, brand, shop, discover, concierge, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) |
 | klow_web UI i18n (앱 전역)    | `klow_web/src/i18n/` (en 단일 원본 → `npm run i18n:fill` 로 ja/zh/vi/th/id/ru 생성) + `useT`/`useLabels` 훅. 가이드: [`klow_web/docs/i18n.md`](./klow_web/docs/i18n.md) |
 | klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, legal, `(authed)/`{studio(제품 관리), campaigns, creators, seeding, instagram, settings}) |

@@ -12,7 +12,7 @@
 - **국가 설정**: 어드민 **국가 설정** 탭(`/shipping-countries`)에서 `enabled`(배송지원 화이트리스트)·EFS 제외구역(`ShippingExclusion`)을 관리한다. `enabled` 는 제품/시딩 공통 게이트(`loadEnabledCountry`). 캐리어는 국가 단위 고정값(`productCarrier`, 물류비용 탭)이라 여기서 토글하지 않는다.
 - **표시용 조회**: `GET /v1/shipping-countries` 목록이 `productLogisticsCostKrw`/`productCarrier` 를 포함하므로 프론트가 국가별 고정 판매가를 직접 계산하고, 미설정 국가는 선택지/미리보기에서 제외한다. 공개 `:iso2` 응답은 `exclusions` 를 포함(클라가 EFS 제외구역 차단을 미러).
 - **시딩 배송비는 seeding 모듈로 이관**: 크리에이터 시딩 배송비는 `SeedingRate`(국가×무게, 모든 비용 포함) + `productCarrier` 고정으로 산출한다 — `src/modules/seeding/seeding-rate.service.ts`. (구 `loadCheapestRatePlanner`/`resolveRatesForWeight`/`pickCheapestCarrier` 무게별 최저가 경로는 제거됨.)
-- **관련 파일**: `shipping.service.ts`(`resolveFixedRate`/`resolveCarrier`/`loadEnabledCountry`/`update`/exclusions CRUD/`matchExclusion`), 2 개 컨트롤러(admin country · public country).
+- **관련 파일**: `shipping.service.ts`(`resolveFixedRate`/`resolveCarrier`/`loadEnabledCountry`/`update`/exclusions CRUD/`matchExclusion`), `shipping-rate.service.ts` + `admin-shipping-rate.controller.ts` + `xlsx-grid.ts`(시딩 EMS/DHL 비교요율 — 2026-07 seeding 모듈에서 이동, 엔드포인트 문서는 [seeding](./seeding.md)), 3 개 컨트롤러(admin country · admin shipping-rate · public country).
 
 ## admin-shipping.controller.ts (`@Controller('admin/shipping-countries')`)
 
