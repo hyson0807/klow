@@ -23,11 +23,23 @@
 |--------|-----------------------------------|---------------------------------------------|-------------------------------------------------------|
 | POST   | `/webhooks/eximbay`               | IP 화이트리스트 (`EXIMBAY_WEBHOOK_IPS`)     | Eximbay 비동기 알림. verify 누락 케이스 보강 처리     |
 
+## 결제 완료(pending→paid) 부수효과
+
+`markPaid()` 의 진짜 전이(`count === 1`) 분기에서만, 멱등하게 순차 실행 — 모두 실패 격리(에러가 결제 전이를 롤백하지 않음):
+
+1. `clearCartItemsForOrder` — 주문에 포함된 카트 항목 서버측 삭제.
+2. `sendOrderConfirmationSafe` — 구매자에게 주문 확인 이메일(Resend).
+3. `createShipmentsForOrderSafe` — EFS 송장 자동 발급(onsite 제외).
+4. `notifyBrandsOfPaidOrderSafe` — **주문에 담긴 제품의 브랜드(들)에게 "새 주문 접수" 카카오 알림톡**(onsite 제외). 브랜드가 스튜디오 주문현황 탭에서 발송처리를 놓치지 않도록. 브랜드 집합은 송장과 동일 규칙(productId→`Product.brandId`, 없으면 `OrderItem.brandId`), 수신번호는 `Brand.senderPhone` 우선·없으면 `BrandUser.phone` 폴백. 발송은 `KakaoService`(`auth/kakao.service.ts`) — 딥링크 `${BRAND_FRONTEND_URL}/studio?tab=orders&navTab=orders`. 알림톡 설정(`SOLAPI_KAKAO_PFID`/`SOLAPI_KAKAO_TEMPLATE_ORDER_PAID`)이 없으면 `[DEV kakao]` 콘솔 로그로 폴백.
+5. `claimSeedingLinkSafe` — 유료 시딩 링크 pending→claimed.
+
 ## 환경변수
 
 - `EXIMBAY_API_KEY` / `EXIMBAY_MID` / `EXIMBAY_RETURN_URL`
 - `EXIMBAY_WEBHOOK_IPS` (CSV)
 - `FRONTEND_URL` (verify 후 리다이렉트 base)
+- `BRAND_FRONTEND_URL` (브랜드 알림톡 딥링크 base — 미설정 시 `http://localhost:3002`)
+- `SOLAPI_KAKAO_PFID` / `SOLAPI_KAKAO_TEMPLATE_ORDER_PAID` (카카오 알림톡; 미설정 시 dev 콘솔 로그. 선행조건: 채널 심사 통과 + 발신프로필 + 템플릿 승인)
 
 ## PG 심사 안전망
 
