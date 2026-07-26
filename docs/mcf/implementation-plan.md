@@ -14,7 +14,7 @@
 2. **일반주문 결제 확정 시**, 도착국 Amazon 창고에 브랜드 전 제품 재고가 있으면 **`createFulfillmentOrder`**
    로 Amazon 출고(= 자동 발송), 아니면 기존 EFS.
 3. Amazon 출고 상태·추적 갱신, 정산(매출) delivered gate 확장.
-4. **MCF 마진 트랙**: 제품마다 MCF 판매가·정산가를 일반과 별도로(기본값=일반과 동일, `MCF마진`으로 조절). Amazon 수수료는 브랜드가 자기 계정에서 부담 — KLOW 조회·보전 없음(§7·§8).
+4. **MCF 채널 트랙**: 제품마다 MCF 판매가·정산가를 일반과 별도로 — 기본값은 판매가=일반 고정가, 정산가=물류비/2 차감 생략 역산(일반보다 물류비/2 높음), `mcfMarginKrw` 오버라이드로 조절. Amazon 수수료는 브랜드가 자기 계정에서 부담 — KLOW 조회·보전 없음(§7·§8).
 
 **안 할 것 (v1)**
 - **시딩 MCF.** 시딩 라인은 `OrderItem.productId=null` 이고 `SeedingLink.selectedSkus`/`selectionSkus` 는
@@ -45,7 +45,7 @@ model BrandAmazonConnection {
   @@index([brandId])
 }
 
-// 제품 ↔ Amazon SKU (마켓플레이스별) + MCF 마진 트랙. ProductCountryPrice 에 얹지 않음(그건 replace-all).
+// 제품 ↔ Amazon SKU (마켓플레이스별) + MCF 채널 트랙. ProductCountryPrice 에 얹지 않음(그건 replace-all).
 model ProductAmazonListing {
   id            String  @id @default(cuid())
   productId     String
@@ -53,7 +53,7 @@ model ProductAmazonListing {
   sellerSku     String
   asin          String?
   fnSku         String?
-  // MCF 마진(§7-1). null = 기본값(일반 마진 + 물류비/2 자동 → MCF 판매가=일반가). 값 있으면 MCF 트랙 독립 조절.
+  // MCF 트랙 오버라이드(§7-1). null = 기본값(MCF 판매가=일반 고정가 + MCF 정산가는 물류비/2 차감 생략 역산). 값 있으면 MCF 트랙 독립 조절.
   mcfMarginKrw  Int?
   createdAt     DateTime @default(now())
   product       Product  @relation(fields: [productId], references: [id])
@@ -272,12 +272,12 @@ if (channel === 'AMAZON_MCF') {
   부족 → **`amazonPackages Json?`(예: `[{packageNumber, carrier, trackingNumber, status}]`) 로 복수 저장**하고, 대표 1개를
   `amazonTrackingNumber` 에 두는 방식 권장. 종료상태 판정은 "전 패키지 delivered"로. UI(출고 현황·추적)도 복수 추적 대응.
 
-## 8. 정산 — 채널별 정산가 (MCF 마진 트랙)
+## 8. 정산 — 채널별 정산가 (MCF 채널 트랙)
 
 ### 8-1. 실제 나간 채널의 정산가로 정산 (F8)
 - 브랜드 정산액 = `Σ (라인이 실제 나간 채널의 정산가) × qty`.
-  - EFS(폴백 포함) → 일반 정산가 `원가 + 마진`.
-  - MCF → MCF 정산가 `원가 + MCF마진`(§1 `ProductAmazonListing.mcfMarginKrw`, null 이면 기본값 `마진 + 물류비/2`).
+  - EFS(폴백 포함) → 일반 정산가 = 고정 판매가에서 **물류비/2 차감** 역산.
+  - MCF → MCF 정산가 = 고정 판매가에서 역산하되 **물류비/2 차감 생략**(§1 `ProductAmazonListing.mcfMarginKrw`, null 이면 기본값 = 일반보다 물류비/2 만큼 높음).
 - **구현(권장): 발급 시점(`executeCreate`)에 확정된 채널로 `OrderItem.settlementPriceKrw` 를 세팅**한다 — MCF 발급이면 MCF 정산가, EFS(폴백 포함)면 일반 정산가.
   그러면 `settlement.service` 는 **기존 `Σ settlementPriceKrw × qty` 그대로**(채널 판별 불필요) 동작한다.
 - **F8 (폴백 정산가 정합)**: MCF 표시가로 결제됐어도 EFS 로 폴백되면 `settlementPriceKrw` 는 **일반 정산가**여야 한다(그래야 KLOW 가 EFS 물류비를 내면서 브랜드에 물류비/2 를 이중 지급하지 않음). 발급 시 실제 채널로 세팅하면 자동 충족.
@@ -306,7 +306,7 @@ if (channel === 'AMAZON_MCF') {
 
 ### 8-3. Amazon 수수료는 브랜드 부담 (KLOW 보전·조회 없음)
 - Amazon MCF 이행 수수료는 **재고 소유자=브랜드의 셀러 계정에서 자동 차감**된다(KLOW 엔 청구 안 됨 — KLOW 는 SP-API 사용료만 별도).
-- 브랜드가 이 수수료를 **MCF마진에 미리 반영**해 값을 책정하므로, KLOW 는 실제 수수료를 **조회·보전하지 않는다** →
+- 브랜드가 이 수수료를 **MCF 판매가/정산가에 미리 반영**해 값을 책정하므로, KLOW 는 실제 수수료를 **조회·보전하지 않는다** →
   `getFulfillmentPreview`/Finances API·**Finance and Accounting Role 불필요**(앱 등록 Role 은 Fulfillment + Inventory 만으로 충분).
 - **`mcfChargeKrw` 는 분석용(옵션)** — 브랜드 MCF 수익성 분석에나 쓰고, money flow·정산과는 무관(없어도 됨).
 - efs-billing 의 브랜드 청구 리포트는 여전히 **시딩 전용**(`order:{isSeeding:true}` + `paymentBy='brand'`) — MCF 와 무관.
@@ -339,7 +339,7 @@ if (channel === 'AMAZON_MCF') {
 | 5 | SKU 매핑 CRUD(`ProductAmazonListing`) + FBA 재고 동기화(수동→크론) | §6 | `POST /sync` 로 `FbaInventoryCache` 채워지고 `lastSyncedAt` 갱신 | — |
 | 6 | `executeCreate` 라우팅 분기 + `createFulfillmentOrder`(mock) + EFS 폴백 + **채널별 정산가 세팅** | §4, §8-1 | mock e2e: 재고 있으면 `Shipment(channel=AMAZON_MCF, status=submitted)` + `ShipmentItem` 생성 + `settlementPriceKrw`=MCF 정산가; 재고 0 이면 EFS 폴백 + `settlementPriceKrw`=일반 정산가. 주문 status=shipped 전이 | **F2·F2b·F3·F4·F8·R5·R6·R7** |
 | 7 | MCF 출고 추적 cron + 정산 delivered 게이트 확장 | §7, §8 | MCF 배송완료 행이 정산 후보에 뜨고 `settle()` 통과(candidate=settle 일치); 정산액이 채널별 정산가로 정확(같은 상품 EFS/MCF 브랜드 net 동일) | **F5·F7** |
-| — | MCF 마진 트랙 UI: `ProductAmazonListing.mcfMarginKrw` 편집 + MCF 판매가 표시 선택 | §7, §9 | 브랜드/어드민이 MCF마진 조절 → MCF 판매가 미리보기; Amazon 적격 제품은 MCF 판매가 표시 | **F8** |
+| — | MCF 채널 트랙 UI: `ProductAmazonListing.mcfMarginKrw` 편집 + MCF 판매가 표시 선택 | §7, §9 | 브랜드/어드민이 MCF 트랙 조절 → MCF 판매가 미리보기; Amazon 적격 제품은 MCF 판매가 표시 | **F8** |
 | 8 | 프론트 mock→real 배선 | §9 | `api.amazon.*` 5개 read 실 엔드포인트 연결, `amazon-mock.ts` 제거, UI 동작 동일 | — |
 | 9 | dynamic sandbox 실검증 → 프로덕션 Role/신원확인 → 파일럿 브랜드 | §3, §11 | sandbox `createFulfillmentOrder`→`getFulfillmentOrder` 실호출; 프로덕션 Role 승인 후 파일럿 1개 브랜드 실출고 | — |
 | — | **(v2)** 시딩 MCF | §5 | `SeedingLink` 선택 필드 productId 화 스키마 변경 후 §4 경로 재사용 | — |
@@ -351,10 +351,10 @@ if (channel === 'AMAZON_MCF') {
   제한 역할 미선택 (상세 sp-api §5).
 - **RDT 요구 범위**: 어느 Fulfillment Outbound 오퍼레이션이 restricted(PII)인지 — Role Mappings 문서로
   확정(`createFulfillmentOrder` 는 불필요 예상, `getFulfillmentOrder` 응답 주소는 대상 가능).
-- **(확정) MCF 가격·수수료 = 마진 트랙**: 판매가·정산가 채널별 2벌, MCF 정산가=`원가+MCF마진`(기본값 `마진+물류비/2`). Amazon 수수료는
-  브랜드가 자기 계정서 부담(MCF마진에 반영) → KLOW 조회·보전 없음, Finance Role 불필요(§7·§8).
+- **(확정) MCF 가격·수수료 = 채널 트랙**: 판매가·정산가 채널별 2벌 — 고정 판매가에서 정산가 역산, MCF 는 물류비/2 차감 생략(기본값이 일반보다 물류비/2 높음). Amazon 수수료는
+  브랜드가 자기 계정서 부담(MCF 판매가/정산가에 반영) → KLOW 조회·보전 없음, Finance Role 불필요(§7·§8).
 - **MCF 판매가 식 확정**: 기존 `product-selects.ts priceLine()`·÷0.95 PG·별도 배송비 라인과 대조 — 특히 **MCF 주문에서 배송비 라인을 0 으로 둘지**.
-- **MCF마진 조절 granularity**: 전역 1개 vs 국가별(`ProductCountryPrice` 미러). 도메스틱이라 마켓플레이스=국가 → 마켓플레이스별이 자연.
+- **MCF 트랙 조절 granularity**: 전역 1개 vs 국가별(`ProductCountryPrice` 미러). 도메스틱이라 마켓플레이스=국가 → 마켓플레이스별이 자연.
 - **표시가격·폴백 정책**: MCF 표시가로 결제 후 EFS 폴백 시 차액 KLOW 흡수(기본값 동일이면 무영향) — 정책 확정.
 - **(확정) refresh token 암호화**: `totp-crypto.ts` 의 범용 encrypt/decrypt 를 공유 유틸로 추출하되 키는 **신규
   `AMAZON_TOKEN_ENCRYPTION_KEY`** 로 분리(ADMIN_TOTP 키와 독립 회전).
@@ -366,8 +366,8 @@ if (channel === 'AMAZON_MCF') {
 
 - **mock 모드**(빈 크레드) e2e: 결제→라우팅→합성 fulfillment order id→`Shipment(channel=AMAZON_MCF)`→
   정산 후보 노출. EFS 폴백(재고 0 케이스)도 확인. **아래 §13 불변식을 각 단계에서 함께 확인**.
-- **정산 금액 검증(F8)**: MCF 발급 라인은 `settlementPriceKrw`=MCF 정산가, EFS 폴백 라인은 일반 정산가로 세팅됐는지. 기본값(MCF마진=마진+물류비/2)에서
-  같은 상품을 MCF/EFS 로 보낸 브랜드 net·고객가가 **동일**한지, MCF마진을 조절하면 MCF 판매가만 독립적으로 바뀌는지 확인.
+- **정산 금액 검증(F8)**: MCF 발급 라인은 `settlementPriceKrw`=MCF 정산가(물류비/2 미차감 역산), EFS 폴백 라인은 일반 정산가(물류비/2 차감 역산)로 세팅됐는지. 기본값에서
+  같은 상품을 MCF/EFS 로 보낼 때 **고객가는 동일**(MCF 판매가 기본=일반)하고 **MCF 정산가는 일반보다 물류비/2 높게** 잡히는지, `mcfMarginKrw` 를 조절하면 MCF 판매가만 독립적으로 바뀌는지 확인.
 - **dynamic sandbox**: `createFulfillmentOrder`→`getFulfillmentOrder` 실호출 검증.
 - 마이그레이션은 `npx prisma migrate dev` (interactive — 사용자 실행 요청).
 
@@ -385,7 +385,7 @@ if (channel === 'AMAZON_MCF') {
 | F4 | 시딩 판정은 `order.isSeeding` 사용(seedingLink 조회 불필요) | 불필요 쿼리 / v1 시딩이 MCF 로 새어 실패 | `Order.isSeeding`(schema:513), loadOrderWithItems 가 order 전체 로드 |
 | F5 | delivered 게이트는 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput` 로 4곳 치환 | MCF 배송완료분이 정산 후보에서 누락 (candidate/settle 불일치) | 게이트가 Prisma where 인라인 4곳(settlement.service:100/193/298/328) |
 | F7 | MCF 는 별도 폴링 cron (기존 EFS cron 이 `efsTrackingNumber:{not:null}` 로 자동 제외) | (양성) 확장 시 MCF 를 EFS 로 잘못 폴링하지 않도록 | refreshTrackingDue where(:611) |
-| F8 | 발급 시 `OrderItem.settlementPriceKrw` 를 **실제 채널 정산가**로 세팅(MCF→MCF정산가=`원가+MCF마진`, EFS폴백→일반정산가) | MCF 표시가로 결제 후 EFS 폴백 시 물류비/2 이중지급·브랜드 정산 오류 | 정산가 채널별 2벌(§8-1), MCF마진(§1) |
+| F8 | 발급 시 `OrderItem.settlementPriceKrw` 를 **실제 채널 정산가**로 세팅(MCF→물류비/2 미차감 역산, EFS폴백→물류비/2 차감 역산) | MCF 표시가로 결제 후 EFS 폴백 시 물류비/2 이중지급·브랜드 정산 오류 | 정산가 채널별 2벌(§8-1), `mcfMarginKrw`(§1) |
 | F9 | 한 MCF 주문 = **복수 패키지/추적번호 가능** → `amazonPackages Json?` 로 배열 저장, 종료판정은 전 패키지 delivered | "한 주문=한 추적번호" 가정 시 추적 누락·조기 배송완료 오판 | getFulfillmentOrder `fulfillmentShipments`/`packages`(§7·§1) |
 | R5 | 모호 실패 시 `getFulfillmentOrder` 접수 확인 후 폴백 | Amazon+EFS 이중출고 | executeCreate try/catch(:718-749) |
 | R6 | 라우팅 0단계 `order.countryCode==null → EFS` | legacy 주문에서 마켓플레이스 판정 NPE | countryCode nullable(schema:490) |

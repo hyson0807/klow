@@ -37,10 +37,10 @@ Fulfillment)되게 하는 기능의 설계·구현 문서 모음.
 | 혼합 주문 | **브랜드 단위 all-or-nothing** — 브랜드 라인 중 하나라도 재고 부족 시 그 브랜드 전체 EFS |
 | 배송 범위(v1) | **도메스틱 MCF 만** — 도착국 == Amazon 마켓플레이스 창고국 (크로스보더 미시도) |
 | 시딩 | **v1 에서 항상 EFS (MCF 는 v2 연기)** — 시딩 라인은 `OrderItem.productId` 가 null 이고, `SeedingLink.selectedSkus`/`selectionSkus` 는 **제품 ID 가 아니라 자유텍스트 제품명 라벨**이라 현 스키마로는 SKU/재고 판정 경로를 못 탄다. 시딩 MCF 는 선택 필드에 실제 productId 를 심는 스키마 변경(v2) 이후로 미룬다 |
-| 가격(판매가·2벌) | **일반·MCF 판매가 2벌.** 일반=`원가+마진+물류비/2`, MCF=`원가+MCF마진`. **MCF마진 기본값=`마진+물류비/2`** → MCF 판매가가 일반가와 같은 값으로 시작하고, **MCF마진으로 독립 조절** 가능(Amazon 은 EFS 물류비가 안 드니 그 몫이 마진으로 흡수). 정확한 식은 `product-selects.ts priceLine()`·배송비 라인·÷0.95 와 대조 확정 |
+| 가격(판매가·2벌) | **일반·MCF 판매가 2벌 (고정 판매가 → 정산가 역산).** 일반=고정 판매가에서 정산가 **물류비/2 차감** 역산, MCF=고정 판매가(기본=일반과 동일)에서 역산하되 **물류비/2 차감 생략**(Amazon 은 EFS 물류비가 안 드니 그 몫이 브랜드 마진으로 흡수 → MCF 정산가가 일반보다 물류비/2 높음). `mcfMarginKrw` 로 MCF 트랙 **독립 조절**. 정확한 식은 `product-selects.ts priceLine()`·배송비 라인·÷0.95 와 대조 확정 |
 | refresh token | **암호화 저장** (Admin TOTP AES-256-GCM 선례 — 단, 키는 신규 `AMAZON_TOKEN_ENCRYPTION_KEY` 로 분리해 독립 회전) |
-| 정산(매출) | 브랜드 정산가도 **채널별 2벌**(일반=`원가+마진`, MCF=`원가+MCF마진`). **실제 나간 채널**로 골라 `Σ 정산가 × qty`. delivered gate(`latestStatusCode='33'`, Prisma where 4곳)를 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput`(EFS `'33'`+MCF 종료상태) where-빌더로 4곳 치환 |
-| MCF 수수료 | **브랜드가 자기 Amazon 계정에서 부담**(MCF마진에 미리 반영해 값 책정 — Amazon 이 셀러 계정에서 차감). KLOW 는 조회·보전 안 함 → Amazon fee 조회(getFulfillmentPreview/Finances)·Finance Role **불필요**. `mcfChargeKrw` 는 분석용(옵션) |
+| 정산(매출) | 브랜드 정산가도 **채널별 2벌**(일반=물류비/2 차감 역산, MCF=물류비/2 미차감 역산). **실제 나간 채널**로 골라 `Σ 정산가 × qty`. delivered gate(`latestStatusCode='33'`, Prisma where 4곳)를 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput`(EFS `'33'`+MCF 종료상태) where-빌더로 4곳 치환 |
+| MCF 수수료 | **브랜드가 자기 Amazon 계정에서 부담**(MCF 판매가/정산가에 미리 반영해 값 책정 — Amazon 이 셀러 계정에서 차감). KLOW 는 조회·보전 안 함 → Amazon fee 조회(getFulfillmentPreview/Finances)·Finance Role **불필요**. `mcfChargeKrw` 는 분석용(옵션) |
 | 표시가격·폴백 | Amazon 적격 제품은 MCF 판매가 표시, 아니면 일반가. MCF 가격 표시 후 재고부족으로 **EFS 폴백** 시 가격차는 **KLOW 흡수**(기본값 동일이면 무영향) |
 | 재고 판정 | 동기화 캐시 1차 판정 + `createFulfillmentOrder` 실패 시 EFS 자동 폴백 |
 

@@ -17,8 +17,9 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **가격 정본**:
   - **미핀 default 판매가 — 두 모델**:
     - **브랜드 신모델** (`Product.basePriceFxRate` 有): default 판매가를 **국가별로 파생** —
-      `판매가USD = ceil((salePrice(정산가=원가+마진) + 그국가 물류비/2)/0.95/basePriceFxRate ×100)`.
-      `basePriceFxRate`(저장 시점 fx 프리즈) 덕에 판매가는 환율에 안 흔들리고, 정산가만 유동. **default 정산가가 전 국가 ≈ 원가+마진.**
+      `판매가USD = ceil((salePrice + 그국가 물류비/2)/0.95/basePriceFxRate ×100)`.
+      `salePrice`(정산가 = 역산 저장 기준값. 브랜드가 UI에서 친 "원가+마진" 편의 입력의 결과)와 `basePriceFxRate`(저장 시점 fx 프리즈)로
+      **판매가를 한 번 파생해 고정**하고, 이후 **마진/정산가는 그 고정 판매가에서 역산**한다(판매가는 환율에 안 흔들리고 정산가만 유동). **default 정산가가 전 국가 ≈ 원가+마진.**
     - **어드민/legacy** (`basePriceFxRate` 無): `Product.basePriceUsd`(USD 센트, 고정) 단일 판매가를 미핀 전 국가에 적용.
     - `basePriceUsd` 는 신모델에선 **대표/정렬값**으로 남는다(US 기준 파생). 완성도 게이트는 `hasSellablePrice`.
   - `ProductCountryPrice.priceLocal` (현지통화 major, 고정) = 국가별 핀. 있으면 그 국가는 현지통화 고정
@@ -49,7 +50,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 |---|---|---|---|---|
 | **원가** | 브랜드/어드민 입력 | KRW | `Product.costKrw` **저장** (nullable) | 원가 밑 경고 기준 |
 | **기본 판매가** (전국가) | 어드민 입력 · 브랜드 대표값 | USD 센트 | `Product.basePriceUsd` **저장** | legacy/어드민 단일 판매가 + 신모델 대표/정렬·게이트값 |
-| **정산가(정본)** | 브랜드 입력(원가+마진) | KRW | `Product.salePrice` **저장** | 신모델 default 판매가를 국가별로 파생하는 정본(= 원가+마진) |
+| **정산가 저장값** | 브랜드 "원가+마진" 편의 입력의 결과 | KRW | `Product.salePrice` **저장** | 신모델 default **판매가**를 국가별로 파생·고정하는 기준값(≈ 원가+마진). 마진 자체는 역산 |
 | **저장 fx 스냅샷** | 서버(저장 시점) | KRW/USD | `Product.basePriceFxRate` **저장** | 有=국가별 파생 신모델. 판매가를 환율에 고정(정산가만 유동) |
 | **국가별 핀** | 브랜드/어드민 입력 | 현지통화 major | `ProductCountryPrice.priceLocal` **저장** | 있으면 그 국가 현지통화 고정. 없으면 기본 USD 상속 |
 | **국가별 할인율** | 브랜드/어드민 입력 | % | `ProductCountryPrice.discountPct` **저장** | 기간 없음. >0 항상 적용 |
@@ -109,10 +110,10 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **입력 방식은 두 앱이 다르지만 저장 정본은 동일**(basePriceUsd + 국가별 priceLocal 핀). `src/lib/cost-pricing.ts`가
   서버 공식(`serializePriceModel`/`deserializePriceModel` 역함수 쌍)을 미러해 입력 즉시 정산가·마진·원가 밑 경고를 미리보기.
   - **klow_admin**: **원가(KRW) + 기본 판매가(USD) 직접 입력** + 국가별 현지통화 핀. basePriceUsd 를 직접 다룬다.
-  - **klow_brand**: **원가(KRW) + 마진(KRW) 입력** → 정산가(salePrice=원가+마진) 저장 + 저장 시점 fx 를 서버가 `basePriceFxRate` 로
-    스냅샷. 미핀 국가의 default 판매가는 **그 나라 물류비로 각각 파생**(서버 `priceLine`)이라 default 정산가가 전 국가 ≈ 원가+마진.
-    국가별은 판매가 모달에서 **그 나라 현지통화 판매가를 직접 입력**해 `priceLocal` 핀으로 저장(그 국가만 마진 유동). 카드의 국가별
-    마진/정산가는 읽기전용 표시(klow_brand `PriceStep`·`ProductDetailPreview` 가 `sellingPriceUSD` 로 동일 파생). 환율 소스 `/v1/shop/fx-rate`.
+  - **klow_brand**: 기본가는 **원가(KRW) + 마진(KRW) 입력** — 단 이는 앱이 즉시 **고정 판매가로 변환**하는 편의 입력이다(정산가 salePrice=원가+마진 저장 +
+    저장 시점 fx 를 서버가 `basePriceFxRate` 로 스냅샷). 미핀 국가의 default 판매가는 **그 나라 물류비로 각각 파생**(서버 `priceLine`)이라 default 정산가가 전 국가 ≈ 원가+마진.
+    국가별은 판매가 모달에서 **그 나라 현지통화 판매가를 직접 입력**해 `priceLocal` 핀으로 저장(그 국가만 판매가 고정·마진 역산). 카드의 국가별
+    마진/정산가는 **읽기전용 역산 표시**(klow_brand `PriceStep`·`ProductDetailPreview` 가 `sellingPriceUSD` 로 동일 파생). 환율 소스 `/v1/shop/fx-rate`.
 
 ## 스키마
 
@@ -120,7 +121,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 model Product {
   basePriceUsd    Int?    // legacy/어드민 단일 판매가(USD 센트) + 신모델 대표/정렬·게이트값
   basePriceFxRate Float?  // 저장 시점 fx 스냅샷. 有=국가별 파생 신모델(판매가 환율 고정)
-  salePrice       Int     // 정산가(=원가+마진). 신모델 default 판매가 파생 정본
+  salePrice       Int     // 정산가 저장값(≈원가+마진). 신모델 default 판매가 파생·프리즈 기준(마진은 역산)
   costKrw         Int?    // 원가(KRW) — 원가 밑 경고 기준
   discount        Int     // 글로벌 마케팅 할인%(legacy 폴백)
   countryPrices   ProductCountryPrice[]
@@ -142,8 +143,8 @@ model OrderItem {
 
 ### 명명·dormant 주의 (감사 메모)
 
-- **`Product.salePrice` 는 이름과 달리 판매가가 아니라 정산가(원가+마진, KRW)** 를 담는다 — 역사적 명명이고, 컬럼명 리네임 대신
-  주석/문서로 정정만 했다(정확한 이름은 `settlementKrw`). 신모델의 default 판매가 파생 정본이다(legacy 아님).
+- **`Product.salePrice` 는 이름과 달리 판매가가 아니라 정산가(≈원가+마진, KRW)** 를 담는다 — 역사적 명명이고, 컬럼명 리네임 대신
+  주석/문서로 정정만 했다(정확한 이름은 `settlementKrw`). 신모델에선 default **판매가를 파생·프리즈**하는 저장 기준값이다(판매가가 정본, 마진/정산가는 역산 — legacy 아님).
 - **dormant(저장만·로직 미사용) 컬럼** — 드롭 보류: `ProductCountryPrice.marginKrw`(유일 소비처 = `backfill-fixed-pricing.ts`,
   prod 백필 실행 후 드롭 가능), `Product.isLoss`, `Product.weightG`(가격 무관, 카트 표시 passthrough),
   `ShippingCountry.emsSpecialFeePerKgKrw`·`ShopSettings.dhlFuelSurchargeRate`(구 요율 재조합 폐기).
