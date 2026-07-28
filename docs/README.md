@@ -11,6 +11,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [architecture.md](./architecture.md) | 전체 구조가 어떻게 되나? 저장소·모듈·데이터 모델·URL surface·요청 흐름 |
 | [server/README.md](./server/README.md) | **API 엔드포인트 레퍼런스** — 모듈별 컨트롤러/가드/엔드포인트 (`server/modules/<module>.md`) |
 | [pricing-model.md](./pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
+| [deploy-drop-logistics-markup-runbook.md](./deploy-drop-logistics-markup-runbook.md) | **판매가 물류비 분리 + 무료배송 릴리스를 prod 에 어떻게 올리나?** 마이그레이션 → 백필 → 배포 순서, 스모크, 사전 공지 |
 | [payment-integration.md](./payment-integration.md) | 고객 결제(Eximbay, USD)가 어떻게 흐르나? prepare→verify, 환불, 웹훅 |
 | [brand-subscription.md](./brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
 | [mcf/README.md](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고. SP-API 조사·구현 계획·플로우 (📄 문서 단계) |
