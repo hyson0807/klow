@@ -22,6 +22,7 @@
 | POST   | `/v1/brand/applications/init-draft`           | 드래프트 생성 (슬러그 기반 — 가입 시 brand 미생성 케이스 안전망, idempotent) |
 | POST   | `/v1/brand/applications/submit-for-review`    | 드래프트 → 검토 제출 (모든 필드 완성 확인, `pgCustomerKey` 발급)  |
 | PATCH  | `/v1/brand/applications/operational-profile`  | 운영 프로필(송화인 4 + 계좌 3 필드) 저장 — OnboardingGate         |
+| PATCH  | `/v1/brand/applications/free-shipping-all`    | 브랜드관 전체 무료배송 스위치 (`Brand.freeShippingAll`) — 켜진 동안 개별 제품 토글을 덮어씀(개별값은 보존) |
 
 ### 셀프 상품 관리 (Product)
 
@@ -31,6 +32,8 @@
 | POST   | `/v1/brand/products/bulk`         | 상품 일괄 생성 (draft 다건)                                       |
 | GET    | `/v1/brand/products`              | 내 브랜드 상품 목록                                               |
 | PATCH  | `/v1/brand/products/reorder`      | 상품 노출 순서 변경 (드래그&드롭)                                 |
+| PATCH  | `/v1/brand/products/free-shipping`| 무료배송 On/Off (`productIds[1..500]` — 단건도 배열 1개). 소유 밖 id 는 조용히 무시. `:id` 위에 선언 |
+| PATCH  | `/v1/brand/products/:id/box`      | 배송 박스 규격(실무게 + 가로/세로/높이 cm) 저장 — 예상 청구 배송비의 청구중량 입력값. `:id` 위에 선언 |
 | PATCH  | `/v1/brand/products/:id/hidden`   | 상품 가리기 On/Off 토글 (`Product.hidden`, status 유지·노출/판매만 제외; 단일 필드 전용 PATCH, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id`          | 상품 수정 (자기 brandId 확인)                                     |
 | DELETE | `/v1/brand/products/:id`          | 상품 삭제                                                         |
@@ -38,5 +41,9 @@
 ## 참고
 
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
+- **무료배송**: 등록(`POST /v1/brand/products`) payload 에도 `freeShipping`·`box*Cm` 을 실을 수 있다 — 생성 후 PATCH 로
+  켜면 그 사이 "유료배송"으로 노출되는 창이 생기기 때문. 목록/단건 응답의 `freeShipping` 은 **개별 토글 원본값**이고,
+  실효 여부는 클라가 `brand.freeShippingAll` 과 OR 해서 판단한다(klow_brand `isFreeShipping`). 자세히는
+  [`../../pricing-model.md`](../../pricing-model.md).
 - 승인/거부/제품 단위 승인·차단·환불은 모두 [subscription](./subscription.md) 의 어드민 `/admin/brand-subscriptions/*` 에서 처리한다.
 - 브랜드 탈퇴(철회)는 [brand-auth](./brand-auth.md) `withdrawal-request` + 어드민 [brands](./brands.md) `brand-withdrawals` 참고.

@@ -3,6 +3,16 @@
 KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 기준** 문서다. 결제 흐름은
 [`payment-integration.md`](./payment-integration.md) 참고.
 
+> **2026-07-28 전환 (판매가에서 물류비 분리 + 무료배송 판매 모드)**: 판매가에 섞여 있던
+> **국가별 2kg 물류비의 절반(마크업)을 제거**했다 — `판매가 = 정산가 ÷ 0.95 ÷ 환율`, 정산 역산도
+> `정산가 = 청구USD × fx × 0.95`(물류비 차감 없음). 그 결과 **미핀 국가의 default 판매가는 목적국과
+> 무관한 단일 값**이 되고, 국가차는 핀(`priceLocal`)·할인에서만 생긴다.
+> 고객이 결제하는 **배송비(물류비/2 × 청구 대상 브랜드수)는 그대로**이고, 그 선결제분은 브랜드 실측
+> 물류비의 **선납금**이 된다 — 입고 실측과의 차액만 브랜드에 후청구(실측 ≤ 선결제면 청구 없음).
+> 제품별 **무료배송**(`Product.freeShipping` / 브랜드관 전체 `Brand.freeShippingAll`)을 켜면 고객은
+> 배송비를 내지 않고 실측 물류비 **전액**이 브랜드 몫이 된다. 배송비는 브랜드 단위(한 브랜드=한 송장)로
+> 청구되므로 **그 브랜드 라인이 전부 무료일 때만** 면제된다.
+>
 > **2026-07 전환 (판매가 고정 → 정산 유동)**: 가격 정본이 "원가+마진(KRW) → 판매가 파생"에서
 > **"국가별 현지통화 판매가 고정 → 브랜드 정산가(KRW)를 주문 시점 환율로 역산"** 으로 바뀌었다.
 > 환율 리스크가 **손님(가격 변동)에서 브랜드(정산액 변동)로** 이동한다 — 손님은 안정적인 현지통화 가격을 보고,
@@ -16,10 +26,10 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **브랜드에게 주는 돈 = KRW (유동)** — 정산가는 고정 판매가에서 주문 시점 환율로 역산된다.
 - **가격 정본**:
   - **미핀 default 판매가 — 두 모델**:
-    - **브랜드 신모델** (`Product.basePriceFxRate` 有): default 판매가를 **국가별로 파생** —
-      `판매가USD = ceil((salePrice + 그국가 물류비/2)/0.95/basePriceFxRate ×100)`.
+    - **브랜드 신모델** (`Product.basePriceFxRate` 有):
+      `판매가USD = ceil(salePrice/0.95/basePriceFxRate ×100)` — **물류비 없음 → 전 국가 동일**.
       `salePrice`(정산가 = 역산 저장 기준값. 브랜드가 UI에서 친 "원가+마진" 편의 입력의 결과)와 `basePriceFxRate`(저장 시점 fx 프리즈)로
-      **판매가를 한 번 파생해 고정**하고, 이후 **마진/정산가는 그 고정 판매가에서 역산**한다(판매가는 환율에 안 흔들리고 정산가만 유동). **default 정산가가 전 국가 ≈ 원가+마진.**
+      **판매가를 한 번 파생해 고정**하고, 이후 **마진/정산가는 그 고정 판매가에서 역산**한다(판매가는 환율에 안 흔들리고 정산가만 유동). **default 정산가 ≈ 원가+마진.**
     - **어드민/legacy** (`basePriceFxRate` 無): `Product.basePriceUsd`(USD 센트, 고정) 단일 판매가를 미핀 전 국가에 적용.
     - `basePriceUsd` 는 신모델에선 **대표/정렬값**으로 남는다(US 기준 파생). 완성도 게이트는 `hasSellablePrice`.
   - `ProductCountryPrice.priceLocal` (현지통화 major, 고정) = 국가별 핀. 있으면 그 국가는 현지통화 고정
@@ -31,15 +41,18 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
   - **⚠️ 과청구 가드(주문·견적)**: 핀(`priceLocal`)이 있는데 목적국 통화의 유효 환율(`CurrencyFxRate.usdRate>0`)이
     없으면 `currencyUsdRate`가 미해결(strict null)이라, 1로 폴백하면 현지가를 USD로 오인해 과청구(¥1500→$1500)한다.
     `OrdersService.billingRate`가 이 경우 주문/견적을 **차단**한다(핀 없는 상품은 영향 없음). 표시 경로는 1로 폴백 + 경고 로깅.
-- **브랜드 정산가(KRW) 역산** = `floor(customerPriceUsd/100 × usdKrwRate × (1 − 0.05) − 국가별 2kg 물류비/2)`.
-  PG 5% 수수료와 물류비 절반을 차감한 순정산액. `customerPriceUsdCents` 의 역함수. **주문 시점 환율로 고정 스냅샷.**
+- **브랜드 정산가(KRW) 역산** = `floor(customerPriceUsd/100 × usdKrwRate × (1 − 0.05))`.
+  PG 5% 만 차감한 순정산액 — **물류비는 차감하지 않는다**(배송비는 고객이 별도 결제하고 실측 차액만 사후 후청구).
+  `customerPriceUsdCents` 의 역함수. **주문 시점 환율로 고정 스냅샷.**
 - **원가 밑 경고**: 역산 정산가 < `Product.costKrw` 이면 `belowCost` — 브랜드/어드민 UI 가 경고, **구매·저장은 막지 않는다.**
 - 환율 **단일 테이블 `CurrencyFxRate`** 로 통합: `['KRW']` 행 = **정산 정본**(USD↔KRW, 정산 역산·결제·basePriceFxRate 스냅샷.
   수동 고정 manualOverride, cron 미갱신), 그 외 코드 = USD→현지통화(핀가 청구 환산 + 표시, 매일 cron + 수동 보정).
   둘 다 어드민 **통화 환율(/currency-rates)** 페이지에서 관리. 정산 fx 는 `resolveFxRate`(`common/fx.ts`)가 KRW 행을 읽는다.
   실시간 아님 — 어드민 갱신 시 계단식. (구 `ShopSettings.usdKrwRate` 는 dormant, 후속 릴리스에서 드롭.)
-- **국가별 물류비**는 `ShippingCountry.productLogisticsCostKrw` (엑셀 `KLOW_가격표` 2kg 행). 절반은 정산가에서 차감(위 식),
-  절반은 배송비(브랜드당 1회). 캐리어는 국가당 고정(`productCarrier`). 물류비/캐리어 미설정국은 구매 차단.
+- **국가별 물류비**는 `ShippingCountry.productLogisticsCostKrw` (엑셀 `KLOW_가격표` 2kg 행).
+  **판매가/정산가와 무관** — 절반이 결제 배송비(청구 대상 브랜드당 1회)로 쓰일 뿐이고, 나머지 절반과
+  입고 실측 차액은 브랜드 후청구 대상이다. 캐리어는 국가당 고정(`productCarrier`).
+  물류비/캐리어 미설정국은 구매 차단 — **무료배송이어도 마찬가지**(요금 게이트가 아니라 배송 가능 여부 게이트).
 - 표시 기본 국가는 `US`. 공개 read 는 `?country=` 로 목적국을 받는다(미지정 US).
 
 ## 한눈 표 — 무엇이 어디에 저장/계산되나
@@ -55,9 +68,11 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 | **국가별 핀** | 브랜드/어드민 입력 | 현지통화 major | `ProductCountryPrice.priceLocal` **저장** | 있으면 그 국가 현지통화 고정. 없으면 기본 USD 상속 |
 | **국가별 할인율** | 브랜드/어드민 입력 | % | `ProductCountryPrice.discountPct` **저장** | 기간 없음. >0 항상 적용 |
 | 글로벌 할인율(legacy) | 어드민 입력 | % | `Product.discount` **저장** | 마케팅 취소선 — 국가별 할인 없을 때만 폴백 |
-| **손님 판매가** (취소선) | 서버 계산 | USD | 응답 `listPriceUsd`(센트) | 핀 국가 `priceLocal/rate`, 미핀 default(신모델=정산가+물류비+frozenFx 파생 / legacy `basePriceUsd`). 목적국별 |
+| **손님 판매가** (취소선) | 서버 계산 | USD | 응답 `listPriceUsd`(센트) | 핀 국가 `priceLocal/rate`, 미핀 default(신모델=정산가+frozenFx 파생 / legacy `basePriceUsd`). **미핀은 전 국가 동일** |
 | **실제 결제가** | 서버 계산 | USD | 응답 `customerPriceUsd`(센트) | 할인 적용가 |
-| 정산가 (개당 브랜드 몫) | 서버 역산 | KRW | 응답엔 미노출(편집기만) | `= 청구USD × fx × 0.95 − 물류비/2`. **유동**(표시 시점 환율) |
+| 정산가 (개당 브랜드 몫) | 서버 역산 | KRW | 응답엔 미노출(편집기만) | `= 청구USD × fx × 0.95`(물류비 차감 없음). **유동**(표시 시점 환율) |
+| **무료배송** | 브랜드 입력 | — | `Product.freeShipping` **저장** + `Brand.freeShippingAll` | 실효 = 둘의 OR(`resolveFreeShipping`). 공개 응답 `freeShipping` |
+| 배송 박스 규격 | 브랜드 입력 | cm/g | `Product.{weightG,boxLengthCm,boxWidthCm,boxHeightCm}` **저장** | 예상 청구 배송비(실측 후청구 미리보기)용. **가격 무관** |
 
 > 핀도 할인도 없는 국가는 `ProductCountryPrice` 행을 만들지 않고 default(신모델=정산가+frozenFx 국가별 파생 / legacy=basePriceUsd, 할인=글로벌 discount)를 상속한다.
 > 완성도 게이트(`PUBLIC_PRODUCT_WHERE`)는 `image != '' && hasSellablePrice` — 판매가(신모델=정산가+frozenFx,
@@ -70,7 +85,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 | 주문 시점 고객 단가 | USD | `OrderItem.unitPriceUsd`(센트) | 고정 판매가 + 할인 (표시가와 동일 `priceLine`) |
 | 주문 시점 정산 단가 | KRW | `OrderItem.settlementPriceKrw` | **청구USD 에서 주문 시점 환율로 역산** — 이 시점에 확정, 이후 환율 변동 무관 |
 | 주문 시점 원가 | KRW | `OrderItem.costKrw` | 원가 밑 정산 경고/리포트 기준(제품 원가가 나중에 바뀌어도 불변) |
-| 배송비 | USD | `Order.shippingFeeUsd`(센트) | `물류비/2/fx × 브랜드수` (한 브랜드 = 한 송장) |
+| 배송비 | USD | `Order.shippingFeeUsd`(센트) | `물류비/2/fx × **청구 대상** 브랜드수` (한 브랜드 = 한 송장) |
+| 브랜드별 배송비 스냅샷 | USD | `Order.shippingFeeByBrand`(JSON `{brandId: 센트}`) | 무료배송 브랜드는 0. Σ == `shippingFeeUsd`. 송장 발급이 EFS 27번을 이걸로 안분(legacy null → 균등분배) |
 | **고객 결제 총액** | USD | `Order.totalUsd`(센트) | `Σ unitPriceUsd×수량 + shippingFeeUsd` |
 | 환율 고정 스냅샷 | — | `Order.fxRateSnapshot` | 결제·환불·정산 역산 기준(usdKrwRate) |
 
@@ -95,13 +111,17 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 
 ## 핵심 함수 (서버, 단일 소스)
 
-- `customerUsdCentsFromLocal(priceLocal, currencyUsdRate)` / `settlementKrwFromCustomerUsd(customerUsdCents, logisticsKrw, fxRate)` /
-  `applyDiscountUsdCents(cents, pct)` / `shippingFeeUsdCents(rateKrw, fxRate, brandCount)` — `klow_server/src/common/pricing.ts`
-- `priceLine(row, cp, rateKrw, fxRate, currencyUsdRate, campaignPct)` — `product-selects.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
+- `customerPriceUsdCents(settlementKrw, fxRate)` / `customerUsdCentsFromLocal(priceLocal, currencyUsdRate)` /
+  `settlementKrwFromCustomerUsd(customerUsdCents, fxRate)` / `applyDiscountUsdCents(cents, pct)` /
+  `shippingFeeUsdCents(rateKrw, fxRate, brandCount)`(브랜드 단위 반올림 × n) — `klow_server/src/common/pricing.ts`
+- `priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` — `product-selects.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
   의 1라인 단일 출처. 표시(`attachCustomerPricing`)·주문 생성·견적(`quote`)이 모두 이 함수를 거쳐 "표시가 == 청구가"를 보장한다.
-- `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ logisticsKrw + **currencyUsdRate**) /
-  `writeProductCountryPrices(tx, productId, rows)` — `product-selects.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice` strip(`StrippedPricingKeys`).
-- 물류비·캐리어: `resolveFixedRate(iso2, address?)` — `shipping.service.ts`. 환율: `resolveFxRate(prisma)` — `common/fx.ts`.
+- `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ **currencyUsdRate** + campaign. 물류비는 없다) /
+  `writeProductCountryPrices(tx, productId, rows)` — `product-selects.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice`/`brandRef` strip(`StrippedPricingKeys`).
+- 물류비·캐리어: `resolveFixedRate(iso2, address?)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관). 환율: `resolveFxRate(prisma)` — `common/fx.ts`.
+- 무료배송: `resolveFreeShipping(row)` — `product-selects.ts`(실효 = `brandRef.freeShippingAll || freeShipping`).
+  `chargeableBrandIds(lines)` — `orders/chargeable-brands.ts`. **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**
+  (그 브랜드 라인이 전부 무료일 때만 면제).
 
 ## 프론트
 
@@ -111,7 +131,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
   서버 공식(`serializePriceModel`/`deserializePriceModel` 역함수 쌍)을 미러해 입력 즉시 정산가·마진·원가 밑 경고를 미리보기.
   - **klow_admin**: **원가(KRW) + 기본 판매가(USD) 직접 입력** + 국가별 현지통화 핀. basePriceUsd 를 직접 다룬다.
   - **klow_brand**: 기본가는 **원가(KRW) + 마진(KRW) 입력** — 단 이는 앱이 즉시 **고정 판매가로 변환**하는 편의 입력이다(정산가 salePrice=원가+마진 저장 +
-    저장 시점 fx 를 서버가 `basePriceFxRate` 로 스냅샷). 미핀 국가의 default 판매가는 **그 나라 물류비로 각각 파생**(서버 `priceLine`)이라 default 정산가가 전 국가 ≈ 원가+마진.
+    저장 시점 fx 를 서버가 `basePriceFxRate` 로 스냅샷). 미핀 국가의 default 판매가는 **물류비가 빠져 전 국가 동일**하고 default 정산가 ≈ 원가+마진.
     국가별은 판매가 모달에서 **그 나라 현지통화 판매가를 직접 입력**해 `priceLocal` 핀으로 저장(그 국가만 판매가 고정·마진 역산). 카드의 국가별
     마진/정산가는 **읽기전용 역산 표시**(klow_brand `PriceStep`·`ProductDetailPreview` 가 `sellingPriceUSD` 로 동일 파생). 환율 소스 `/v1/shop/fx-rate`.
 
@@ -120,9 +140,13 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 ```prisma
 model Product {
   basePriceUsd    Int?    // legacy/어드민 단일 판매가(USD 센트) + 신모델 대표/정렬·게이트값
-  basePriceFxRate Float?  // 저장 시점 fx 스냅샷. 有=국가별 파생 신모델(판매가 환율 고정)
+  basePriceFxRate Float?  // 저장 시점 fx 스냅샷. 有=정산가 파생 신모델(판매가 환율 고정)
   salePrice       Int     // 정산가 저장값(≈원가+마진). 신모델 default 판매가 파생·프리즈 기준(마진은 역산)
   costKrw         Int?    // 원가(KRW) — 원가 밑 경고 기준
+  freeShipping    Boolean // 무료배송 개별 토글. 실효 = brandRef.freeShippingAll || freeShipping
+  boxLengthCm     Float?  // 박스 규격(cm) — 예상 청구 배송비의 부피무게용. 가격 무관
+  boxWidthCm      Float?
+  boxHeightCm     Float?
   discount        Int     // 글로벌 마케팅 할인%(legacy 폴백)
   countryPrices   ProductCountryPrice[]
 }
@@ -133,6 +157,14 @@ model ProductCountryPrice {
   marginKrw   Int?     // [dormant] 구 모델 마진. priceLocal 백필 소스만 — prod 백필 후 드롭 가능
   discountPct Int      @default(0)
   @@unique([productId, iso2])
+}
+model Brand {
+  freeShippingAll Boolean // 브랜드관 전체 무료배송. 켜진 동안 개별 freeShipping 을 덮어씀(개별값은 보존)
+}
+model Order {
+  shippingFeeUsd     Int   // = 물류비/2/fx × 청구 대상 브랜드수
+  shippingFeeByBrand Json? // { brandId: 센트 }. 무료배송 브랜드는 0, Σ == shippingFeeUsd.
+                           // legacy 주문은 null → 송장 발급이 균등분배로 폴백
 }
 model OrderItem {
   unitPriceUsd       Int   // 고객 결제 단가(USD 센트) 스냅샷
@@ -146,10 +178,19 @@ model OrderItem {
 - **`Product.salePrice` 는 이름과 달리 판매가가 아니라 정산가(≈원가+마진, KRW)** 를 담는다 — 역사적 명명이고, 컬럼명 리네임 대신
   주석/문서로 정정만 했다(정확한 이름은 `settlementKrw`). 신모델에선 default **판매가를 파생·프리즈**하는 저장 기준값이다(판매가가 정본, 마진/정산가는 역산 — legacy 아님).
 - **dormant(저장만·로직 미사용) 컬럼** — 드롭 보류: `ProductCountryPrice.marginKrw`(유일 소비처 = `backfill-fixed-pricing.ts`,
-  prod 백필 실행 후 드롭 가능), `Product.isLoss`, `Product.weightG`(가격 무관, 카트 표시 passthrough),
+  prod 백필 실행 후 드롭 가능), `Product.isLoss`.
+  (`Product.weightG` 는 **더 이상 dormant 가 아니다** — 박스 규격과 함께 예상 청구 배송비의 청구중량 산출에 쓰인다. 가격엔 여전히 무관.)
+  그 외:
   `ShippingCountry.emsSpecialFeePerKgKrw`·`ShopSettings.dhlFuelSurchargeRate`(구 요율 재조합 폐기).
 - `ShippingRate` 모델은 시딩 EMS/DHL **비교 표 전용** — 주문/제품 가격(정산·판매가) 계산엔 쓰이지 않는다.
-마이그레이션: `add_country_currency_and_fx`(통화) + 판매가 고정 전환 마이그레이션. 백필: `npm run backfill:fixed-pricing`.
+마이그레이션: `add_country_currency_and_fx`(통화) + 판매가 고정 전환 + `pricing_free_shipping`(무료배송·박스규격·브랜드별 배송비 스냅샷).
+백필: `npm run backfill:fixed-pricing`(구 전환) · `npm run backfill:drop-logistics-markup`(물류비 분리 전환).
+
+> **`backfill:drop-logistics-markup` 주의**: 판매가에서 물류비를 뺀 만큼 `salePrice` 를 올려 **현 판매가를 보존**한다
+> (`salePrice += round(US 물류비/2)`). **멱등하지 않다** — 기본은 dry-run 이고 `-- --apply` 로만 쓴다.
+> 기준국이 US 하나뿐이라 **다른 국가의 default 판매가는 `(US물류비 − 그국가물류비)/2/0.95/fx` 만큼 이동**한다
+> (물류비가 US 보다 싼 아시아권은 인상, 비싼 국가는 인하). dry-run 이 국가별 델타 표를 출력하니 반드시 확인하고 진행할 것.
+> **백필 → 코드 배포 순서**를 지킨다 — 뒤집으면 그 구간 주문마다 브랜드 정산이 조용히 깎인다.
 
 ## 이력 (보관 문서)
 
