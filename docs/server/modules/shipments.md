@@ -17,7 +17,9 @@
 - **추적 자동 갱신 cron (`tracking-refresh.cron.ts`)**: KST 0/6/12/18시(`0 0,6,12,18 * * *`, Asia/Seoul)에 `refreshTrackingDue` 호출 — `submitted` + `efsTrackingNumber` 존재 + 비-terminal 코드(종료 코드 `TERMINAL_TRACKING_CODES = ['33','47','74','42']` 제외)인 송장을 오래 미갱신순으로 일괄 폴링(내부적으로 `refreshTrackingBulk` 재사용). `TRACKING_CRON_ENABLED=false` 일 때만 비활성(미설정 기본 on). 어드민 수동 일괄 갱신 버튼과 별개로 도는 보강 경로.
 - **dev-set-tracking (게이트)**: `POST /admin/shipments/:id/dev-set-tracking` 은 EFS 폴링 없이 추적 상태를 수동 주입(local/staging 배송 상태별 동작 테스트용). `devSetTrackingStatus` 가 `ALLOW_DEV_TRACKING_OVERRIDE=true` 를 **service 단에서 재확인**하므로 운영에선 `403`(`ForbiddenException`). 선택 코드로 합성 이벤트를 타임라인 끝에 append + latest 갱신.
 - **브랜드 발송 확인**: 어드민이 EFS 송장을 발급(`submitted`)하면 브랜드 스튜디오 "발송 대기"(`listPendingForBrand`: submitted + `brandConfirmedShippedAt=null`)에 뜨고, 브랜드가 `confirmShippedForBrand`(`POST /v1/brand/shipments/:id/confirm-shipped`)로 패킹 확인하면 `brandConfirmedShippedAt` 기록 → "배송 현황"(`listConfirmedForBrand`)으로 이동. 브랜드 라우트는 자기 `brandId` 송장만 접근(아니면 404).
+- **배송비 share (EFS 27번)**: 이 송장이 부담할 고객 선결제 배송비는 `orders/chargeable-brands.ts` 의 `perBrandShareUsd`(스냅샷 `Order.shippingFeeByBrand`, legacy 는 균등분배)로 정한다. **[efs-billing](./efs-billing.md) 의 브랜드 후청구가 같은 함수로 차감액을 구하므로** 둘이 어긋나면 송장과 청구서의 배송비가 달라진다 — 바꿀 땐 양쪽을 함께 본다.
 - **관련 파일**: `shipments.service.ts`(발급/재발급/취소/추적/상태전이 본체), `efs.client.ts`(EFS HTTP + 응답 파싱), `payload-builder.ts`(33필드 sendData 빌드), `tracking-refresh.cron.ts`(추적 폴링 cron), `shipment-include.ts`(`SHIPMENT_INCLUDE`/`SHIPMENT_LIST_OMIT`), `shipments.types.ts`, 2 개 컨트롤러.
+- **교차링크**: [efs-billing](./efs-billing.md)(EFS 실비 확정 → 브랜드 후청구), [settlement](./settlement.md)(delivered 송장 매출 정산), [seeding](./seeding.md)(시딩 claim 자동 발급).
 
 ## admin-shipments.controller.ts (`@Controller('admin/shipments')`)
 

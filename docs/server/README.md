@@ -55,6 +55,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI)                       |
 |            | [settlement](./modules/settlement.md)                                 | 브랜드 매출 정산 (delivered 송장 집계)                   |
+|            | [efs-billing](./modules/efs-billing.md)                               | EFS 배송비 브랜드 후청구 (시딩+일반, 정산표 업로드·청구서) |
 |            | [upload](./modules/upload.md)                                         | R2 presigned URL 발급 (admin / brand scope)              |
 |            | [translation](./modules/translation.md)                              | Google 번역 v2 래퍼 (DB 콘텐츠 다국어, 내부 서비스)     |
 
