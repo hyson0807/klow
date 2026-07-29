@@ -226,7 +226,7 @@ EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 
 ### 사전 준비
 
-- Neon dev DB 에 **배송지원 국가 1개**(`ShippingCountry.enabled=true` + `productLogisticsCostKrw` + `productCarrier` 세팅 — 어드민 물류비용/국가 설정 탭 또는 `seed:product-logistics-cost`)와 **승인된 제품(브랜드) 1개**. 어드민 물류비용/국가 미설정 국가는 `quote` 가 `shippable:false` 를 돌려주고 주문이 차단된다.
+- Neon dev DB 에 **배송지원 국가 1개**(`ShippingCountry.enabled=true` + 캐리어 설정 + `SeedingRate` 2kg 티어 — 어드민 배송비용/국가 설정 탭 또는 `seed:seeding-rates`)와 **승인된 제품(브랜드) 1개**. 요율표 2kg 티어나 캐리어가 없는 국가, 배송지원 꺼진 국가는 `quote` 가 `shippable:false` 를 돌려주고 주문이 차단된다.
 - 금액은 `totalUsd`(센트) 정본으로 계산되며, 어떤 값이든 흐름 검증엔 무방하다(정확히 $1 을 맞출 필요 없음).
 - 3 터미널: `klow_server`(4000), `klow_admin`(3000), `klow_web`(3001).
 - `.env` 에 EXIMBAY_* 키(해외 MID 는 sandbox 기본값)를 채우고 `npm run start:dev` 재시작. 국내(KRW) 결제까지 보려면 `EXIMBAY_DOMESTIC_*` 도 채운다(sandbox 엔 없으므로 보통 USD 만 검증).
