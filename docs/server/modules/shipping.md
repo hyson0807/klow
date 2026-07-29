@@ -11,8 +11,8 @@
 - **브랜드별 캐리어 스냅샷**: 한 브랜드 = 한 송장 = 한 박스. 캐리어는 국가 단위라 전 브랜드 동일하지만, 송장 발급 호환을 위해 주문 시점에 브랜드별 캐리어를 `Order.shippingCarrierByBrand`(JSON `{[brandId]:carrier}`) 에 스냅샷하고 `Order.shippingCarrier`(단일)는 같은 값을 **대표값**으로 둔다. 송장 발급(`shipments.service` `carrierForBrand`)이 `shippingCarrierByBrand[brandId] ?? shippingCarrier` 로 정한다. klow_web 은 `resolveCarrierAndRate`(`useShippingCountriesQuery.ts`) 가 동일 규칙(productLogisticsCostKrw/productCarrier + EFS 제외구역 차단)을 미러.
 - **요율의 절반 = 고객 결제 배송비 (판매가와 무관, 2026-07-28)**: 요율표 2kg 티어의 **절반만** 고객에게 배송비로 청구하고, **판매가에는 물류비가 들어가지 않는다**(구 "절반은 판매가 마크업" 규칙 폐기) — `orders.service`:
   - **배송비** = `요율표2kg/2/fxRate × **청구 대상** 브랜드수` — 한 브랜드 = 한 송장. 브랜드 단위로 반올림한 뒤 곱해 `Order.shippingFeeByBrand` 스냅샷 합과 정확히 일치시킨다.
-  - **무료배송**: `Product.freeShipping` 또는 `Brand.freeShippingAll`(실효는 `resolveFreeShipping` OR). 그 브랜드 라인이 **전부** 무료일 때만 그 브랜드 몫이 빠진다(`orders/chargeable-brands.ts` `chargeableBrandIds`) — 한 라인이라도 유료면 박스는 어차피 나가므로 1회 청구.
-  - 나머지 절반과 **입고 실측 차액은 브랜드 후청구 대상**(무료배송이면 실측 전액). 후청구 정산 플로우 자체는 미구현.
+  - **무료배송**: **국가별** `ProductCountryPrice.freeShipping`(목적국 행이 true 일 때만 — 행이 없으면 유료. 판정은 `resolveFreeShipping(row, iso2)`). 그 브랜드 라인이 **전부** 무료일 때만 그 브랜드 몫이 빠진다(`orders/chargeable-brands.ts` `chargeableBrandIds(lines, iso2)`) — 한 라인이라도 유료면 박스는 어차피 나가므로 1회 청구. 같은 주문이라도 배송지 국가가 다르면 배송비가 달라진다.
+  - 나머지 절반과 **입고 실측 차액은 브랜드 후청구 대상**(무료배송이면 실측 전액) — [efs-billing](./efs-billing.md) 참고.
   - ⚠️ 요율/캐리어 미설정국·배송지원 제외국·EFS 제외구역 차단은 **요금 게이트가 아니라 배송 가능 여부 게이트**라, 무료배송이어도 그대로 막는다.
 - **편집/시드**: 어드민 **배송비용** 탭(`/seeding-cost`)에서 국가×무게 요율(`PUT /admin/seeding-rates`)과 캐리어(`PUT /admin/shipping-countries/:iso2` → `productCarrier`, 국가 상세에서 `seedingCarrierSplitWeightG`)를 관리한다. 초기 적재 시드: `prisma/data/seeding_rates.json` → `npm run seed:seeding-rates`. (구 **물류비용** 탭 `/product-logistics-cost` + `seed:product-logistics-cost` 는 2026-07-29 제거 — 캐리어 편집은 배송비용 탭으로 이관.)
 - **국가 설정**: 어드민 **국가 설정** 탭(`/shipping-countries`)에서 `enabled`(배송지원 화이트리스트)·EFS 제외구역(`ShippingExclusion`)을 관리한다. `enabled` 는 **일반 주문 전용** 게이트(`loadEnabledCountry`) — 시딩 발급국은 요율표 기준(`supportedCountries`)이라 무관하다. 캐리어는 배송비용 탭에서 관리하므로 여기서 토글하지 않는다.

@@ -9,9 +9,15 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 > 무관한 단일 값**이 되고, 국가차는 핀(`priceLocal`)·할인에서만 생긴다.
 > 고객이 결제하는 **배송비(물류비/2 × 청구 대상 브랜드수)는 그대로**이고, 그 선결제분은 브랜드 실측
 > 물류비의 **선납금**이 된다 — 입고 실측과의 차액만 브랜드에 후청구(실측 ≤ 선결제면 청구 없음).
-> 제품별 **무료배송**(`Product.freeShipping` / 브랜드관 전체 `Brand.freeShippingAll`)을 켜면 고객은
-> 배송비를 내지 않고 실측 물류비 **전액**이 브랜드 몫이 된다. 배송비는 브랜드 단위(한 브랜드=한 송장)로
-> 청구되므로 **그 브랜드 라인이 전부 무료일 때만** 면제된다.
+> **무료배송**을 켜면 고객은 배송비를 내지 않고 실측 물류비 **전액**이 브랜드 몫이 된다. 배송비는
+> 브랜드 단위(한 브랜드=한 송장)로 청구되므로 **그 브랜드 라인이 전부 무료일 때만** 면제된다.
+>
+> **2026-07-29 전환 (무료배송을 국가별 설정으로)**: 무료배송이 제품/브랜드 단위 전역 불리언
+> (`Product.freeShipping` + `Brand.freeShippingAll`)에서 **국가별 핀의 세 번째 속성**
+> (`ProductCountryPrice.freeShipping`)으로 내려갔다 — 브랜드가 "미국은 무료, 동남아는 고객 부담"
+> 처럼 나라별로 정할 수 있다. 두 전역 컬럼과 그 엔드포인트(`PATCH /v1/brand/products/free-shipping`,
+> `PATCH /v1/brand/applications/free-shipping-all`)는 **제거**됐고, **행이 없는 국가 = 유료**가 유일한
+> 기본값이다(fail-closed). 판정은 `resolveFreeShipping(row, iso2)` 단일 출처.
 >
 > **2026-07-29 전환 (배송비 요율 단일화)**: 배송비 정본이 국가당 단일 2kg 값
 > (`ShippingCountry.productLogisticsCostKrw`, 어드민 물류비용 탭)에서 **국가×무게 요율표
@@ -84,10 +90,11 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 | **손님 판매가** (취소선) | 서버 계산 | USD | 응답 `listPriceUsd`(센트) | 핀 국가 `priceLocal/rate`, 미핀 default(신모델=정산가+frozenFx 파생 / legacy `basePriceUsd`). **미핀은 전 국가 동일** |
 | **실제 결제가** | 서버 계산 | USD | 응답 `customerPriceUsd`(센트) | 할인 적용가 |
 | 정산가 (개당 브랜드 몫) | 서버 역산 | KRW | 응답엔 미노출(편집기만) | `= 청구USD × fx × 0.95`(물류비 차감 없음). **유동**(표시 시점 환율) |
-| **무료배송** | 브랜드 입력 | — | `Product.freeShipping` **저장** + `Brand.freeShippingAll` | 실효 = 둘의 OR(`resolveFreeShipping`). 공개 응답 `freeShipping` |
+| **무료배송** | 브랜드 입력 | — | `ProductCountryPrice.freeShipping` **저장**(국가별) | 목적국 행이 true 일 때만(`resolveFreeShipping(row, iso2)`). 행 없음 = 유료. 공개 응답 `freeShipping` 은 `?country=` 기준 값 |
 | 배송 박스 규격 | 브랜드 입력 | cm/g | `Product.{weightG,boxLengthCm,boxWidthCm,boxHeightCm}` **저장** | 예상 청구 배송비(실측 후청구 미리보기)용. **가격 무관** |
 
-> 핀도 할인도 없는 국가는 `ProductCountryPrice` 행을 만들지 않고 default(신모델=정산가+frozenFx 국가별 파생 / legacy=basePriceUsd, 할인=글로벌 discount)를 상속한다.
+> 핀·할인·무료배송이 **셋 다 없는** 국가는 `ProductCountryPrice` 행을 만들지 않고 default(신모델=정산가+frozenFx 국가별 파생 / legacy=basePriceUsd, 할인=글로벌 discount, 배송비=고객 부담)를 상속한다.
+> ⚠️ `writeProductCountryPrices` 는 **replace-all** 이다 — 저장하는 쪽은 언제나 그 제품의 **전체 국가 배열**을 보내야 한다(부분 배열 = 나머지 국가 설정 삭제).
 > 완성도 게이트(`PUBLIC_PRODUCT_WHERE`)는 `image != '' && hasSellablePrice` — 판매가(신모델=정산가+frozenFx,
 > legacy=basePriceUsd) 가 정해져야 노출/판매된다. `hasSellablePrice`/`SELLABLE_PRICE_WHERE`(product-selects.ts)가 정본.
 
@@ -134,8 +141,10 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - 물류비·캐리어: `resolveProductShipping(iso2, address, brandWeights)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
   요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`), 브랜드별 박스 무게는 `orders/brand-weights.ts` `brandChargeableWeights`.
   환율: `resolveFxRate(prisma)` — `common/fx.ts`.
-- 무료배송: `resolveFreeShipping(row)` — `product-selects.ts`(실효 = `brandRef.freeShippingAll || freeShipping`).
-  `chargeableBrandIds(lines)` — `orders/chargeable-brands.ts`. **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**
+- 무료배송: `resolveFreeShipping(row, iso2)` — `product-selects.ts`(목적국 `ProductCountryPrice` 행의 `freeShipping`).
+  **`(cp)` 가 아니라 `(row, iso2)` 를 받는 건 fail-closed 를 위해서다** — 호출부가 `countryPrices` 를 목적국으로
+  필터하는 걸 깜빡해도 iso2 가 안 맞아 유료로 떨어진다(cp 를 받으면 다른 나라 설정으로 배송비가 샌다).
+  `chargeableBrandIds(lines, iso2)` — `orders/chargeable-brands.ts`. **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**
   (그 브랜드 라인이 전부 무료일 때만 면제).
 
 ## 프론트
@@ -158,7 +167,6 @@ model Product {
   basePriceFxRate Float?  // 저장 시점 fx 스냅샷. 有=정산가 파생 신모델(판매가 환율 고정)
   salePrice       Int     // 정산가 저장값(≈원가+마진). 신모델 default 판매가 파생·프리즈 기준(마진은 역산)
   costKrw         Int?    // 원가(KRW) — 원가 밑 경고 기준
-  freeShipping    Boolean // 무료배송 개별 토글. 실효 = brandRef.freeShippingAll || freeShipping
   boxLengthCm     Float?  // 박스 규격(cm) — 예상 청구 배송비의 부피무게용. 가격 무관
   boxWidthCm      Float?
   boxHeightCm     Float?
@@ -168,13 +176,11 @@ model Product {
 model ProductCountryPrice {
   productId   String
   iso2        String   @db.VarChar(2)
-  priceLocal  Float?   // 국가별 고정 현지통화 판매가(major). null = 기본 USD 상속
-  marginKrw   Int?     // [dormant] 구 모델 마진. priceLocal 백필 소스만 — prod 백필 후 드롭 가능
-  discountPct Int      @default(0)
+  priceLocal   Float?  // 국가별 고정 현지통화 판매가(major). null = 기본 USD 상속
+  marginKrw    Int?    // [dormant] 구 모델 마진. priceLocal 백필 소스만 — prod 백필 후 드롭 가능
+  discountPct  Int     @default(0)
+  freeShipping Boolean @default(false) // 이 국가만 무료배송. 행 자체가 없으면 false(고객 부담)
   @@unique([productId, iso2])
-}
-model Brand {
-  freeShippingAll Boolean // 브랜드관 전체 무료배송. 켜진 동안 개별 freeShipping 을 덮어씀(개별값은 보존)
 }
 model Order {
   shippingFeeUsd     Int   // = 물류비/2/fx × 청구 대상 브랜드수
@@ -198,7 +204,12 @@ model OrderItem {
   그 외:
   `ShippingCountry.emsSpecialFeePerKgKrw`·`ShopSettings.dhlFuelSurchargeRate`(구 요율 재조합 폐기).
 - `ShippingRate` 모델은 시딩 EMS/DHL **비교 표 전용** — 주문/제품 가격(정산·판매가) 계산엔 쓰이지 않는다.
-마이그레이션: `add_country_currency_and_fx`(통화) + 판매가 고정 전환 + `pricing_free_shipping`(무료배송·박스규격·브랜드별 배송비 스냅샷).
+마이그레이션: `add_country_currency_and_fx`(통화) + 판매가 고정 전환 + `pricing_free_shipping`(무료배송·박스규격·브랜드별 배송비 스냅샷)
++ `country_free_shipping`(무료배송을 국가별로 — `ProductCountryPrice.freeShipping` 추가 / `Product.freeShipping`·`Brand.freeShippingAll` 드롭).
+
+> **`country_free_shipping` 배포 주의**: `Product`/`Brand` 의 DROP COLUMN 은 롤링 배포에 안전하지 않다
+> (Prisma 가 SELECT 에 컬럼을 명시하므로 구 파드가 마이그레이션 직후 500). 컷오버 시 단일 레플리카로
+> 내리거나 "읽기 중단 코드 배포 → 마이그레이션" 2단계로 나눈다. 데이터 백필은 없다(전역 설정을 이관하지 않고 전부 OFF 로 시작).
 백필: `npm run backfill:fixed-pricing`(구 전환) · `npm run backfill:drop-logistics-markup`(물류비 분리 전환).
 
 > **`backfill:drop-logistics-markup` 주의**: 판매가에서 물류비를 뺀 만큼 `salePrice` 를 올려 **현 판매가를 보존**한다

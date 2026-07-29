@@ -5,10 +5,13 @@
 - **주문 생성 시 저장**: 약관동의(4종) + IP + `fxRateSnapshot` (결제 시점 환율 고정용). 라인 단가·정산가·원가는
   `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
 - **배송비 + 무료배송**: `shippingFeeUsd = 물류비/2/fx × 청구 대상 브랜드수`. 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
-  **그 브랜드 라인이 전부 무료배송(`Product.freeShipping` 또는 `Brand.freeShippingAll`)일 때만** 면제된다
-  — 판정은 `orders/chargeable-brands.ts` `chargeableBrandIds`(생성·견적 공유). 브랜드별 금액은 `Order.shippingFeeByBrand`
-  (`{brandId: 센트}`, 무료 브랜드는 0, Σ == `shippingFeeUsd`)에 스냅샷해 송장 발급이 EFS 27번을 정확히 안분한다.
-  `quote` 응답 라인에도 `freeShipping` 이 실려 klow_web 이 배지/배송비 표기를 서버 판단대로 그린다.
+  **그 브랜드 라인이 전부 무료배송일 때만** 면제된다. 무료배송은 **국가별**(`ProductCountryPrice.freeShipping`,
+  목적국 행이 없으면 유료)이라 배송지 국가가 판정의 입력이다 — `chargeableBrandIds(lines, iso2)`
+  (`orders/chargeable-brands.ts`, 생성·견적 공유). create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.
+  브랜드별 금액은 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 무료 브랜드는 0, Σ == `shippingFeeUsd`)에
+  스냅샷해 송장 발급이 EFS 27번을 정확히 안분한다.
+  `quote` 응답 라인은 `{productId, quantity, unitPriceUsd}` 뿐이다 — klow_web 은 배송비 표기를
+  라인이 아니라 `shippingFeeUsd`/`shippable` 로 그린다(무료배송이 국가별이라 클라 스냅샷이 성립하지 않음).
 - **과청구 가드**: 현지통화 핀(`priceLocal`) 상품인데 목적국 통화의 유효 환율이 없으면 `OrdersService.billingRate`가
   주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
 - **상태 흐름**: `pending → paid → fulfilled / cancelled / refunded`

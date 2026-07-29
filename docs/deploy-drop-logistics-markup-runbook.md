@@ -5,6 +5,11 @@
 
 관련 문서: [`pricing-model.md`](./pricing-model.md) · [이전 전환 런북](./deploy-fixed-pricing-runbook.md)
 
+> ⚠️ **이 문서는 그 릴리스 시점의 기록이다.** 2026-07-29 에 무료배송이 **국가별 설정**
+> (`ProductCountryPrice.freeShipping`)으로 바뀌면서 여기 나오는 `Product.freeShipping`·
+> `Brand.freeShippingAll` 컬럼은 드롭됐다. 무료배송 부분은 현행이 아니고, 물류비 분리·백필 절차만
+> 유효하다. 현행 모델은 [`pricing-model.md`](./pricing-model.md) 참고.
+
 ## 왜 순서가 중요한가
 
 신 공식은 `판매가 = 정산가 ÷ 0.95 ÷ 환율` 로 물류비 항이 없다. 백필 없이 신 코드가 트래픽을 받으면
@@ -62,8 +67,8 @@ npm run backfill:drop-logistics-markup -- --apply
 2. **전 국가 동일가** — `?country=JP|CN|SG` 가 US 와 같은 값(핀·할인 있는 제품 제외).
 3. **견적 == 청구** — `POST /v1/orders/quote` 의 `itemsTotalUsd` 가 표시가 × 수량과 일치,
    `shippingFeeUsd = 물류비/2/fx × 청구 대상 브랜드수`.
-4. **무료배송** — 제품 하나를 `freeShipping=true` 로 두고 견적 → `shippingFeeUsd=0`.
-   같은 브랜드에 유료 라인을 섞으면 다시 1회 청구.
+4. **무료배송** — (당시 기준) 제품 하나를 `freeShipping=true` 로 두고 견적 → `shippingFeeUsd=0`.
+   같은 브랜드에 유료 라인을 섞으면 다시 1회 청구. *현행은 국가별 설정이라 배송지 국가 기준으로 판정한다.*
 5. **어드민/legacy 무변경** — `basePriceFxRate = null` 제품 가격이 백필 전후 동일.
 6. **온사이트 무변경** — 부스 주문가(`basePriceUsd`)는 백필이 같은 값으로 재계산하므로 안 바뀐다.
 
