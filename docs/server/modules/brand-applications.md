@@ -45,7 +45,8 @@
   (한 국가만 고치려고 부분 배열을 보내면 나머지 국가의 핀·할인·무료배송이 전부 삭제된다).
 - **응답의 국가별 설정**: 목록/단건은 `pins{iso:priceLocal}` · `discounts{iso:pct}` · `freeShippingCountries[iso]`
   세 맵으로 국가별 원본을 돌려준다(폼 재구성용). 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
-- ⚠️ **초안 일괄 등록(`POST /v1/brand/products/bulk`)은 `countryPrices` 를 저장하지 않는다** —
-  `createMany` 라 `writeProductCountryPrices` 를 타지 않는다. 초안은 발행 전 편집 폼을 거치므로 의도된 동작.
+- **초안 일괄 등록(`POST /v1/brand/products/bulk`)은 `countryPrices` 를 아예 받지 않는다** —
+  `createMany` 라 `writeProductCountryPrices` 를 못 타므로 `BrandProductDraftInput` 에서 omit 했다
+  (받아놓고 버리지 않는다). 국가별 설정은 발행 전 편집 폼에서 채운다.
 - 승인/거부/제품 단위 승인·차단·환불은 모두 [subscription](./subscription.md) 의 어드민 `/admin/brand-subscriptions/*` 에서 처리한다.
 - 브랜드 탈퇴(철회)는 [brand-auth](./brand-auth.md) `withdrawal-request` + 어드민 [brands](./brands.md) `brand-withdrawals` 참고.

@@ -10,8 +10,9 @@
   (`orders/chargeable-brands.ts`, 생성·견적 공유). create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.
   브랜드별 금액은 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 무료 브랜드는 0, Σ == `shippingFeeUsd`)에
   스냅샷해 송장 발급이 EFS 27번을 정확히 안분한다.
-  `quote` 응답 라인은 `{productId, quantity, unitPriceUsd}` 뿐이다 — klow_web 은 배송비 표기를
-  라인이 아니라 `shippingFeeUsd`/`shippable` 로 그린다(무료배송이 국가별이라 클라 스냅샷이 성립하지 않음).
+  `quote` 응답 라인은 `{productId, quantity, unitPriceUsd}` 뿐이고, 배송비 표기에 필요한
+  `shippingFeeUsd`·`shippable`·`chargeableBrands`(실제 청구된 브랜드 수)는 응답 최상위에 있다 —
+  무료배송이 국가별이라 클라는 면제 여부를 못 구하므로 "무료" 판정과 "N개 브랜드" 표기 모두 서버값을 쓴다.
 - **과청구 가드**: 현지통화 핀(`priceLocal`) 상품인데 목적국 통화의 유효 환율이 없으면 `OrdersService.billingRate`가
   주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
 - **상태 흐름**: `pending → paid → fulfilled / cancelled / refunded`
