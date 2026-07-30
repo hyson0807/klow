@@ -4,7 +4,7 @@
 - **결제 통화**: USD
 - **주문 생성 시 저장**: 약관동의(4종) + IP + `fxRateSnapshot` (결제 시점 환율 고정용). 라인 단가·정산가·원가는
   `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
-- **배송비 + 무료배송**: `shippingFeeUsd = 물류비/2/fx × 청구 대상 브랜드수`. 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
+- **배송비 + 무료배송**: `shippingFeeUsd = 500g 요율/fx × 청구 대상 브랜드수`(산식 정본은 [pricing-model](../../pricing-model.md)). 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
   **그 브랜드 라인이 전부 무료배송일 때만** 면제된다. 무료배송은 **국가별**(`ProductCountryPrice.freeShipping`,
   목적국 행이 없으면 유료)이라 배송지 국가가 판정의 입력이다 — `chargeableBrandIds(lines, iso2)`
   (`orders/chargeable-brands.ts`, 생성·견적 공유). create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.

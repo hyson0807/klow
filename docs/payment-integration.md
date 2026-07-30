@@ -176,7 +176,7 @@ DB 전이는 호출자(어드민/사용자/게스트)가 각자 where 절로 수
 | 컬럼 | 값 |
 |------|------|
 | `Order.totalUsd` | **USD 센트(정수) 정본** = Σ(`unitPriceUsd`×qty) + `shippingFeeUsd`. PG 청구액과 1:1 (2630 = $26.30) |
-| `Order.shippingFeeUsd` | USD 센트 — 배송비(= Σ_브랜드 요율/2). `totalUsd` 에 포함 |
+| `Order.shippingFeeUsd` | USD 센트 — 배송비(= 500g 요율 × 청구 대상 브랜드수). `totalUsd` 에 포함 |
 | `Order.fxRateSnapshot` | 주문 시점 USD-KRW 환율. prepare/verify/refund 가 KRW 파생·환산에 재사용 |
 | `Order.pgCurrency` | prepare 가 기록 — `'USD'`(해외 MID) / `'KRW'`(국내 전용 MID). null = 아직 prepare 안 됨(USD 로 간주) |
 | `Order.paymentStatus` | `'pending'` → `'paid'`(verify/webhook) / `'failed'`(report-failure) → `'refunded'`/`'cancelled'`(환불) |
@@ -188,7 +188,7 @@ DB 전이는 호출자(어드민/사용자/게스트)가 각자 where 절로 수
 | `Order.agreementIp` | 동의를 누른 클라이언트 IP (분쟁 트레이서빌리티) |
 | `Order.paymentFailureReason` | report-failure 가 저장하는 운영 디버깅용 사유(≤500자) |
 | `OrderItem.unitPriceUsd` | USD 센트 — 주문 시점 고객 결제 단가 스냅샷(마크업+수수료 포함) |
-| `OrderItem.settlementPriceKrw` | KRW — 주문 시점 브랜드 정산 단가. 청구 USD 에서 주문 시점 환율로 역산(`= 청구USD × fx × 0.95 − 물류비/2`, `settlementKrwFromCustomerUsd`) — `Product.salePrice`(정산가)와 별개 스냅샷 |
+| `OrderItem.settlementPriceKrw` | KRW — 주문 시점 브랜드 정산 단가. 청구 USD 에서 주문 시점 환율로 역산(`= 청구USD × fx × 0.95`, 물류비 차감 없음 — `settlementKrwFromCustomerUsd`) — `Product.salePrice`(정산가)와 별개 스냅샷 |
 
 스키마는 USD 전환 마이그레이션 이후 안정 — 이 통합 자체가 추가한 신규 마이그레이션은 없다.
 
@@ -226,7 +226,7 @@ EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 
 ### 사전 준비
 
-- Neon dev DB 에 **배송지원 국가 1개**(`ShippingCountry.enabled=true` + 캐리어 설정 + `SeedingRate` 2kg 티어 — 어드민 배송비용/국가 설정 탭 또는 `seed:seeding-rates`)와 **승인된 제품(브랜드) 1개**. 요율표 2kg 티어나 캐리어가 없는 국가, 배송지원 꺼진 국가는 `quote` 가 `shippable:false` 를 돌려주고 주문이 차단된다.
+- Neon dev DB 에 **배송지원 국가 1개**(`ShippingCountry.enabled=true` + 캐리어 설정 + `SeedingRate` 500g 티어 — 어드민 배송비용/국가 설정 탭 또는 `seed:seeding-rates`)와 **승인된 제품(브랜드) 1개**. 요율표 500g 티어나 캐리어가 없는 국가, 배송지원 꺼진 국가는 `quote` 가 `shippable:false` 를 돌려주고 주문이 차단된다.
 - 금액은 `totalUsd`(센트) 정본으로 계산되며, 어떤 값이든 흐름 검증엔 무방하다(정확히 $1 을 맞출 필요 없음).
 - 3 터미널: `klow_server`(4000), `klow_admin`(3000), `klow_web`(3001).
 - `.env` 에 EXIMBAY_* 키(해외 MID 는 sandbox 기본값)를 채우고 `npm run start:dev` 재시작. 국내(KRW) 결제까지 보려면 `EXIMBAY_DOMESTIC_*` 도 채운다(sandbox 엔 없으므로 보통 USD 만 검증).
