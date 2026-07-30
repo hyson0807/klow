@@ -37,6 +37,7 @@
 
 ## 참고
 
+- **취급 품목 게이트**: 두 생성 경로(`POST /v1/brand/products`, `/products/bulk`)는 `Brand.category` 가 `null` 이면 `400 "제품을 등록하기 전에 브랜드 카테고리를 먼저 선택해 주세요"` 로 거부한다(`assertBrandCategoryChosen`). 품목이 EFS 통관 신고값의 정본이라 첫 제품보다 먼저 정해져야 하기 때문 — 안 그러면 첫 제품이 화장품 전제로 등록된 뒤에야 바꿀 수 있다. 품목은 `PUT /v1/brand/applications` 의 `category` 로 저장하며, klow_brand 스튜디오가 제품 0개 온보딩에서 소개서 업로드보다 먼저 묻는다. 수정 경로(`PATCH /products/:id` 등)는 게이트하지 않는다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
