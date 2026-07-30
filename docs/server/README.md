@@ -37,7 +37,6 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [creators](./modules/creators.md)                                     | 크리에이터 CRUD + 공개 조회 (상품 연관 포함)             |
 |            | [videos](./modules/videos.md)                                         | 비디오 CRUD + 공개 조회 (creatorId/productId 필터)       |
 |            | [reviews](./modules/reviews.md)                                       | 리뷰 CRUD + 공개 조회                                    |
-|            | [discover](./modules/discover.md)                                     | 피부/관심사 기반 상품 추천 피드                          |
 |            | [shop](./modules/shop.md)                                             | 오늘의 추천(Today's Pick), 환율, 쇼핑 설정, 가격 미리보기 |
 |            | [curated-influencers](./modules/curated-influencers.md)               | 큐레이티드 인플루언서 (입점 시 크리에이터 매칭용)        |
 | **주문**   | [cart](./modules/cart.md)                                             | 유저 장바구니 (merge 포함)                               |

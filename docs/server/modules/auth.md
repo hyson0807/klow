@@ -16,7 +16,7 @@
 | POST   | `/v1/auth/login`              | public              | LOOSE    | 이메일/비밀번호 로그인 + 세션 쿠키 설정                            |
 | POST   | `/v1/auth/logout`             | public              | -        | 세션 무효화 + 쿠키 제거                                           |
 | GET    | `/v1/auth/me`                 | public (쿠키 읽음)  | -        | 현재 로그인 유저 (없으면 401)                                     |
-| PATCH  | `/v1/auth/me`                 | `UserGuard`         | -        | 프로필 편집 (닉네임/국가/피부타입/concerns 등)                    |
+| PATCH  | `/v1/auth/me`                 | `UserGuard`         | -        | 프로필 편집 (닉네임/국가)                    |
 | GET    | `/v1/auth/google`             | public              | -        | `returnTo` 쿠키 저장 후 `/v1/auth/google/authorize` 로 리다이렉트 |
 | GET    | `/v1/auth/google/authorize`   | `AuthGuard('google')`| -       | Passport — Google 로 보냄                                         |
 | GET    | `/v1/auth/google/callback`    | `AuthGuard('google')`| -       | Google 콜백 → 유저 찾기/생성 + 세션 쿠키 + `FRONTEND_URL` 로 복귀  |

@@ -92,7 +92,7 @@ The **28 feature modules** under `src/modules/`:
 
 | Domain              | Modules                                                                            |
 |---------------------|------------------------------------------------------------------------------------|
-| Catalog             | `products`, `brands`, `creators`, `videos`, `reviews`, `shop`, `discover`, `stats` |
+| Catalog             | `products`, `brands`, `creators`, `videos`, `reviews`, `shop`, `stats` |
 | Commerce            | `cart`, `orders`, `payment`, `concierge`                                            |
 | Fulfilment          | `shipments`, `shipping`, `seeding`, `settlement`                                    |
 | User auth           | `auth`                                                                              |
@@ -113,13 +113,13 @@ Each entity follows the same shape, and this is the convention to preserve when 
 - **All controllers delegate to the same service.** A bug fix or feature change flows to every surface automatically.
 - **Adding a new client** (mobile app, internal tool) means adding a controller, never duplicating logic.
 
-Some modules intentionally diverge from the multi-controller shape: `stats`/`upload` are admin-only, `discover` is read-only public, `payment` splits `PublicPaymentController` (UserGuard) from `WebhookPaymentController` (IP-whitelisted, no guard), and `brand-scraper`/`subscription` add brand-scoped controllers under `/v1/brand/*`.
+Some modules intentionally diverge from the multi-controller shape: `stats`/`upload` are admin-only, `payment` splits `PublicPaymentController` (UserGuard) from `WebhookPaymentController` (IP-whitelisted, no guard), and `brand-scraper`/`subscription` add brand-scoped controllers under `/v1/brand/*`.
 
 ### Shared product selects & pricing
 
 `klow_server/src/modules/products/product-selects.ts` is the single place that owns product read shape **and** customer-facing price computation:
 
-- `PRODUCT_LIST_SELECT` — the lean field set for cards (detail-only fields excluded to keep list payloads small); `DISCOVER_SCORING_SELECT` adds `concerns`/`recommendedFor` for the discover pipeline.
+- `PRODUCT_LIST_SELECT` — the lean field set for cards (detail-only fields excluded to keep list payloads small). `concerns` is in the list select so the free-text tags can render on cards; `recommendedFor` is detail-only.
 - `PUBLIC_PRODUCT_WHERE` / `PURCHASABLE_PRODUCT_WHERE` — the **single visibility+purchasability gate** (they are identical: subscription-gated for self-signup brands, exempt for admin-created/legacy brands).
 - `priceLine(row, cp, rateKrw, fx)` — the one function that turns a product row + optional `ProductCountryPrice` + FX into the customer price line, so **display price == charged price** across cards, order creation, and quotes. See the Pricing section.
 
@@ -151,14 +151,14 @@ Source of truth: `klow_server/prisma/schema.prisma` (43 models, 18 native enums)
 
 ### 카탈로그 (Catalog)
 
-- **`Product`** — 판매 제품 마스터. **가격 정본은 고정 판매가**(마진/정산가는 역산): 정산가 저장값 `salePrice`(≈원가+마진 KRW, ⚠️이름과 달리 판매가가 아님)+저장 fx 스냅샷 `basePriceFxRate`(有=이 둘로 국가별 default 판매가를 파생·프리즈하는 신모델), `costKrw`(원가, 원가 밑 경고 기준), `basePriceUsd`(legacy/어드민 단일 판매가 USD 센트 + 정렬·게이트 대표값), `discount`(글로벌 취소선), 공개·판매 게이트 `status`/`hidden`(완성도는 `hasSellablePrice`), 통관 `hsCode`/`customsCategoryEn`, FOMO/머천다이징/페르소나 태그(`concerns`, `recommendedFor`) + 상세 콘텐츠. `brand` 는 `Brand.name` 의 denormalized 캐시(권위는 `brandId` FK). `rating`/`reviewCount` 는 `Review` 에서 서버가 파생.
+- **`Product`** — 판매 제품 마스터. **가격 정본은 고정 판매가**(마진/정산가는 역산): 정산가 저장값 `salePrice`(≈원가+마진 KRW, ⚠️이름과 달리 판매가가 아님)+저장 fx 스냅샷 `basePriceFxRate`(有=이 둘로 국가별 default 판매가를 파생·프리즈하는 신모델), `costKrw`(원가, 원가 밑 경고 기준), `basePriceUsd`(legacy/어드민 단일 판매가 USD 센트 + 정렬·게이트 대표값), `discount`(글로벌 취소선), 공개·판매 게이트 `status`/`hidden`(완성도는 `hasSellablePrice`), 통관 `hsCode`/`customsCategoryEn`, FOMO/머천다이징 태그 + **자유 텍스트 태그**(`concerns`=주요 고민, `recommendedFor`=추천 피부 타입 — 고정 enum 이 아닌 영문 원문이고 `ProductTranslation` 이 로케일별로 번역) + 상세 콘텐츠. `brand` 는 `Brand.name` 의 denormalized 캐시(권위는 `brandId` FK). `rating`/`reviewCount` 는 `Review` 에서 서버가 파생.
 - **`ProductCountryPrice`** — 제품×국가 설정 핀(`iso2`, `priceLocal?`(현지통화 고정 판매가), `discountPct`, `freeShipping`; `marginKrw?` 는 dormant). 핀 있으면 그 국가는 현지통화 고정, 없으면 전국가 기본 `basePriceUsd` 상속. `freeShipping` 은 그 국가만 고객 배송비 면제(행 없음 = 유료). 셋 다 기본값이면 행을 만들지 않고, 저장은 **replace-all**(전체 배열 전송 필수). `@@unique([productId, iso2])`, Product cascade.
 - **`Brand`** — 브랜드 storefront + 정산/발송/입점상태/구독 마스터. `slug`, `status`(BrandStatus), 로고 레이아웃, 송화인/계좌 정산 정보, `pgCustomerKey`(결제 준비 게이트). Product·Shipment·Campaign·SeedingLink·BrandUser·BrandSubscription·BillingKey·BrandTranslation 소유.
-- **`Creator`** — 콘텐츠 크리에이터 프로필. `handle`(unique), `skinType`/`concerns`/`country`, `followers`, SNS 핸들. Video[] 소유.
+- **`Creator`** — 콘텐츠 크리에이터 프로필. `handle`(unique), `country`, `followers`, SNS 핸들. Video[] 소유.
 - **`Video`** — 크리에이터 릴스. `videoUrl`/`thumbnailUrl`, `themes`, `forSkinTypes`. Creator(N:1, cascade), VideoProduct 경유 Product(N:M).
 - **`VideoProduct`** — Video↔Product 명시 조인 + `order`(드래그 정렬용). 복합 PK `(videoId, productId)`, 양쪽 cascade. (extra 컬럼 때문에 implicit N:M 대신 명시 조인.)
 - **`Review`** — 제품 리뷰(한국어 원문). mutation 이 같은 트랜잭션에서 `Product.rating`/`reviewCount` 재계산. Product(cascade)·User(nullable)·ReviewTranslation[].
-- **`ShopSettings`** — 전역 상점 설정 싱글턴(`id="default"`, lazy-create). `todaysPickConcern`(`/v1/shop/today`), `dhlFuelSurchargeRate`. (`usdKrwRate` 는 정산 정본이 `CurrencyFxRate['KRW']` 로 이관돼 **dormant**.)
+- **`ShopSettings`** — 전역 상점 설정 싱글턴(`id="default"`). `dhlFuelSurchargeRate`. (`usdKrwRate` 는 정산 정본이 `CurrencyFxRate['KRW']` 로 이관돼 **dormant**. 어드민 편집 엔드포인트·`todaysPickConcern` 은 2026-07-30 제거.)
 - **`CurrencyFxRate`** — 통화 환율 단일 테이블. `['KRW']` 행 = 브랜드 정산 정본 환율(수동 고정, cron 제외, `resolveFxRate`), 그 외 = USD→현지통화 표시 환율(cron 자동 + 수동 오버라이드). `manualOverride`/`autoRate`/`source`.
 
 ### 주문 / 결제 (Orders & Payment)
@@ -168,7 +168,7 @@ Source of truth: `klow_server/prisma/schema.prisma` (43 models, 18 native enums)
 
 ### 유저 인증 (User auth)
 
-- **`User`** — 일반 고객. `email`(unique), `passwordHash?`(Google-only 는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`, 스킨 프로필(`country?`/`skinType?`/`concerns[]`). Order·Review 와 nullable 관계, CartItem·Session 소유.
+- **`User`** — 일반 고객. `email`(unique), `passwordHash?`(Google-only 는 null), `googleId?`(unique), `nickname`, `emailVerifiedAt`, `country?`. Order·Review 와 nullable 관계, CartItem·Session 소유.
 - **`Session`** — 유저 DB 세션. `token`(opaque, unique), `expiresAt`, `userAgent`/`ip`. `klow_sid` 쿠키. User cascade.
 - **`EmailVerification`** — 이메일 OTP + signup token(웹 + 브랜드 공용, `purpose` 로 분기). `codeHash`(argon2), `expiresAt`, `attempts`(5회 잠금). 독립 테이블.
 - **`PhoneVerification`** — 브랜드 전화 SMS OTP. `phone`, `codeHash`, `purpose`, `expiresAt`, `attempts`, `lastSentAt`(60초 재발송 쿨다운). 독립 테이블.
@@ -312,7 +312,7 @@ Browser-direct two-step upload, used for both images and videos:
 
 - Toast context: `klow_admin/src/components/Toast.tsx`, mounted once in `app/layout.tsx` via `<ToastProvider>`, consumed via `useToast()` → `success/error/info/show`.
 - The shared CRUD hook `klow_admin/src/hooks/useFormState.ts` already emits the right toasts — form-based flows get it for free.
-- Ad-hoc flows that bypass `useFormState` (e.g. `shop-settings`, `concierge-requests`, `reviews` moderation) call `useToast()` directly.
+- Ad-hoc flows that bypass `useFormState` (e.g. `concierge-requests`, `reviews` moderation) call `useToast()` directly.
 - Server errors are thrown by `api.ts` as `Error(message)`; forwarding `e.message` into the toast is enough.
 - **Not** for background list fetches (use inline placeholders) or field-validation hints (use inline helper text). Toasts are for _actions the user just took_.
 
@@ -412,7 +412,7 @@ Always `npx prisma migrate dev --name <이름>` — never `migrate deploy`, manu
 ## Frontend Surfaces (route map)
 
 - **klow_web** (`src/app/`): `[brandSlug]`, `brand`, `cart`, `checkout`, `concierge`, `creator`, `customer-center`, `discover`, `faq`, `feed`, `legal`, `login`, `my`, `orders`, `product`, `seed`, `shop`, `signup`, `track`, `videos`.
-- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `campaigns`, `concierge-requests`, `creators`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `shop-settings`, `tracking`. Public: `login`, `accept-invite/[token]`.
+- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `campaigns`, `concierge-requests`, `creators`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `tracking`. Public: `login`, `accept-invite/[token]`.
 - **klow_brand** (`src/app/`): landing `/`, `signup`, `legal`, and `(authed)/{campaigns, creators, seeding, settings, studio}` — product management lives under **studio** (the old onboarding/dashboard structure is gone).
 
 ---

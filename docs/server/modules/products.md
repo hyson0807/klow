@@ -30,7 +30,7 @@
 
 | Method | Path                       | 기능                                                                                |
 |--------|----------------------------|-------------------------------------------------------------------------------------|
-| GET    | `/v1/products`             | 상품 목록 (`q`, `categoryKey`, `concerns[]`, `discount`, `sort`, `brandId` 필터)    |
+| GET    | `/v1/products`             | 상품 목록 (`q`, `categoryKey`, `discount`, `sort`=`discount_desc`\|`popular`, `brandId` 필터)    |
 | GET    | `/v1/products/:id`         | 상품 상세                                                                           |
 
 ## 참고

@@ -31,7 +31,7 @@
 
 `TranslationService` 를 직접 주입하는 모듈은 **products / brands** 두 곳이며, 각각 도메인 전용 래퍼를 한 단계 더 둔다.
 
-- **`products/product-translation.service.ts` (`ProductTranslationService`)** — 제품 텍스트 segment 들을 모아 `translation.translateBatch(segments, locale)` 호출. `products.service.ts` 와 `discover/discover.service.ts`(`ProductTranslationService` 주입)가 소비. `products.module.ts` 가 `ProductTranslationService` 를 export.
+- **`products/product-translation.service.ts` (`ProductTranslationService`)** — 제품 텍스트 segment 들을 모아 `translation.translateBatch(segments, locale)` 호출 — 제품명·상세설명·핵심성분·공감카드·**자유 텍스트 태그(concerns/recommendedFor)** + 고시 필드. 가변 길이 항목(성분·카드·태그)은 고정 필드 뒤에 정해진 순서로 평탄화하고 같은 순서로 재조립한다. `products.service.ts` 가 소비. `products.module.ts` 가 `ProductTranslationService` 를 export.
 - **`brands/brand-translation.service.ts` (`BrandTranslationService`)** — 브랜드 텍스트 segment 들을 모아 `translation.translateBatch(segments, locale)` 호출. `brands.service.ts` 가 소비, `brands.module.ts` 에 등록.
 
-> 즉 호출 그래프는 `products/brands(+discover)` → `Product/BrandTranslationService` → `TranslationService` → Google v2 다. `TranslationService` 자체는 도메인 무관한 순수 배치 번역기다.
+> 즉 호출 그래프는 `products/brands` → `Product/BrandTranslationService` → `TranslationService` → Google v2 다. `TranslationService` 자체는 도메인 무관한 순수 배치 번역기다.
