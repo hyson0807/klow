@@ -38,6 +38,17 @@
 ## 참고
 
 - **취급 품목 게이트**: 두 생성 경로(`POST /v1/brand/products`, `/products/bulk`)는 `Brand.category` 가 `null` 이면 `400 "제품을 등록하기 전에 브랜드 카테고리를 먼저 선택해 주세요"` 로 거부한다(`assertBrandCategoryChosen`). 품목이 EFS 통관 신고값의 정본이라 첫 제품보다 먼저 정해져야 하기 때문 — 안 그러면 첫 제품이 화장품 전제로 등록된 뒤에야 바꿀 수 있다. 품목은 `PUT /v1/brand/applications` 의 `category` 로 저장하며, klow_brand 스튜디오가 제품 0개 온보딩에서 소개서 업로드보다 먼저 묻는다. 수정 경로(`PATCH /products/:id` 등)는 게이트하지 않는다.
+- **제품 텍스트 필드는 영문(ASCII) 전용** — 국제 노출 원문이자 `ProductTranslation`(en 소스) 번역의
+  입력이라 non-ASCII 를 거부한다. 두 종류로 갈린다:
+  **①서술형(`EnglishText`: usage·precautions·qualityAssuranceStandard·volume·manufacturer 등)** 은
+  **여러 줄 허용**(`\t\r\n`) — klow_web PDP 의 `StatutoryInfo` 가 `whitespace-pre-line` 으로 렌더한다.
+  **②단일 라인(`EnglishProductName`·`EnglishTag`)** 은 개행 불가(제품명은 EFS 24-5 에 그대로 들어간다).
+  예외는 전성분(`ingredients`) 하나뿐 — 번역 대상이 아니라 입력 언어 그대로 노출된다.
+  ⚠️ 2026-07-31 이전에는 서술형도 개행을 막아, **주의사항에 엔터 한 번만 쳐도 그 제품의 저장이 영구히
+  400** 이 됐다(자동저장은 그 값을 조용히 건너뛰어 화면엔 "저장됨"만 떠서 발견이 늦었다).
+  klow_brand 는 `src/lib/ascii.ts` 의 `sanitizeToAscii` 로 `※ ℃ ㎖ ’ —` 같은 기호를 ASCII 근사로 바꿔
+  보내고(번역 결과에도 유니코드 문장부호가 남으므로 **번역 전후 양쪽**에서 통과시킨다), ASCII 아닌
+  **글자**만 번역 대상으로 남긴다 — 글자를 스트립하면 사용자 텍스트가 소실되기 때문.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
