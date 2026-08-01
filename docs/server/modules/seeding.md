@@ -14,7 +14,7 @@
 - **이용계약서 서명**: 후청구(브랜드 결제) 시딩 이용계약서는 `BrandUser` 계정당 1회 동의 — 클라이언트 서명 캔버스 PNG data URL 을 디코드해 R2(`seeding-agreements/`, `brandUserId` scope)에 업로드하고 DB(`SeedingServiceAgreement`)엔 공개 URL 만 저장한다(data URL 을 행에 박지 않음). 재동의 시 `acceptedAt` 갱신. 브랜드 미연결 계정(`brandId=null`)도 서명 가능하므로 `requireBrandId` 가 아니라 `user.id` 로 스코프.
 - **발급 가능국**: `logisticsRate.supportedCountries()` = 요율표 티어 보유 ∩ 캐리어 결정 가능(`productCarrier` 또는 `seedingCarrierSplitWeightG`) 국가. **배송지원 `enabled` 무관** — 그 게이트는 일반 주문 전용이다. 캐리어 없는 국가를 드롭다운에서 빼 "목록엔 뜨는데 발급 실패"를 막는다.
 - **초기 시드**: `npm run seed:seeding-rates`(`prisma/data/seeding_rates.json`, 엑셀 `KLOW_시딩_가격표` 고객_가격표 기준).
-- **관련 파일**: `seeding.service.ts`(링크 발급·claim·checkout·계약서 서명·review/sns-memo 토글), `manual-seeding.service.ts`(KLOW 이전 수동 시딩기록 엑셀 추출·CRUD), `shipping/logistics-rate.service.ts`(요율표 조회·편집·엑셀 — shipping 모듈 소유·export, 2026-07-29 이동), `shipping/shipping-rate.service.ts`(EMS/DHL 비교가 — shipping 모듈 소유·export, 2026-07 이동), `shipping/xlsx-grid.ts`(캐리어 시트 파서), 컨트롤러 3개(brand·public·admin-seeding-rate) + shipping 모듈의 admin-shipping-rate.
+- **관련 파일**: `seeding.service.ts`(링크 발급·claim·checkout·계약서 서명·review/sns-memo 토글), `manual-seeding.service.ts`(KLOW 이전 수동 시딩기록 엑셀 추출·CRUD), `shipping/logistics-rate.service.ts`(요율표 조회·편집·엑셀 — shipping 모듈 소유·export, 2026-07-29 이동), `shipping/rate-sheet-ai.service.ts`(임의 포맷 요율표 AI 추출), `shipping/shipping-rate.service.ts`(EMS/DHL 비교가 — shipping 모듈 소유·export, 2026-07 이동), `shipping/xlsx-grid.ts`(캐리어 시트 파서), 컨트롤러 3개(brand·public·admin-seeding-rate) + shipping 모듈의 admin-shipping-rate.
 - **교차링크**: [shipping](./shipping.md)(productCarrier·EFS 제외구역·resolveCarrier), [orders](./orders.md)(게스트 주문 토큰·동의), [payment](./payment.md)(유료 checkout prepare/verify), [shipments](./shipments.md)(EFS 송장 자동 발급).
 
 ## brand-seeding.controller.ts (`@Controller('v1/brand/seeding')`)
@@ -63,6 +63,16 @@
 | DELETE | `/admin/seeding-rates`                  | `(iso2, weightG)` 셀 삭제                     |
 | POST   | `/admin/seeding-rates/import/preview`   | 시딩 가격표 엑셀 파싱 → 국가별 상태 diff      |
 | POST   | `/admin/seeding-rates/import/apply`     | 같은 파일 재파싱 + 선택 국가 티어 통째 교체   |
+| POST   | `/admin/seeding-rates/:iso2/import/ai-preview` | 임의 포맷 요율표 엑셀 → AI 추출 + diff (적용 안 함) |
+| PUT    | `/admin/seeding-rates/:iso2/tiers`      | 한 국가 티어 일괄 저장(`mode: replace \| merge`) |
+
+**AI 요율표 추출 (국가 상세, 2026-08)** — 위의 `import/preview`·`import/apply` 는 `고객_가격표`(국가×무게 매트릭스) **고정 포맷 전용**이라, 캐리어에서 받은 국가 하나짜리 요율표(헤더 이름·단위·열 위치가 매번 다름)에는 못 쓴다. 그래서 국가 상세(`/seeding-cost/[iso2]`)에 별도 경로를 뒀다 — **목록 페이지의 기존 업로드와 무관하게 병존**한다.
+
+- **AI 는 레이아웃만 판단하고 금액은 서버가 원본 셀에서 직접 읽는다.** 71~140행 금액을 LLM 이 옮겨 적으면 자릿수 환각이 나므로, AI 응답은 `{sheetName, orientation, weightIndex, priceIndex, weightUnit, dataStart/EndIndex, currency, notes}`(`RateSheetLayout`) 뿐이다. 저장되는 값은 항상 파일값과 일치한다.
+- 서비스는 `shipping/rate-sheet-ai.service.ts`(`RateSheetAiService`, ShippingModule 소유) — `inferLayout()`(OpenAI, `OPENAI_MODEL ?? gpt-4o-mini`, 시트당 앞 40행×30열만 프롬프트에 실음) + `extract()`(**LLM 미경유 결정론적 파싱**) + 후보 열 수집. `LogisticsRateService.aiImportPreview()` 가 이를 호출하고 기존 `buildTierDiff` 로 diff 를 만든다.
+- **열 오선택 복구**: 응답에 `candidates`(숫자 5개 이상 든 열/행 + 헤더)를 함께 실어, 어드민이 미리보기에서 무게/가격 열을 바꾸면 **같은 파일 + `layout` 을 재전송해 AI 없이 즉시 재추출**한다. 추출 0건이어도 400 을 던지지 않고 candidates 와 함께 돌려주는 이유가 이것 — 던지면 어드민이 바로잡을 화면 자체가 안 뜬다.
+- **버리는 행은 노출한다**: `SeedingRateUpsert` 와 같은 상한(무게 1~50,000g / 0~10,000,000원)을 벗어난 행은 `skipped[]` 에 사유와 함께 담겨 경고 배너로 뜬다(예: 50kg 초과 티어). 통화가 KRW 가 아니면 400.
+- **적용**은 AI 를 다시 타지 않는다 — 미리보기에서 확인한 티어를 그대로 `PUT :iso2/tiers` 로 되돌려 보낸다. `replace` 는 그 국가 티어 전체 교체(목록 업로드와 같은 의미), `merge` 는 들어온 무게만 갱신. 전체 교체가 지울 기존 티어는 미리보기 `removed[]` 로 먼저 보여준다(표준 소형 티어 100g/250g/750g 이 조용히 사라지지 않도록).
 
 ## admin-shipping-rate.controller.ts (`@Controller('admin/shipping-rates')`) — 파일 위치: `src/modules/shipping/`
 

@@ -56,6 +56,10 @@
 | DELETE | `/admin/seeding-rates`                  | `(iso2, weightG)` 셀 삭제                     |
 | POST   | `/admin/seeding-rates/import/preview`   | 시딩 가격표 엑셀 파싱 → 국가별 상태 diff      |
 | POST   | `/admin/seeding-rates/import/apply`     | 같은 파일 재파싱 + 선택 국가 티어 통째 교체   |
+| POST   | `/admin/seeding-rates/:iso2/import/ai-preview` | 임의 포맷 요율표 → AI 추출 + diff (적용 안 함) |
+| PUT    | `/admin/seeding-rates/:iso2/tiers`      | 한 국가 티어 일괄 저장(`replace`/`merge`)     |
 
 초기 적재 시드: `prisma/data/seeding_rates.json`(엑셀 `KLOW_시딩_가격표` 고객_가격표) → `npm run seed:seeding-rates`.
+
+국가 상세의 AI 추출(`rate-sheet-ai.service.ts`)은 **AI 에게 레이아웃만 묻고 금액은 서버가 원본 셀에서 직접 읽는** 2단계 구조다 — 자세히는 [seeding](./seeding.md#admin-seeding-ratecontrollerts-controlleradminseeding-rates).
 서비스는 `shipping/logistics-rate.service.ts` `LogisticsRateService`(컨트롤러만 seeding 모듈에 남음).
