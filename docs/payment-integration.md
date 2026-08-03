@@ -105,8 +105,18 @@
   "merchant": { "mid": "1849705C64" },
   "buyer": { "name": "...", "email": "..." },
   "url": { "return_url": ".../api/eximbay/return", "status_url": ".../webhooks/eximbay" },
-  "settings": { "display_type": "R" }
+  "settings": { "display_type": "R" },
+  "product": [
+    { "name": "Dokdo Toner", "quantity": "2", "unit_price": "12.00", "link": "https://klow.kr/product/a" },
+    { "name": "Birch Juice Sun", "quantity": "1", "unit_price": "14.30", "link": "https://klow.kr/product/b" }
+  ],
+  "surcharge": [{ "name": "Shipping", "quantity": "1", "unit_price": "21.00" }]
 }
+```
+
+국내결제(`issuerCountry:'KR'`)면 `settings.issuer_country:'KR'` 과 함께 `tax` 객체가 추가로 붙는다:
+```json
+"tax": { "receipt_status":"N", "amount_tax_free":"0", "amount_taxable":"31818", "amount_vat":"3182", "amount_service_fee":"0" }
 ```
 
 서버 동작:
@@ -114,11 +124,32 @@
 2. `paymentStatus === 'pending'` 아니면 400 `'order is not payable'`.
 3. **동의 재검증** — `termsAgreedAt`/`refundAgreedAt`/`pgDataSharingAgreedAt` 중 하나라도 null 이면 400. legacy/API 직접호출 우회로도 동의 없이는 결제창이 안 뜬다.
 4. **통화/MID 선택** — `issuerCountry==='KR'` → 국내 전용 MID + `currency:'KRW'`(정수 amount) + `settings.issuer_country:'KR'`, 그 외 → 해외 MID + `currency:'USD'`(`"26.30"`). 금액은 `totalUsd` 정본에서 파생(USD 는 `/100`, KRW 는 `× fxRateSnapshot` 반올림).
-5. Eximbay `/v1/payments/ready`(선택된 scope 의 API 키) 호출 → fgkey 수령.
-6. **`Order.pgCurrency` 저장**('USD'/'KRW') — verify/webhook/refund 가 이 값으로 MID·통화·금액을 복원한다. 재-prepare(통화 변경) 시 덮어쓰기 = 마지막 prepare 가 실제 결제창.
-7. **요청 본문과 fgkey 를 함께 echo**.
+5. **상품 명세 산출**(`buildOrderLines`) — `OrderItem` 을 `product` 배열로 전개. 아래 "상품 명세" 참고.
+6. **국내결제면 `tax` 산출**(`buildTax`) — 네이버페이 **포인트** 결제가 전 필드를 필수로 요구한다. 취급 품목이 전액 과세라 `amount_taxable = round(amount / 1.1)`, `amount_vat` 는 뺄셈 잔차(합이 항상 amount 와 일치). `receipt_status='N'` — 현금영수증 발급은 수취정보 입력 UI 가 필요해 미지원.
+7. Eximbay `/v1/payments/ready`(선택된 scope 의 API 키) 호출 → fgkey 수령.
+8. **`Order.pgCurrency` 저장**('USD'/'KRW') — verify/webhook/refund 가 이 값으로 MID·통화·금액을 복원한다. 재-prepare(통화 변경) 시 덮어쓰기 = 마지막 prepare 가 실제 결제창.
+9. **요청 본문과 fgkey 를 함께 echo**.
 
-**fgkey echo 정책** — SDK `request_pay()` 인자(payment·merchant·buyer·url·settings)가 prepare 시점 본문과 정확히 같아야 fgkey 검증이 통과한다. 클라이언트는 응답 payload 를 그대로 인자로 넘긴다. amount 등을 임의 조작하면 SDK 가 거부 → 위변조 자동 방지.
+**fgkey echo 정책** — SDK `request_pay()` 인자(payment·merchant·buyer·url·settings·product·surcharge·tax)가 prepare 시점 본문과 정확히 같아야 fgkey 검증이 통과한다. 클라이언트는 응답 payload 를 그대로 인자로 넘긴다. amount 등을 임의 조작하면 SDK 가 거부 → 위변조 자동 방지.
+
+⚠️ **필드를 추가할 땐 3곳을 반드시 같이 고친다** — `klow_server .../payment.service.ts` 의 `PreparePayload`, `klow_web/src/lib/api.ts` 의 `EximbayPreparePayload` 미러 타입, `klow_web/src/lib/eximbay.ts` 의 `request_pay` 인자. 한 곳만 고치면 fgkey 불일치로 결제창이 아예 안 뜬다.
+
+### 상품 명세 — `product` / `surcharge` (네이버페이 필수)
+
+네이버페이는 상품명·수량·단가를 필수로 요구하며, 누락 시 **X059**(`NaverPay payment fail`)로 결제가 거절된다(해외 USD 카드결제는 없어도 통과해 오래 드러나지 않았다). Eximbay 통합가이드 Note 10 이 장바구니를 **항목별로 전개**하라고 예시까지 들어 명시한다.
+
+`buildOrderLines()`(`payment.service.ts`)가 `OrderItem` 에서 산출한다:
+
+| 규칙 | 내용 |
+|---|---|
+| 통화 | 국내는 `round(unitPriceUsd/100 × fx)` 정수, 해외는 `(unitPriceUsd/100).toFixed(2)` — `payment.amount` 와 같은 규칙 |
+| 최대 3줄 | 3개 이하는 그대로 전개, 4개 이상은 앞 2줄 + `"기타 N건"` 합산줄 |
+| `link` | `productId` 있으면 `{FRONTEND_URL}/product/{id}`, 시딩 라인(null)은 홈 |
+| `name` | 255자 초과 시 절단 |
+
+**합계 규칙(Note 5)** — `Σ(product.quantity × unit_price) + Σ(surcharge...)` 는 `payment.amount` 와 **정확히** 같아야 한다. 그래서 `surcharge` 를 배송비로 고정하지 않고 **잔차**(`amount − Σ(product)`)로 계산한다. 이 한 줄이 배송비 + KRW 라인별 반올림 오차 + 합산줄 절사분을 모두 흡수해 규칙이 정의상 항상 성립한다(`unit_price` 는 스펙상 음수 허용). 잔차가 0이면(무료배송 등) `surcharge` 자체를 생략한다.
+
+불변식 회귀 테스트: `klow_server/src/modules/payment/__tests__/eximbay-order-lines.spec.ts`.
 
 ### `POST /v1/payment/verify` (guard 없음 — Eximbay 재조회로 보호, rate-limit 5/분)
 
