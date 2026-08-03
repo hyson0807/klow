@@ -22,7 +22,7 @@
 
 | Method | Path                              | 기능                                                                                       |
 |--------|-----------------------------------|--------------------------------------------------------------------------------------------|
-| GET    | `/v1/brand/campaigns`             | 내 인플루언서 목록(각 item clickCount/purchaseCount/revenueUsd) + KPI(activeCampaigns/totalClicks/totalPurchases/totalRevenueUsd) |
+| GET    | `/v1/brand/campaigns`             | 내 인플루언서 목록(각 item `id/name/status/clickCount/purchaseCount` — **per-item 매출은 안 실림**) + KPI(activeCampaigns/totalClicks/totalPurchases/totalRevenueUsd) |
 | POST   | `/v1/brand/campaigns`             | 인플루언서(=캠페인) 생성(`name`/`snsUrl`/`platforms[]`/`countries[]`/`discountPct`/`memo?`) — slug·code·url 발급 |
 | GET    | `/v1/brand/campaigns/:id`         | 상세(플랫 DTO: slug·url·platforms·countries·discountPct·clickCount·purchaseCount·revenueUsd 등) |
 | PATCH  | `/v1/brand/campaigns/:id`         | 중지/재개(`status?`) + 링크 On/Off(`enabled?`) + 메모(`memo?`, null=삭제, ≤500자) (최소 1필드) |
@@ -47,4 +47,4 @@
 | Method | Path                                          | 기능                                                                            |
 |--------|-----------------------------------------------|---------------------------------------------------------------------------------|
 | GET    | `/r/:code`                                    | (하위호환) 클릭 1 기록 후 브랜드관 302. 무효/Off 는 미집계·홈 폴백               |
-| GET    | `/v1/campaigns/track/:brandSlug/:influencerSlug` | pretty 링크 유입 집계 — klow_web 진입 시 호출. `{ ok }` 반환(무효/Off 는 `ok:false`) |
+| GET    | `/v1/campaigns/track/:brandSlug/:influencerSlug` | pretty 링크 유입 집계 — klow_web 진입 시 호출. `{ ok, code }` 반환(무효/Off 는 `{ok:false, code:null}`). `code` 는 klow_web 이 localStorage 에 저장해 이후 가격/견적/주문에 동봉하는 할인 적용 키 |

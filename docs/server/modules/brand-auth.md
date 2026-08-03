@@ -14,6 +14,8 @@
 
 ## brand-auth.controller.ts (`@Controller('v1/brand/auth')`)
 
+> `TIGHT` = 5회/분, `LOOSE` = 10회/분 (per IP). 비밀번호는 8자↑ + 영문 + 숫자(`BrandPasswordField`), 전화번호는 `010`+8자리로 정규화 후 검증.
+
 ### 이메일 인증
 
 | Method | Path                                    | Throttle | 기능                                                  |
@@ -22,6 +24,9 @@
 | POST   | `/v1/brand/auth/verify-email`           | LOOSE    | OTP 검증 → 가입용 단기 토큰                           |
 | POST   | `/v1/brand/auth/signup`                 | TIGHT    | 이메일/비밀번호 가입 (+slug→brand draft) + 세션 쿠키  |
 | POST   | `/v1/brand/auth/login`                  | LOOSE    | 이메일/비밀번호 로그인 + 세션 쿠키                    |
+
+- `login` 은 **미가입 이메일 또는 비밀번호 없는 계정(구글/전화 가입)** 이면 404 `user_not_found` — LoginModal 이 이 코드를 받아 랜딩의 회원가입 안내로 보낸다. 비밀번호만 틀리면 401.
+- 이메일 중복은 409 (`assertEmailAvailable` — 가입·연결 두 경로의 단일 출처), slug 충돌은 409 / 형식·예약어는 400.
 
 ### 비밀번호 변경 / 찾기 (2026-07)
 
@@ -48,6 +53,9 @@
 | POST   | `/v1/brand/auth/phone/verify-login`     | LOOSE    | 로그인 OTP 검증 → 로그인용 토큰                       |
 | POST   | `/v1/brand/auth/phone/signup`           | TIGHT    | 전화 가입 완료 (브랜드 이름/슬러그 포함) + 세션 쿠키  |
 | POST   | `/v1/brand/auth/phone/login`            | LOOSE    | 전화 로그인 완료 + 세션 쿠키                          |
+
+- `phone/send-login-otp` 는 **`BrandUserPhone` 에 없는 번호면 SMS 를 보내지 않고 404 `user_not_found`** (이메일 login 과 같은 관례 — 클라가 회원가입 안내로 분기). 반대로 `phone/send-signup-otp` 는 이미 쓰이는 번호면 409.
+- `phone/signup` 은 `contactName` 없이 빈 문자열로 생성하고, 가입 트랜잭션이 `BrandUserPhone` 대표 행까지 함께 만든다.
 
 ### 로그인 전화번호 관리 (설정 페이지, 전부 BrandGuard)
 
@@ -95,10 +103,14 @@
 | POST   | `/v1/brand/auth/logout`                 | -        | 세션 무효화 + 쿠키 제거                               |
 | GET    | `/v1/brand/auth/me`                     | -        | 현재 브랜드 사용자 세션 조회                          |
 | POST   | `/v1/brand/auth/withdrawal-request`     | -        | 탈퇴(철회) 요청 — `Brand.status` 를 `withdrawal_pending` 으로 전환 후 세션 쿠키 제거. 실제 처리는 어드민 [brands](./brands.md) 의 brand-withdrawals 가 담당 |
-| GET    | `/v1/brand/auth/slug-availability`      | LOOSE    | 브랜드 슬러그 중복 체크 (`?slug=...`)                 |
-| GET    | `/v1/brand/auth/google`                 | -        | `returnTo` + `mode` + (가입 시) `slug` 쿠키 저장 후 authorize 로 |
-| GET    | `/v1/brand/auth/google/authorize`       | -        | Passport — Google 로 보냄 (`BRAND_GOOGLE_STRATEGY`)   |
-| GET    | `/v1/brand/auth/google/callback`        | -        | Google 콜백 → 유저 찾기/생성 (신규면 slug 쿠키로 brand draft) + `BRAND_FRONTEND_URL` 로 복귀 |
+| GET    | `/v1/brand/auth/slug-availability`      | LOOSE    | 브랜드 슬러그 중복 체크 (`?slug=...`) → `{slug, available, reason}` (`invalid`/`reserved`/`taken`/`null`) |
+| GET    | `/v1/brand/auth/google`                 | -        | `returnTo` + `mode` + (가입 시) `slug` + CSRF `state` 쿠키 저장 후 `authorize?state=...` 로 |
+| GET    | `/v1/brand/auth/google/authorize`       | -        | Passport — Google 로 보냄 (`BRAND_GOOGLE_STRATEGY`, `state` 통과)   |
+| GET    | `/v1/brand/auth/google/callback`        | -        | `state` 대조(불일치 401) → mode 분기 → 세션 쿠키 + `BRAND_FRONTEND_URL` 로 복귀 |
+
+- **탈퇴 요청은 세션 쿠키만 지우는 게 아니다** — 같은 트랜잭션에서 (1) `Brand.status = withdrawal_pending` + 요청자 스냅샷(`withdrawalRequested*`) 기록, (2) `canceled` 가 아닌 **모든 `BrandSubscription` 즉시 해지**(안 끊으면 cron 이 `brand.status` 를 안 봐서 탈퇴 브랜드 카드가 계속 결제된다), (3) **그 브랜드에 속한 모든 BrandUser 의 세션 삭제**. 이미 `withdrawn` 이거나 브랜드가 없으면 400.
+- **탈퇴 신청/완료 브랜드는 인증 자체가 막힌다** — 세션 발급은 403(`assertCanAuthenticate`), 기존 세션은 `me`/`getSession` 이 조회 시점에 삭제하고 null 을 돌려준다.
+- **Google `mode` 분기**: `mode=login`(LoginModal 발) 은 **신규 계정을 만들지 않고**, 미가입이면 `BRAND_FRONTEND_URL/?signup=guide` 로 보내 랜딩에서 슬러그부터 입력하게 한다. 그 외(기본 `signup`)는 `slug` 쿠키로 brand draft 까지 만든다. 두 경로 모두 `googleId` 미매칭이어도 **이메일이 같은 기존 계정이 있으면 그 계정에 `googleId` 를 링크**한다(신규 생성 아님).
 
 ## 참고
 

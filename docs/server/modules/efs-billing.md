@@ -62,7 +62,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 `.xlsx`(5MB, `INVOICE` 시트 우선 없으면 첫 시트). **HAWB 컬럼은 결정적으로** 찾고
 (`/^EFS\d+/i` 셀이 가장 많은 컬럼), **총배송비 컬럼만 OpenAI 가 추론**한 뒤 헤더 정규식
 (`shipping charge|total|합계|…`)으로 덮어쓴다 — 포맷이 바뀌어도 견디되 오판은 결정적으로 보정.
-매칭 키는 **HAWB**(`Shipment.efsTrackingNumber`)이고 refNo 는 쓰지 않는다.
+매칭 키는 **HAWB**(`Shipment.efsTrackingNumber`)이고 refNo 는 쓰지 않는다. 모델은 `OPENAI_MODEL`(기본 `gpt-4o-mini`)이고, OpenAI 호출이 실패해도 던지지 않고 헤더 정규식 가드로 폴백한다 — 그마저 못 찾으면 400(`총 배송비 컬럼을 찾지 못했습니다`).
 
 `importPreview` 는 **파일 HAWB 집합 == 그 달 송장 집합**일 때만 `ok:true` 를 준다(개수·집합 불일치 시 적용 차단).
 `importApply` 만 DB 에 쓴다(preview 는 저장하지 않음).
@@ -80,7 +80,10 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 
 "전달"하면 그 시점의 rows·합계·xlsx 를 `EfsBillingStatement` 에 동결하고(R2 업로드 + `@@unique([brandId,yearMonth])` upsert),
 브랜드는 **이 확정본만** 본다. 이후 어드민이 `efsChargeKrw`/`efsBillingFeeKrw` 를 고쳐도 스냅샷은 불변 —
-갱신은 **재전달**로만.
+갱신은 **재전달**로만. 동결되는 `count` 는 실제로 돈이 청구되는 행 수(`billableCount`)다.
+오류는 모두 **400** — 그 달 청구 내역이 0건이면 `전달할 청구 내역이 없습니다.`, 아직 전달 안 된 브랜드×월에
+`mark-paid`/브랜드 상세·엑셀을 부르면 `전달된 청구서가 없습니다.` (`published` 조회만 예외적으로
+`{published:false, paidAt:null}` 로 응답).
 
 > **하위호환**: `rows` 는 동결 JSON 이라 2026-07-29 이전 발행분엔 `kind`·`prepaidKrw` 키가 **없다**.
 > 읽는 쪽(브랜드 UI)은 `kind ?? 'seeding'` 으로 해석한다 — 그때는 전부 시딩이었으므로 정확하다.

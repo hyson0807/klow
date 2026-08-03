@@ -2,17 +2,20 @@
 
 - **모듈 경로**: `src/modules/auth/`
 - **주 클라이언트**: `klow_web` (port 3001)
-- **세션 쿠키**: `klow_sid` (httpOnly, DB `Session` 테이블 기반)
-- **인증 방식**: 이메일 + 비밀번호 (이메일 OTP 6자리/10분 TTL) + Google OAuth
-- **관련 파일**: `auth.service.ts`, `password.ts`, `session.ts`, `email-verification.service.ts`, `email.service.ts`, `sms.service.ts`, `google.strategy.ts`
+- **세션 쿠키**: `klow_sid` (httpOnly, DB `Session` 테이블 기반, 30일 — `SESSION_TTL_DAYS`)
+- **인증 방식**: 이메일 + 비밀번호 (이메일 OTP 6자리/10분 TTL·5회 시도제한 → 15분 가입 토큰) + Google OAuth
+- **관련 파일**: `auth.service.ts`, `password.ts`, `session.ts`, `email-verification.service.ts`, `email.service.ts`, `google.strategy.ts`
+- **같은 폴더의 공용 인프라**: `sms.service.ts`(Solapi SMS) · `phone-verification.service.ts` 는 [brand-auth](./brand-auth.md) 의 전화 OTP 가, `kakao.service.ts`(알림톡) 는 [payment](./payment.md) 가 쓴다 — 일반 유저 인증 경로에서는 호출되지 않는다.
 
 ## public-auth.controller.ts (`@Controller('v1/auth')`)
 
+> `TIGHT` = 5회/분, `LOOSE` = 10회/분 (per IP). 이메일 OTP 에는 `PhoneVerification` 같은 재발송 쿨다운 컬럼이 없어 **THROTTLE 이 유일한 방어**다.
+
 | Method | Path                          | Guard               | Throttle | 기능                                                              |
 |--------|-------------------------------|---------------------|----------|-------------------------------------------------------------------|
-| POST   | `/v1/auth/send-verification`  | public              | TIGHT    | 가입용 이메일 OTP 코드 발송 (10분 TTL, 60초 재발송 쿨다운)        |
-| POST   | `/v1/auth/verify-email`       | public              | LOOSE    | OTP 코드 검증 → 가입 진행용 단기 토큰 발급                        |
-| POST   | `/v1/auth/signup`             | public              | TIGHT    | 토큰+비밀번호로 가입 + 세션 쿠키 설정                              |
+| POST   | `/v1/auth/send-verification`  | public              | TIGHT    | 가입용 이메일 OTP 코드 발송 (10분 TTL)                            |
+| POST   | `/v1/auth/verify-email`       | public              | LOOSE    | OTP 코드 검증 → 가입 진행용 단기 토큰(15분) 발급                  |
+| POST   | `/v1/auth/signup`             | public              | TIGHT    | `{email, password, nickname, emailVerificationToken, country?}` 로 가입 + 세션 쿠키 설정 |
 | POST   | `/v1/auth/login`              | public              | LOOSE    | 이메일/비밀번호 로그인 + 세션 쿠키 설정                            |
 | POST   | `/v1/auth/logout`             | public              | -        | 세션 무효화 + 쿠키 제거                                           |
 | GET    | `/v1/auth/me`                 | public (쿠키 읽음)  | -        | 현재 로그인 유저 (없으면 401)                                     |

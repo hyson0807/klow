@@ -2,7 +2,7 @@
 
 - **모듈 경로**: `src/modules/subscription/`
 - **주 클라이언트**: `klow_brand`(자체 가입 브랜드의 결제·해지·카드관리, `/v1/brand/subscription/*`) + `klow_admin`(구독 관찰·강제해지·환불·정책위반 reject·제품 단위 차단, `/admin/brand-subscriptions/*`).
-- **데이터 모델**: `BrandSubscription`(brand 1:1, `status`/`planCode`/`billingInterval`/`currentPeriodStart`/`currentPeriodEnd`/`cancelAtPeriodEnd`/`canceledAt`/`billingKeyId`), `BillingKey`(`provider='nicepay'`, `pgBillingKey`=빌키 bid, `cardCompany`/`cardLast4`, `deletedAt` soft-delete, `isDefault`), `SubscriptionInvoice`(`status`/`amountKrw`/`pgProvider`/`pgTid`/`periodStart`/`periodEnd`/`paidAt`/`attemptCount`/`lastAttemptAt`/`failReason`). 게이트 플래그는 `Brand.pgCustomerKey`(null 이면 결제 준비 미완 + cron 청구 제외).
+- **데이터 모델**: `BrandSubscription`(brand 1:1, `status`/`planCode`/`billingInterval`/`currentPeriodStart`/`currentPeriodEnd`/`cancelAtPeriodEnd`/`canceledAt`/`billingKeyId`), `BillingKey`(`provider='nicepay'`, `pgBillingKey`=빌키 bid, `cardCompany`/`cardLast4`, `deletedAt` soft-delete, `isDefault`), `SubscriptionInvoice`(`status`/`amountKrw`/`pgProvider`/`pgTid`/`periodStart`/`periodEnd`/`paidAt`/`attemptCount`/`lastAttemptAt`/`failReason`/`cardQuota`(Int?)/`isInterestFree`(Boolean?)). 게이트 플래그는 `Brand.pgCustomerKey`(null 이면 결제 준비 미완 + cron 청구 제외).
 - **결제 방식 (NicePay 포스타트 빌링, 결제창 없음)**: 브랜드가 `CardEntryForm` 으로 입력한 카드정보(`cardNo`/`expYear`/`expMonth`/`idNo`/`cardPw`)를 서버로 보내면, 어댑터가 secretKey 로 AES-256-CBC(encMode `A2`) 암호화한 `encData` 로 `POST /v1/subscribe/regist`(빌키발급) → `POST /v1/subscribe/{bid}/payments`(자동결제) 를 호출한다. **카드 원문이 서버를 경유하지만(PCI) DB 에 저장하거나 로깅하지 않는다** — 저장하는 건 빌키(bid)/거래번호(tid)/카드사명/끝4자리뿐.
 - **플랜 코드 (`planCode`)**:
   - `brand_standard` — 정기 유료 구독(기본값, env `SUBSCRIPTION_PLAN_CODE`). `billingKeyId` 있음 → cron 이 매 사이클 자동 청구.
@@ -22,12 +22,13 @@
 
 ## admin-subscription.controller.ts (`@Controller('admin/brand-subscriptions')`)
 
-> 전체 라우트 `AdminGuard`.
+> 전체 라우트 `AdminGuard`. **목록 엔드포인트는 이 컨트롤러에 없다** — 구 `GET /admin/brand-subscriptions`
+> 는 브랜드/구독 통합 목록 [`GET /admin/brands`](./brands.md)(`subStatus`=active|past_due|canceled|none
+> 필터 + `subscription{billingKey}`·제품수 include)로 흡수됐다.
 
 | Method | Path                                                       | 기능                                                                    |
 |--------|------------------------------------------------------------|-------------------------------------------------------------------------|
-| GET    | `/admin/brand-subscriptions`                               | 구독 목록 (status 필터: active/past_due/canceled/none/rejected)         |
-| GET    | `/admin/brand-subscriptions/:id`                           | brand 구독 상세 (+ 빌링키·invoice 전체·제품, `monthlyPriceKrw` 포함)    |
+| GET    | `/admin/brand-subscriptions/:id`                           | brand 구독 상세 (+ 빌링키·invoice 전체·제품·`submittedBy`, `monthlyPriceKrw` 포함) |
 | PATCH  | `/admin/brand-subscriptions/:id/reject`                    | 정책위반 차단 — brand reject + 활성 구독 강제 해지(환불 없음)           |
 | PATCH  | `/admin/brand-subscriptions/:id/grant`                     | 무료 구독권 부여 — 결제 없이 N개월 active + brand 승인 + 제품 승인       |
 | PATCH  | `/admin/brand-subscriptions/:id/grant-cash`                | 현금결제 구독 발급 — 받은 금액 paid invoice 기록 + N개월 active          |
@@ -43,11 +44,20 @@
 | Method | Path                                       | 기능                                                          |
 |--------|--------------------------------------------|---------------------------------------------------------------|
 | GET    | `/v1/brand/subscription`                   | 내 구독 + 빌링키 + 최근 invoice 12건                          |
-| POST   | `/v1/brand/subscription/start`             | 빌키발급 + 첫 결제 + brand 승인 (신규/재가입 결제 진입)        |
+| GET    | `/v1/brand/subscription/interest-free?interval=` | 결제 전 카드사별 무이자 할부 안내 → `{amountKrw, cards[]}` (`interval` 미지정/이상값은 legacy `monthly` 금액 기준) |
+| POST   | `/v1/brand/subscription/start`             | 빌키발급 + 첫 결제 + brand 승인 (신규/재가입 결제 진입). body = 카드 5필드 + `billingInterval`(`semiannual` 기본\|`annual`) + `cardQuota`(문자열 `'0'`\|`'3'`\|`'6'`\|`'12'`, 기본 `'0'`) |
 | POST   | `/v1/brand/subscription/cancel`            | 사이클 만료 후 해지 예약 (`cancelAtPeriodEnd=true`)           |
 | POST   | `/v1/brand/subscription/resume`            | 해지 예약 취소 (만료 전, 다음 사이클 자동 갱신 복구)          |
 | POST   | `/v1/brand/subscription/resume-existing-card`| canceled 구독을 기존 빌키로 즉시 재결제해 active 복귀         |
-| POST   | `/v1/brand/subscription/change-card`       | 카드 교체 (past_due 면 즉시 1회 재청구)                        |
+| POST   | `/v1/brand/subscription/change-card`       | 카드 교체 (past_due 면 즉시 1회 재청구). body = 카드 5필드(할부 무관 — `cardQuota` 없음) |
+
+### 에러 응답
+
+- `409 이미 활성 구독이 있습니다` — 이미 active 구독 보유(`assertEligibleForStart`).
+- `400 { message: 'brand_not_ready_for_payment', missing: [...] }` — 송화인·계좌 7필드 중 빈 필드 목록.
+- `400 seeding_agreement_required` — 시딩 서비스 이용계약서 미서명.
+- `400 { message, code, classification }` — NicePay 빌링 에러(`NicepayBillingError`). `classification` 은
+  permanent/transient/upstream 이며 사용자 메시지 용도일 뿐, dunning 재시도 여부는 `attemptCount` 만 본다.
 
 ## 관련 문서
 

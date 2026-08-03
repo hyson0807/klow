@@ -9,7 +9,7 @@
   - **배송지원(`enabled`) 화이트리스트**를 강제한다(`loadEnabledCountry`) — 시딩과 다른 점.
   - EFS 로 해석된 브랜드가 하나라도 있고 주소가 EFS 제외구역(`matchExclusion`)이면 **폴백 없이 차단**. ⚠️ 전부 EMS 로 갈리면 제외구역 주소여도 통과한다(시딩에서 물려받은 성질 — 제외구역은 EFS 제약이므로 의도된 동작).
 - **캐리어 산출 (시딩 송장 전용)**: `resolveCarrier(iso2, addr, weightG)` 가 같은 무게 분기(`pickCarrierForWeight`)로 캐리어만 반환한다(비용은 `LogisticsRateService`, 아래 seeding 모듈). 시딩은 `enabled` 게이트 없음(`loadCountry`). 일반주문/시딩 공통 EFS 제외구역 차단은 private `assertNotEfsExcluded` 단일 출처.
-- **브랜드별 캐리어 스냅샷**: 한 브랜드 = 한 송장 = 한 박스. 캐리어는 국가 단위라 전 브랜드 동일하지만, 송장 발급 호환을 위해 주문 시점에 브랜드별 캐리어를 `Order.shippingCarrierByBrand`(JSON `{[brandId]:carrier}`) 에 스냅샷하고 `Order.shippingCarrier`(단일)는 같은 값을 **대표값**으로 둔다. 송장 발급(`shipments.service` `carrierForBrand`)이 `shippingCarrierByBrand[brandId] ?? shippingCarrier` 로 정한다. klow_web 은 `resolveCarrierAndRate`(`useShippingCountriesQuery.ts`) 가 동일 규칙(customerShippingKrw/productCarrier + EFS 제외구역 차단)을 미러.
+- **브랜드별 캐리어 스냅샷**: 한 브랜드 = 한 송장 = 한 박스. **무게 분기국에서는 브랜드마다 캐리어가 갈릴 수 있으므로**(박스 청구중량이 다름) 주문 시점에 브랜드별 캐리어를 `Order.shippingCarrierByBrand`(JSON `{[brandId]:carrier}`) 에 스냅샷하고, `Order.shippingCarrier`(단일)에는 **첫 브랜드 캐리어를 대표값**으로 둔다(브랜드 없는 legacy 제품만 담긴 주문은 맵이 비므로 캐리어 근사 무게 `CARRIER_FALLBACK_WEIGHT_G`=2kg 로 산출한 값). 송장 발급(`shipments.service` `carrierForBrand`)이 `shippingCarrierByBrand[brandId] ?? shippingCarrier` 로 정한다. klow_web 은 `resolveCarrierAndRate`(`useShippingCountriesQuery.ts`) 가 같은 규칙을 **근사**로 미러한다 — 브랜드별 박스 무게를 모르므로 캐리어 표시는 근사 무게(2kg) 기준이고, 제외구역 판정만 보수적으로(무게 분기국은 근사 캐리어가 EMS 여도 차단) 건다. 정본은 서버(`/v1/orders/quote`·주문 생성).
 - **500g 요율 = 고객 결제 배송비 (판매가와 무관, 2026-07-28 분리 / 2026-07-30 기준무게 전환)**: 요율표 500g 티어를 그대로 고객에게 배송비로 청구하고, **판매가에는 물류비가 들어가지 않는다**(구 "절반은 판매가 마크업" 규칙 폐기) — `orders.service`:
   - **배송비** = `요율표500g/fxRate × **청구 대상** 브랜드수` — 한 브랜드 = 한 송장. 브랜드 단위로 반올림한 뒤 곱해 `Order.shippingFeeByBrand` 스냅샷 합과 정확히 일치시킨다. 산식 단일 출처는 `common/pricing.ts perBrandShippingFeeUsdCents`.
   - **무료배송**: **국가별** `ProductCountryPrice.freeShipping`(목적국 행이 true 일 때만 — 행이 없으면 유료. 판정은 `resolveFreeShipping(row, iso2)`). 그 브랜드 라인이 **전부** 무료일 때만 그 브랜드 몫이 빠진다(`orders/chargeable-brands.ts` `chargeableBrandIds(lines, iso2)`) — 한 라인이라도 유료면 박스는 어차피 나가므로 1회 청구. 같은 주문이라도 배송지 국가가 다르면 배송비가 달라진다.
@@ -17,7 +17,7 @@
   - ⚠️ 요율/캐리어 미설정국·배송지원 제외국·EFS 제외구역 차단은 **요금 게이트가 아니라 배송 가능 여부 게이트**라, 무료배송이어도 그대로 막는다.
 - **편집/시드**: 어드민 **배송비용** 탭(`/seeding-cost`)에서 국가×무게 요율(`PUT /admin/seeding-rates`)과 캐리어(`PUT /admin/shipping-countries/:iso2` → `productCarrier`, 국가 상세에서 `seedingCarrierSplitWeightG`)를 관리한다. 초기 적재 시드: `prisma/data/seeding_rates.json` → `npm run seed:seeding-rates`. (구 **물류비용** 탭 `/product-logistics-cost` + `seed:product-logistics-cost` 는 2026-07-29 제거 — 캐리어 편집은 배송비용 탭으로 이관.)
 - **국가 설정**: 어드민 **국가 설정** 탭(`/shipping-countries`)에서 `enabled`(배송지원 화이트리스트)·EFS 제외구역(`ShippingExclusion`)을 관리한다. `enabled` 는 **일반 주문 전용** 게이트(`loadEnabledCountry`) — 시딩 발급국은 요율표 기준(`supportedCountries`)이라 무관하다. 캐리어는 배송비용 탭에서 관리하므로 여기서 토글하지 않는다.
-- **표시용 조회**: `GET /v1/shipping-countries` 목록이 요율표에서 파생한 `customerShippingKrw`(+`productCarrier`/`seedingCarrierSplitWeightG`)를 포함하므로 프론트가 고객 배송비를 그대로 미리보기하고, 미설정 국가는 선택지/미리보기에서 제외한다. 공개 `:iso2` 응답은 `exclusions` 를 포함(클라가 EFS 제외구역 차단을 미러). **구 `productLogisticsCostKrw` 는 응답에서 제거됐다.**
+- **표시용 조회**: `GET /v1/shipping-countries` 목록이 요율표에서 파생한 `customerShippingKrw`(+`productCarrier`/`seedingCarrierSplitWeightG`)를 포함하므로 프론트가 고객 배송비를 그대로 미리보기하고, 미설정 국가는 선택지/미리보기에서 제외한다. 공개 `:iso2` 응답은 `exclusions` 를 포함(클라가 EFS 제외구역 차단을 미러). **구 `productLogisticsCostKrw` 는 응답에서 제거됐다.** 어드민 목록/상세(`/admin/shipping-countries`, `:iso2`)도 같은 `customerShippingKrw` 를 싣는다(파생 단일 출처 `withCustomerShipping`).
   - ⚠️ **배포 과도기**: 구 필드명 `logisticsCost2kgKrw` 를 **같은 값으로 병기**하고 있다(`shipping.service.ts withCustomerShipping`). 프론트 3개가 신규 필드로 넘어갔으므로 다음 릴리스에서 제거한다.
 - **요율표 서비스 위치**: `LogisticsRateService`(`src/modules/shipping/logistics-rate.service.ts`)가 `SeedingRate` 표의 단일 소스다 — 2026-07-29 에 seeding 모듈에서 이동(`SeedingRateService` → 개명). `SeedingModule → ShippingModule` 의존이 이미 있어 반대 방향이면 순환이 되기 때문이고, `shipping-rate.service.ts` 를 옮긴 것과 같은 선례다. 모델명 `SeedingRate` 와 어드민 라우트 `/admin/seeding-rates` 는 그대로 뒀다(rename 이득 없음).
 - **관련 파일**: `shipping.service.ts`(`resolveProductShipping`/`resolveCarrier`/`pickCarrierForWeight`/`loadEnabledCountry`/`update`/exclusions CRUD/`matchExclusion`), `logistics-rate.service.ts`(요율표 — 시딩·일반주문 공용, 어드민 컨트롤러는 seeding 모듈), `shipping-rate.service.ts` + `admin-shipping-rate.controller.ts` + `xlsx-grid.ts`(시딩 EMS/DHL 비교요율 — 2026-07 seeding 모듈에서 이동, 엔드포인트 문서는 [seeding](./seeding.md)), 3 개 컨트롤러(admin country · admin shipping-rate · public country).
@@ -28,12 +28,14 @@
 
 | Method | Path                                                       | 기능                                                |
 |--------|------------------------------------------------------------|-----------------------------------------------------|
-| GET    | `/admin/shipping-countries`                                | 국가 목록 (+ exclusions 개수)                       |
-| GET    | `/admin/shipping-countries/:iso2`                          | 특정 국가 상세                                      |
+| GET    | `/admin/shipping-countries`                                | 국가 목록 (enabled 무관 전체 + exclusions 개수 + `customerShippingKrw`) |
+| GET    | `/admin/shipping-countries/:iso2`                          | 특정 국가 상세 (+ exclusions 개수 + `customerShippingKrw`, 없으면 404) |
 | PUT    | `/admin/shipping-countries/:iso2`                          | enabled · 제외구역 캐시 · **캐리어**(고정값·무게분기, 배송비용 탭) · efsBillingFeeKrw · currencyCode |
 | GET    | `/admin/shipping-countries/:iso2/exclusions`               | 해당 국가 EFS 제외 지역 목록                        |
 | POST   | `/admin/shipping-countries/:iso2/exclusions`               | 제외 지역 추가                                      |
 | DELETE | `/admin/shipping-countries/:iso2/exclusions/:id`           | 제외 지역 삭제 (cuid)                               |
+
+에러: 없는 국가는 404 `shipping country not found`(상세·PUT·제외구역 추가), 없는 제외구역 삭제는 404 `exclusion not found`. 제외구역 추가/삭제는 `ShippingCountry.efsPartialExclusions`(있냐 없냐 캐시)를 0→N / N→0 전이에서만 자동 동기화한다. `ShippingExclusionInput` 은 `kind` 별 필수 필드를 강제한다(zip→`zipFrom`, city→`city`, state→`state`) — ⚠️ `state` 종류는 저장은 되지만 `Order` 에 state 매칭 근거가 없어 **차단 판정에 쓰이지 않는다**(`matchExclusion` 이 zip/city 만 본다).
 
 ## public-shipping.controller.ts (`@Controller('v1/shipping-countries')`)
 

@@ -30,23 +30,27 @@
 
 | Method | Path | 가드 | 설명 |
 |--------|------|------|------|
-| GET | `/v1/brand/instagram/connect?returnTo=` | `BrandGuard` | state/brandId/returnTo 쿠키 세팅 후 Meta 동의 화면으로 302 |
-| GET | `/v1/brand/instagram/callback` | (없음) | Meta IdP 호출. state 검증 → code 교환 → 장기토큰 → getMe → 연동 저장 → `BRAND_FRONTEND_URL/instagram?ig_connected=1` 로 302. 실패 시 `?ig_error=<reason>`. CSRF Origin 체크 예외(main.ts). |
+| GET | `/v1/brand/instagram/connect?returnTo=` | `BrandGuard` | state/brandId/returnTo(기본 `/instagram`) 쿠키 세팅 후 Meta 동의 화면으로 302 |
+| GET | `/v1/brand/instagram/callback` | (없음) | Meta IdP 호출. state 검증 → code 교환 → 장기토큰 → getMe → 연동 저장 → `BRAND_FRONTEND_URL{returnTo}?ig_connected=1` 로 302(returnTo 는 connect 때 심은 쿠키). 실패 시 같은 경로에 `?ig_error=<reason>`(`state_mismatch`/`missing_brand`/`connect_failed`/Meta 가 준 error). 상세 사유는 서버 로그에만. CSRF Origin 체크 예외(main.ts). |
 
-### 리소스 (`InstagramController`, 모두 `@UseGuards(BrandGuard)` + `requireBrandId`)
+- **재연동/계정 이동**: 같은 IG 계정(`igUserId @unique`)이 다른 브랜드에 물려 있으면 저장 시 **이전 연동을 삭제**하고 현재 브랜드로 옮긴다(OAuth 로그인 자체가 그 계정 통제권 증명). 없으면 unique 충돌로 저장이 실패한다.
+
+### 리소스 (`BrandInstagramController`, 모두 `@UseGuards(BrandGuard)` + `requireBrandId`)
+
+> 연동이 없으면 `404 인스타그램 계정이 연동돼 있지 않습니다`, 토큰이 만료됐으면 `400 인스타그램 연동이 만료되었습니다. 다시 연동해 주세요` (`connection` 조회/해제는 예외 — 항상 응답).
 
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/v1/brand/instagram/connection` | 연동 상태. `{connected:false}` 또는 `{connected:true, igUsername, connectedAt, needsReconnect}` |
-| DELETE | `/v1/brand/instagram/connection` | 연동 해제 |
+| DELETE | `/v1/brand/instagram/connection` | 연동 해제 → `{ok:true}` (미연동이어도 200) |
 | GET | `/v1/brand/instagram/media?cursor=` | 포스팅 목록(최신순, 커서 페이지네이션) — 서버가 저장 토큰 복호화해 Graph API 프록시 |
 | GET | `/v1/brand/instagram/media/unreplied-counts?mediaIds=a,b,c` | 그리드 뱃지용 — 여러 포스팅의 "답장 가능(미DM·7일 이내)" 댓글 수. `{counts:{[mediaId]:number}}`. mediaIds 최대 30개, 미디어당 최대 3페이지(150댓글) 조회·동시성 5. 개별 조회 실패한 미디어는 맵에서 생략(뱃지 미표시). 그리드 로드를 막지 않도록 프론트가 미디어 목록 수신 후 지연 호출 |
 | GET | `/v1/brand/instagram/media/:mediaId/comments?cursor=` | 댓글 목록(50/page). 각 댓글에 `alreadyReplied`/`tooOld`/`replyable` 파생 플래그 부착 |
-| GET | `/v1/brand/instagram/templates` | 템플릿 목록 |
-| POST | `/v1/brand/instagram/templates` | 템플릿 생성 `{name, body}` |
-| PATCH | `/v1/brand/instagram/templates/:id` | 템플릿 수정 |
-| DELETE | `/v1/brand/instagram/templates/:id` | 템플릿 삭제 |
-| POST | `/v1/brand/instagram/replies/bulk` | 일괄 발송 `{mediaId, templateId, commentIds[]}`. 응답 `{sent, skipped[], failed[]}` |
+| GET | `/v1/brand/instagram/templates` | 템플릿 목록(최신순) |
+| POST | `/v1/brand/instagram/templates` | 템플릿 생성 `{name(≤60), body(≤900)}` |
+| PATCH | `/v1/brand/instagram/templates/:id` | 템플릿 수정(본인 브랜드 것만, 아니면 404) |
+| DELETE | `/v1/brand/instagram/templates/:id` | 템플릿 삭제 → `{ok:true}` (없으면 404) |
+| POST | `/v1/brand/instagram/replies/bulk` | 일괄 발송 `{mediaId, templateId, commentIds[1..100]}`. 응답 `{sent, skipped[{commentId,reason}], failed[{commentId,reason}]}` |
 
 ### 일괄 발송(`replies/bulk`) 처리 순서
 
@@ -55,6 +59,8 @@
 3. 각 댓글: 7일 초과면 skip(`too_old`), 미해석이면 skip(`not_found`).
 4. `InstagramReply` 를 status=`pending` 으로 **선-예약**(commentId @unique → 동시요청/중복발송 원천 차단). 예약 실패 = `already_replied` skip.
 5. 템플릿 렌더(`{link}`→`storefrontUrl(slug)`, `{username}`→댓글 작성자) 후 `sendPrivateReply` 호출.
+   ⚠️ 표준 액세스에서는 **타인 댓글의 username 이 안 내려오므로**, 비어 있으면 앞의 `@` 까지 흡수해
+   `고객` 으로 대체한다(`@{username}님` → `고객님`).
 6. 성공 → status=`sent`. 실패 → 예약 삭제(재시도 가능) 후 `failed[]` 에 기록.
 
 ## 환경변수

@@ -12,6 +12,17 @@
 
 > 전체 라우트 `BrandGuard` (자기 brandId scope).
 
+### 번역 유틸 (스튜디오 공용)
+
+| Method | Path                  | Throttle   | 기능                                                                 |
+|--------|-----------------------|------------|----------------------------------------------------------------------|
+| POST   | `/v1/brand/translate` | 20회 / 분  | `{texts[], target, source?}` → `{translated: string[]}` (Google Translate 유료 호출이라 IP 당 제한) |
+
+- `texts` 는 **1~20개** (각 2000자 이하) — 태그처럼 개수가 많은 입력은 클라가 20개씩 청크해서 보낸다.
+- `target` 은 `en|ja|zh|vi|th|id|ru` (서버가 실제 지원하는 로케일). `source` 는 생략 가능(자동 감지, 허용값에 `ko` 추가).
+- 두 용도 공용: **입력 영문화**(스튜디오 폼 한글 → `target:'en'`) + **목업 라이브 번역**(선택 국가 로케일).
+  표시/입력 보조라 제품 소유권 체크가 없다(로그인 브랜드면 충분). 빈 문자열은 위치를 보존해 그대로 반환.
+
 ### 입점 신청 (Brand)
 
 | Method | Path                                          | 기능                                                              |
@@ -30,7 +41,8 @@
 | POST   | `/v1/brand/products`              | 상품 생성 (신청 진행 중 또는 승인 후 모두 `pending` 으로 시작)    |
 | POST   | `/v1/brand/products/bulk`         | 상품 일괄 생성 (draft 다건)                                       |
 | GET    | `/v1/brand/products`              | 내 브랜드 상품 목록                                               |
-| PATCH  | `/v1/brand/products/reorder`      | 상품 노출 순서 변경 (드래그&드롭)                                 |
+| PATCH  | `/v1/brand/products/reorder`      | 상품 노출 순서 변경 (드래그&드롭, `ids[]` 최대 500 — 자기 브랜드 소유만 반영) |
+| PUT    | `/v1/brand/products/onsite`       | 현장(박람회 부스) QR 판매가 일괄 저장 (`items[]{id, onsitePriceUsd(센트\|null), onsiteExcluded}` 최대 500, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id/hidden`   | 상품 가리기 On/Off 토글 (`Product.hidden`, status 유지·노출/판매만 제외; 단일 필드 전용 PATCH, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id`          | 상품 수정 (자기 brandId 확인)                                     |
 | DELETE | `/v1/brand/products/:id`          | 상품 삭제                                                         |
@@ -49,6 +61,14 @@
   klow_brand 는 `src/lib/ascii.ts` 의 `sanitizeToAscii` 로 `※ ℃ ㎖ ’ —` 같은 기호를 ASCII 근사로 바꿔
   보내고(번역 결과에도 유니코드 문장부호가 남으므로 **번역 전후 양쪽**에서 통과시킨다), ASCII 아닌
   **글자**만 번역 대상으로 남긴다 — 글자를 스트립하면 사용자 텍스트가 소실되기 때문.
+- **자유 텍스트 태그**: 주요 고민(`concerns` 최대 8개) · 추천 피부 타입(`recommendedFor` 최대 6개)은 고정 enum
+  이 아니라 **영문 자유 텍스트 태그**(각 40자, `EnglishTag`)다. 브랜드가 한글로 입력하면 klow_brand 가
+  위 `POST /v1/brand/translate` 로 영문화해 보낸다(요청당 20개 상한 → 20개씩 청크).
+  일괄 초안(`/products/bulk`)만 예외로 **EnglishTag 를 통과 못한 항목을 버리고** 진행한다(AI 가 한글을
+  섞어 보내도 30개 생성이 400 나지 않게).
+- **현장 QR 판매가(`PUT /products/onsite`)**: `onsitePriceUsd=null` 이면 기본가로 되돌리고,
+  `onsiteExcluded` 는 그 제품을 현장 판매에서 제외한다. 서버가 `brandId` 로 소유권을 재검증해
+  남의 productId 가 섞여 오면 조용히 무시하고, `{ ok, saved }`(반영된 건수)를 돌려준다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
