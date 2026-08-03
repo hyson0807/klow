@@ -1,11 +1,21 @@
 # ② Amazon MCF 실제 구현 계획 (living doc)
 
-> **이 문서가 구현·스키마의 정본이다.** 현재 버전: **v1 (2026-07-08)**. 모든 경로는 `klow_server/` 기준(별도 표기 제외). 프론트는 `klow_brand/`.
+> **이 문서가 구현·스키마의 정본이다.** 현재 버전: **v1 (2026-07-08 · 가격/정산 섹션 2026-08-01 최신화)**. 모든 경로는 `klow_server/` 기준(별도 표기 제외). 프론트는 `klow_brand/`.
 >
-> **처음 보고 착수한다면**: (1) 빌드 순서는 **§10 로드맵 체크리스트** 그대로, (2) 각 단계 착수 전 **§13 통합 불변식**(F1~F7·R5~R7)을 먼저 읽는다.
+> **처음 보고 착수한다면**: (1) 빌드 순서는 **§10 로드맵 체크리스트** 그대로, (2) 각 단계 착수 전 **§13 통합 불변식**(F1~F10·R5~R8)을 먼저 읽는다.
 >
-> **⚠️ 라인번호는 2026-07-08 스냅샷**(예: `executeCreate` :630, settlement `:100/:193`). 구현 시점엔 밀려 있을 수 있으니
+> **⚠️ 라인번호는 2026-08-01 재확인 스냅샷**(예: `executeCreate` :644, settlement `:216/:390/:470/:527`). 구현 시점엔 밀려 있을 수 있으니
 > **심볼명(함수/상수)으로 재확인** 후 편집한다. §13 "근거" 열이 심볼명을 함께 준다.
+>
+> **🔄 2026-08-01 최신화 요약** — 2026-07-28/29/30 가격 전환(판매가에서 물류비 분리 · 고객 배송비 별도 라인 · 무료배송 국가별 ·
+> 500g 기준 · efs-billing 일반주문 포함)을 반영해 **채널별 가격 트랙 설계를 폐기**했다:
+> | 폐기(옛 v1 초안) | 대체(현재) |
+> |---|---|
+> | MCF 판매가·정산가 2벌 (물류비/2 차감 생략 역산) | **채널 무관 1벌** — 물류비가 애초에 가격에 없다(§8-1) |
+> | `ProductAmazonListing.mcfMarginKrw` | **필드 삭제** (§1) |
+> | 발급 시 채널별 `settlementPriceKrw` 세팅 | **주문 시점 스냅샷 그대로, 발급이 건드리지 않음**(F8 반전) |
+> | MCF 표시가 분기 + 폴백 차액 KLOW 흡수 | **분기 없음** — 문제 자체가 소멸 |
+> | (신규) | **배송비 선결제분 귀속 정책 A/B**(§8-4) · **R8 구매 가능 국가** · **F10 efs-billing 자연 제외** |
 
 ## 0. 스코프
 
@@ -14,9 +24,10 @@
 2. **일반주문 결제 확정 시**, 도착국 Amazon 창고에 브랜드 전 제품 재고가 있으면 **`createFulfillmentOrder`**
    로 Amazon 출고(= 자동 발송), 아니면 기존 EFS.
 3. Amazon 출고 상태·추적 갱신, 정산(매출) delivered gate 확장.
-4. **MCF 채널 트랙**: 제품마다 MCF 판매가·정산가를 일반과 별도로 — 기본값은 판매가=일반 고정가, 정산가=물류비/2 차감 생략 역산(일반보다 물류비/2 높음), `mcfMarginKrw` 오버라이드로 조절. Amazon 수수료는 브랜드가 자기 계정에서 부담 — KLOW 조회·보전 없음(§7·§8).
+4. **가격은 손대지 않는다** — 판매가·고객 배송비·정산가가 모두 채널 무관 1벌이라 MCF 는 가격/견적/체크아웃 경로를 **읽지도 쓰지도 않는다**(§8). 유일한 돈 관련 결정은 **MCF 주문의 배송비 선결제분 귀속**(§8-4, 정책 확정 필요). Amazon 수수료는 브랜드가 자기 계정에서 부담 — KLOW 조회·보전 없음(§8-3).
 
 **안 할 것 (v1)**
+- **MCF 전용 가격·마진 트랙.** 물류비가 판매가/정산가에서 빠진 뒤(2026-07-28) 채널별로 다르게 잡을 근거가 없다 — 필요해지면 v2.
 - **시딩 MCF.** 시딩 라인은 `OrderItem.productId=null` 이고 `SeedingLink.selectedSkus`/`selectionSkus` 는
   자유텍스트 제품명 라벨이라 SKU/재고 판정을 못 탄다 → 시딩은 항상 EFS. MCF 는 선택 필드에 실제 productId 를
   심는 스키마 변경(v2) 이후.
@@ -45,7 +56,8 @@ model BrandAmazonConnection {
   @@index([brandId])
 }
 
-// 제품 ↔ Amazon SKU (마켓플레이스별) + MCF 채널 트랙. ProductCountryPrice 에 얹지 않음(그건 replace-all).
+// 제품 ↔ Amazon SKU (마켓플레이스별). **가격 필드 없음** — 판매가/정산가는 채널 무관 1벌이라
+// 이 모델은 순수 매핑이다(§8-1). ProductCountryPrice 에 얹지 않음(그건 replace-all).
 model ProductAmazonListing {
   id            String  @id @default(cuid())
   productId     String
@@ -53,8 +65,6 @@ model ProductAmazonListing {
   sellerSku     String
   asin          String?
   fnSku         String?
-  // MCF 트랙 오버라이드(§7-1). null = 기본값(MCF 판매가=일반 고정가 + MCF 정산가는 물류비/2 차감 생략 역산). 값 있으면 MCF 트랙 독립 조절.
-  mcfMarginKrw  Int?
   createdAt     DateTime @default(now())
   product       Product  @relation(fields: [productId], references: [id])
   @@unique([productId, marketplaceId])
@@ -102,11 +112,16 @@ model FbaInventoryCache {
     - `carrier` → resolveFulfillmentChannel 이전에 `carrierForBrand(order, brand.id)` 로 이미 구하므로 **그 값을 그대로 저장**(스키마 변경 없이 채움 가능). 단 EFS-제외구역으로 carrier 가 없어 throw 하는 경우가 있어, MCF 행에서도 필요 없다면 nullable 화가 더 안전 — **권장: `carrier` 도 nullable**.
     - `requestPayload` → MCF 요청 스냅샷(`sellerFulfillmentOrderId`, items, destinationAddress)을 담아 non-null 유지.
   - 3-state UI enum(requested/shipping/delivered)은 두 채널(EFS `latestStatusCode` / MCF `mcfStatus`)을 각각 매핑하는 레이어에서 산출.
+  - **⚠️ F6 (`brandConfirmedShippedAt`)**: EFS 는 브랜드가 "박스 EFS 인계" 를 눌러야 채워지는데 **MCF 는 브랜드가 인계할 박스가 없다.**
+    이 값이 null 이면 브랜드 정산 탭 목록(`settlement.listDeliveredForBrand` 가 `brandConfirmedShippedAt: { not: null }` 로 거름)에
+    MCF 송장이 **영영 안 뜬다**. → MCF 발급 시 `submittedAt` 과 같이 채우거나(권장), 그 쿼리를 채널별로 분기한다.
   - 정산 delivered 판정: EFS `'33'` + MCF 종료상태를 함께 인식하는 **`settleableDeliveredWhere(): Prisma.ShipmentWhereInput` where-프래그먼트**로 처리 — JS 불리언 헬퍼가 아니다(§8·F5).
 - **`OrderItem`**: 스키마 변경 불요. 일반주문 라우팅은 `OrderItem.productId`(nullable) 를 읽는다. **시딩 라인은 productId=null 이라
-  v1 에서 항상 EFS**(§5). `settlementPriceKrw`(nullable) 는 **발급 시 실제 채널 정산가로 세팅**(MCF→MCF정산가, EFS→일반정산가)해 정산에 그대로 쓴다(§8-1·F8).
+  v1 에서 항상 EFS**(§5). `settlementPriceKrw` 는 **주문 시점에 이미 확정된 스냅샷이고 채널과 무관**하다 — MCF 분기는 이 값을
+  **읽지도 쓰지도 않는다**(§8-1·F8).
 - **`Order`**: 스키마 변경 불요. 라우팅 키 `order.countryCode` 는 **nullable(`@db.VarChar(2)`, legacy 주문 null)** — 라우팅 0단계에서
-  null → EFS 로 가드. 주소는 `Order` 인라인 컬럼(§4·R7).
+  null → EFS 로 가드. 주소는 `Order` 인라인 컬럼(§4·R7). 배송비 스냅샷(`shippingFeeUsd`/`shippingFeeByBrand`)도 주문 시점 값
+  그대로 — MCF 는 §8-4 (B) 를 택할 때만 이걸 **읽는다**(쓰지 않음).
 - **`ShippingCountry`**: (열린질문) 도착국→마켓플레이스 판정을 위해 `amazonMarketplaceId` 추가할지, 아니면
   `ProductAmazonListing` 존재 여부로만 판정할지 결정.
 - **`ShippingCarrier` enum**: MCF 는 `Shipment.channel` 판별자로 분리하므로 enum 에 값 추가는 하지 않는
@@ -176,8 +191,11 @@ src/modules/amazon/
 
 ## 4. 발급 분기 (핵심) — `shipments.service.ts executeCreate`
 
-현재 `executeCreate(order, group, shippingFeeShareUsd, adminId)` (:630–749): `carrierForBrand`(:656) →
-`buildPayload` → `Shipment` 저장 → `efs.newCreateShipment`(:719).
+현재 `executeCreate(order, group, shippingFeeShareUsd, adminId)` (:644–760): `carrierForBrand`(:670) →
+`buildPayload` → `Shipment` 저장 → `efs.newCreateShipment`(:733).
+`shippingFeeShareUsd` 는 호출부(`createForOrder`/재발급)가 `perBrandShareUsd(order, brandId, groups.length)`
+(`orders/chargeable-brands.ts`)로 구해 넘기는 **고객 선결제 배송비의 이 브랜드 몫**이다 — EFS 는 이걸 27번 필드에 싣는다.
+MCF 는 Amazon 에 보낼 곳이 없으므로 **`requestPayload` 스냅샷에만 남긴다**(§8-4 (B) 를 택하면 정산이 같은 함수로 다시 구한다).
 
 **변경**: `carrierForBrand` 직후 채널 판정. **executeCreate 의 반환 계약을 반드시 지킨다** —
 `Promise<{ shipment: ShipmentWithRelations; warnings: string[] }>` (void `return;` 아님).
@@ -205,9 +223,9 @@ if (channel === 'AMAZON_MCF') {
   만들어야 한다. ShipmentItem 을 안 만들면 (a) `maybeMarkOrderShipped`(`order.items.every(i => i.shipmentItem?.shipment?.status===submitted)`)가
   영영 false → 주문이 shipped 로 안 넘어가고, (b) settlement 후보 쿼리의 `shipment.items → orderItem.settlementPriceKrw` 조인이 비어 **정산금 0**.
   상태는 `submitted`(EFS 와 동일 값) 로 저장해 두 불변식을 만족시킨다.
-- **F3 (재발급 시 채널 전환)**: `existing` 이 있으면(=failed/cancelled 재발급) EFS 처럼 **같은 row 를 update** 로 재사용한다. MCF↔EFS 가
+- **F3 (재발급 시 채널 전환)**: `existing` 이 있으면(=failed/cancelled 재발급) EFS 처럼 **같은 row 를 update** 로 재사용한다(:691–715). MCF↔EFS 가
   시도마다 바뀔 수 있으므로 update 시 `channel` 을 새로 세팅하고 **반대 채널 컬럼을 clear** 해야 한다:
-  EFS→MCF 재발급 → `efsTrackingNumber`/`localCarrierName`/`localTrackingNumber` null; MCF→EFS 재발급 → `amazonFulfillmentOrderId`/`amazonShipmentId`/`amazonTrackingNumber`/`mcfStatus` null.
+  EFS→MCF 재발급 → `efsTrackingNumber`/`localCarrierName`/`localTrackingNumber` null; MCF→EFS 재발급 → `amazonFulfillmentOrderId`/`amazonShipmentId`/`amazonTrackingNumber`/`mcfStatus`/`amazonPackages` null.
   (현 EFS update 브랜치는 efs 컬럼만 리셋하므로 amazon* 초기화 로직 추가 필요.)
 - **R5 (이중출고 방지)**: 모호 실패를 곧바로 EFS 폴백하면 Amazon+EFS 둘 다 발송될 수 있다. `sellerFulfillmentOrderId`
   가 발급마다 유일하므로 이를 키로 `getFulfillmentOrder`/`listAllFulfillmentOrders` 접수 확인 후 분기한다.
@@ -272,21 +290,25 @@ if (channel === 'AMAZON_MCF') {
   부족 → **`amazonPackages Json?`(예: `[{packageNumber, carrier, trackingNumber, status}]`) 로 복수 저장**하고, 대표 1개를
   `amazonTrackingNumber` 에 두는 방식 권장. 종료상태 판정은 "전 패키지 delivered"로. UI(출고 현황·추적)도 복수 추적 대응.
 
-## 8. 정산 — 채널별 정산가 (MCF 채널 트랙)
+## 8. 가격·정산 — 채널 무관 1벌 (2026-08-01 최신화)
 
-### 8-1. 실제 나간 채널의 정산가로 정산 (F8)
-- 브랜드 정산액 = `Σ (라인이 실제 나간 채널의 정산가) × qty`.
-  - EFS(폴백 포함) → 일반 정산가 = 고정 판매가에서 **물류비/2 차감** 역산.
-  - MCF → MCF 정산가 = 고정 판매가에서 역산하되 **물류비/2 차감 생략**(§1 `ProductAmazonListing.mcfMarginKrw`, null 이면 기본값 = 일반보다 물류비/2 만큼 높음).
-- **구현(권장): 발급 시점(`executeCreate`)에 확정된 채널로 `OrderItem.settlementPriceKrw` 를 세팅**한다 — MCF 발급이면 MCF 정산가, EFS(폴백 포함)면 일반 정산가.
-  그러면 `settlement.service` 는 **기존 `Σ settlementPriceKrw × qty` 그대로**(채널 판별 불필요) 동작한다.
-- **F8 (폴백 정산가 정합)**: MCF 표시가로 결제됐어도 EFS 로 폴백되면 `settlementPriceKrw` 는 **일반 정산가**여야 한다(그래야 KLOW 가 EFS 물류비를 내면서 브랜드에 물류비/2 를 이중 지급하지 않음). 발급 시 실제 채널로 세팅하면 자동 충족.
+### 8-1. 가격·정산가는 채널을 모른다 (F8)
+2026-07-28 전환 이후 **판매가·정산가에 물류비가 없다**(`priceLine()` — `판매가 = 정산가/0.95/fx`,
+`정산가 = floor(청구USD × fx × 0.95)`). 고객 배송비는 판매가 바깥의 별도 라인이고 **주문 시점**에 확정된다
+(`shippingFeeByBrand`, 500g 요율 × 청구 대상 브랜드수). 라우팅은 **결제 이후**에 일어나므로:
+
+- 고객 결제가·고객 배송비: **MCF 여부와 무관하게 동일** → 표시·카트·견적(`/v1/orders/quote`)·주문 생성 코드는 **수정 대상이 아니다**.
+- 브랜드 정산액 = `Σ OrderItem.settlementPriceKrw × qty` — **채널 판별 불필요**(값이 같으므로).
+- **F8 (반전됨 — 발급은 정산가를 건드리지 않는다)**: `settlementPriceKrw` 는 주문 시점 역산 스냅샷이다. MCF 분기가 이 값을
+  다시 계산하거나 덮어쓰면 **주문 시점 fx 스냅샷이 깨져** 같은 주문의 라인끼리 기준 환율이 갈린다. 발급 경로는 **읽기도 안 한다.**
+  (옛 초안의 "발급 시 채널별 정산가 세팅"은 물류비/2 차감이 사라지면서 폐기됐다.)
+- 제품 단위 MCF 가격/마진 필드는 두지 않는다(§1 `mcfMarginKrw` 삭제).
 - Amazon 수수료는 브랜드가 자기 계정서 부담(§8-3) — KLOW 보전·조회 없음.
 
 ### 8-2. delivered 게이트 (F5)
 - **F5 (게이트는 boolean 이 아니라 Prisma where 프래그먼트)**: delivered 게이트 `latestStatusCode: EFS_STATUS_DELIVERED` 는
-  **Prisma `where` 안에 인라인**된다(4곳: `getBrandSummary` :100, `listAdminCandidates` :193, `listAdminBrandCandidates` :298,
-  `settle()` 트랜잭션 :328 — 모두 `...SETTLEABLE_SHIPMENT_WHERE`·`settledAt:null`·`brandId` 와 형제). 따라서 공유물은
+  **Prisma `where` 안에 인라인**된다(4곳: `listAdminCandidates` :216, `listAdminBrandCandidates` :390,
+  `settle()` 트랜잭션 :470, `listAdminMonthly` :527 — 모두 `...SETTLEABLE_SHIPMENT_WHERE`·`latestStatusAt` 범위와 형제). 따라서 공유물은
   JS 불리언 헬퍼가 아니라 **where-빌더**여야 한다:
   ```ts
   const MCF_TERMINAL_STATUSES = ['COMPLETE']; // getFulfillmentOrder 종료 상태(착수 시 확정)
@@ -299,19 +321,46 @@ if (channel === 'AMAZON_MCF') {
   ```
   4곳에서 `latestStatusCode: EFS_STATUS_DELIVERED` 를 `...settleableDeliveredWhere()` 로 치환(Prisma 가 top-level 키를 AND
   하므로 `{ brandId, settledAt:null, order:…, OR:[…] }` 로 안전하게 합성).
-  - 이 "정산용 delivered" 는 tracking 폴링 중단용 `TERMINAL_TRACKING_CODES=['33','47','74','42']`(shipments.service)
+  - 이 "정산용 delivered" 는 tracking 폴링 중단용 `TERMINAL_TRACKING_CODES=['33','47','74','42']`(shipments.service :1305)
     와 **다른 집합** — where-빌더로 정의를 명시적으로 분리한다.
   - `settle()` 트랜잭션은 게이트를 재확인하고 `updated.count !== shipmentIds.length` 면 throw 하므로, **같은 where-빌더를
-    read 4곳·write 1곳이 공유**해야 candidate 로 보였던 MCF 행이 settle 에서 튕기지 않는다.
+    read 3곳·write 1곳이 공유**해야 candidate 로 보였던 MCF 행이 settle 에서 튕기지 않는다.
+  - **월 버킷은 `latestStatusAt` 범위**로 잡는다(후보·집계 3곳. `settle()` 은 id 목록으로 특정하므로 범위 없음).
+    MCF 폴링도 상태 갱신 시 `latestStatusAt` 을 함께 채워야
+    배송완료 MCF 행이 해당 월 후보/집계에 들어온다 — `mcfStatusUpdatedAt` 만 채우면 월 필터에서 통째로 빠진다.
+  - 브랜드 정산 탭 목록(`listDeliveredForBrand`)은 이 게이트가 아니라 `brandConfirmedShippedAt: { not: null }` 로 거른다 →
+    MCF 는 인계 액션이 없어 별도 처리 필요(§1 `Shipment` 주의).
 
 ### 8-3. Amazon 수수료는 브랜드 부담 (KLOW 보전·조회 없음)
 - Amazon MCF 이행 수수료는 **재고 소유자=브랜드의 셀러 계정에서 자동 차감**된다(KLOW 엔 청구 안 됨 — KLOW 는 SP-API 사용료만 별도).
-- 브랜드가 이 수수료를 **MCF 판매가/정산가에 미리 반영**해 값을 책정하므로, KLOW 는 실제 수수료를 **조회·보전하지 않는다** →
-  `getFulfillmentPreview`/Finances API·**Finance and Accounting Role 불필요**(앱 등록 Role 은 Fulfillment + Inventory 만으로 충분).
+- 가격이 채널 무관 1벌이므로 브랜드는 이 수수료를 **가격에 반영하는 게 아니라 "이 제품을 MCF 로 보낼지" 판단에 쓴다** —
+  브랜드 마진(정산가)은 채널과 무관하게 같고, **이행 비용만** `EFS 실측 후청구` ↔ `Amazon MCF 수수료` 로 갈린다.
+- KLOW 는 실제 수수료를 **조회·보전하지 않는다** → `getFulfillmentPreview`/Finances API·**Finance and Accounting Role 불필요**
+  (앱 등록 Role 은 Fulfillment + Inventory 만으로 충분).
 - **`mcfChargeKrw` 는 분석용(옵션)** — 브랜드 MCF 수익성 분석에나 쓰고, money flow·정산과는 무관(없어도 됨).
-- efs-billing 의 브랜드 청구 리포트는 여전히 **시딩 전용**(`order:{isSeeding:true}` + `paymentBy='brand'`) — MCF 와 무관.
+- **F10 (efs-billing 이 MCF 를 자연 제외 — 좋은 성질)**: 배송비 청구(`efs-billing`)는 2026-07-29 부터 **시딩 전용이 아니라 일반주문도
+  청구**한다(`kind: 'general' | 'seeding'`, 일반은 `max(0, 실비+수수료 − 고객 선결제)`). 하지만 후보 쿼리가
+  `efsTrackingNumber: { not: null }` + `submittedAt` 창으로 거르므로 **MCF 행(efsTrackingNumber=null)은 자동 제외**된다 —
+  EFS 실비가 없는 행에 청구서가 만들어질 위험 없음. 청구서 쪽은 **손댈 필요가 없다.**
+
+### 8-4. ⚠️ 배송비 선결제분의 귀속 — 확정 필요한 유일한 money 정책
+고객이 낸 배송비는 현 모델에서 **브랜드 실측 물류비의 선납금**이다(EFS 면 `efs-billing` 이 `max(0, 실비+수수료 − 선결제)` 로
+청구해 되돌려준다). **MCF 는 EFS 청구서가 없으므로 그 선결제분이 KLOW 에 남는다.**
+
+| 안 | 구현 | 성질 |
+|---|---|---|
+| **(A)** KLOW 보유 | 없음(코드 변경 0) | v1 파일럿 기본. 브랜드는 EFS 후청구가 사라지는 대신 Amazon 수수료를 전액 부담 — 유불리는 `Amazon 수수료 ⋛ 실측−선결제` |
+| **(B)** 브랜드 크레딧 *(권고)* | 정산 집계에 `+ perBrandShareUsd(order, brandId, brandCount) × Order.fxRateSnapshot` (MCF 송장만) | "선결제 = 그 브랜드 배송의 선납금" 정의를 채널 무관하게 유지. 무료배송 국가는 선결제 0 → 크레딧도 0(자동) |
+
+- (B) 를 택하면 **금액 출처는 반드시 `perBrandShareUsd`(`orders/chargeable-brands.ts`)** — EFS 27번·EFS 청구서와 같은 함수를 써야
+  세 곳(송장·청구서·정산 크레딧)의 값이 갈리지 않는다. legacy 주문(`shippingFeeByBrand=null`)은 균등분배 폴백이 이미 그 안에 있다.
+- (B) 의 파급: `settlement.service` 의 정산액이 더 이상 `Σ settlementPriceKrw × qty` 만이 아니게 되므로 **어드민 정산 후보/월별 집계·
+  브랜드 정산 탭 표시까지 같이 손봐야 한다**(라인 단가와 배송 크레딧을 분리 표기 권장). 파일럿은 (A) 로 시작하고 별도 릴리스로 붙이는 게 안전.
 
 ## 9. 프론트 연결 (mock → real)
+
+⚠️ **목업은 `klow_brand` 브랜치 `develop/mcf2` 에만 있다**(staging/main 미머지 — 현 HEAD 엔 `app/(authed)/amazon/`·`lib/amazon-mock.ts`·
+`amazon-marketplaces.ts` 가 없다). 배선 전에 리베이스/머지 선행. 가격 입력 UI 는 **추가하지 않는다** — MCF 전용 가격 필드가 없다(§8-1).
 
 `klow_brand/src/lib/api.ts` 의 `api.amazon.*` 목업 함수 본문만 실제 엔드포인트로 교체:
 | 목업 | 실제 |
@@ -337,10 +386,10 @@ if (channel === 'AMAZON_MCF') {
 | 3 | `AmazonSpApiClient`(mock 모드) + 토큰 교환·암복호화 | §3 | 빈 크레드→mock 응답, 크레드 있으면 `auth/o2/token` 으로 access token 발급 확인. 공유 crypto 유틸(`AMAZON_TOKEN_ENCRYPTION_KEY`) | — |
 | 4 | OAuth 연결(connect/callback) + `BrandAmazonConnection` CRUD | §3 | 샌드박스는 env refresh token 으로 대체 가능; 프론트 ConnectModal → 실제 리다이렉트 | — |
 | 5 | SKU 매핑 CRUD(`ProductAmazonListing`) + FBA 재고 동기화(수동→크론) | §6 | `POST /sync` 로 `FbaInventoryCache` 채워지고 `lastSyncedAt` 갱신 | — |
-| 6 | `executeCreate` 라우팅 분기 + `createFulfillmentOrder`(mock) + EFS 폴백 + **채널별 정산가 세팅** | §4, §8-1 | mock e2e: 재고 있으면 `Shipment(channel=AMAZON_MCF, status=submitted)` + `ShipmentItem` 생성 + `settlementPriceKrw`=MCF 정산가; 재고 0 이면 EFS 폴백 + `settlementPriceKrw`=일반 정산가. 주문 status=shipped 전이 | **F2·F2b·F3·F4·F8·R5·R6·R7** |
-| 7 | MCF 출고 추적 cron + 정산 delivered 게이트 확장 | §7, §8 | MCF 배송완료 행이 정산 후보에 뜨고 `settle()` 통과(candidate=settle 일치); 정산액이 채널별 정산가로 정확(같은 상품 EFS/MCF 브랜드 net 동일) | **F5·F7** |
-| — | MCF 채널 트랙 UI: `ProductAmazonListing.mcfMarginKrw` 편집 + MCF 판매가 표시 선택 | §7, §9 | 브랜드/어드민이 MCF 트랙 조절 → MCF 판매가 미리보기; Amazon 적격 제품은 MCF 판매가 표시 | **F8** |
-| 8 | 프론트 mock→real 배선 | §9 | `api.amazon.*` 5개 read 실 엔드포인트 연결, `amazon-mock.ts` 제거, UI 동작 동일 | — |
+| 6 | `executeCreate` 라우팅 분기 + `createFulfillmentOrder`(mock) + EFS 폴백 | §4 | mock e2e: 재고 있으면 `Shipment(channel=AMAZON_MCF, status=submitted)` + `ShipmentItem` 생성; 재고 0 이면 EFS 폴백. 주문 status=shipped 전이. **두 경로 모두 `OrderItem.settlementPriceKrw`·`Order.shippingFee*` 가 주문 시점 값 그대로**(diff 0) | **F2·F2b·F3·F4·F8·R5·R6·R7** |
+| 7 | MCF 출고 추적 cron + 정산 delivered 게이트 확장 | §7, §8-2 | MCF 배송완료 행이 정산 후보에 뜨고 `settle()` 통과(candidate=settle 일치); `latestStatusAt` 이 채워져 월 버킷에 들어감; 같은 상품을 EFS/MCF 로 보냈을 때 **브랜드 정산액이 완전히 동일** | **F5·F7·F10** |
+| — | (정책 확정 시) 배송비 선결제 크레딧 (B) | §8-4 | MCF 송장에 `perBrandShareUsd × fxRateSnapshot` 크레딧이 정산 후보·월별 집계·브랜드 정산 탭에 일관되게 반영; 무료배송 국가는 0 | **F10** |
+| 8 | 프론트 mock→real 배선 | §9 | `api.amazon.*` 5개 read 실 엔드포인트 연결, `amazon-mock.ts` 제거, UI 동작 동일 (⚠️ 목업이 `develop/mcf2` 브랜치에만 있어 리베이스 선행) | — |
 | 9 | dynamic sandbox 실검증 → 프로덕션 Role/신원확인 → 파일럿 브랜드 | §3, §11 | sandbox `createFulfillmentOrder`→`getFulfillmentOrder` 실호출; 프로덕션 Role 승인 후 파일럿 1개 브랜드 실출고 | — |
 | — | **(v2)** 시딩 MCF | §5 | `SeedingLink` 선택 필드 productId 화 스키마 변경 후 §4 경로 재사용 | — |
 
@@ -351,11 +400,11 @@ if (channel === 'AMAZON_MCF') {
   제한 역할 미선택 (상세 sp-api §5).
 - **RDT 요구 범위**: 어느 Fulfillment Outbound 오퍼레이션이 restricted(PII)인지 — Role Mappings 문서로
   확정(`createFulfillmentOrder` 는 불필요 예상, `getFulfillmentOrder` 응답 주소는 대상 가능).
-- **(확정) MCF 가격·수수료 = 채널 트랙**: 판매가·정산가 채널별 2벌 — 고정 판매가에서 정산가 역산, MCF 는 물류비/2 차감 생략(기본값이 일반보다 물류비/2 높음). Amazon 수수료는
-  브랜드가 자기 계정서 부담(MCF 판매가/정산가에 반영) → KLOW 조회·보전 없음, Finance Role 불필요(§7·§8).
-- **MCF 판매가 식 확정**: 기존 `product-selects.ts priceLine()`·÷0.95 PG·별도 배송비 라인과 대조 — 특히 **MCF 주문에서 배송비 라인을 0 으로 둘지**.
-- **MCF 트랙 조절 granularity**: 전역 1개 vs 국가별(`ProductCountryPrice` 미러). 도메스틱이라 마켓플레이스=국가 → 마켓플레이스별이 자연.
-- **표시가격·폴백 정책**: MCF 표시가로 결제 후 EFS 폴백 시 차액 KLOW 흡수(기본값 동일이면 무영향) — 정책 확정.
+- **(확정 2026-08-01) MCF 가격 = 채널 무관 1벌**: 판매가·고객 배송비·정산가가 모두 채널과 무관하다(물류비가 가격에서 빠진 뒤
+  채널별로 다르게 잡을 근거 소멸) → 채널별 2벌·`mcfMarginKrw`·MCF 표시가·폴백 차액 흡수 **전부 폐기**(§8-1). Amazon 수수료는
+  브랜드가 자기 계정서 부담 → KLOW 조회·보전 없음, Finance Role 불필요(§8-3).
+- **⚠️ (미확정 · 착수 전 결정) MCF 주문의 고객 배송비 선결제분 귀속**: (A) KLOW 보유 vs (B) 정산 시 브랜드 크레딧(§8-4).
+  로드맵 6·7 단계는 어느 쪽이든 그대로 진행 가능하고, (B) 는 뒤에 별도 릴리스로 붙일 수 있다.
 - **(확정) refresh token 암호화**: `totp-crypto.ts` 의 범용 encrypt/decrypt 를 공유 유틸로 추출하되 키는 **신규
   `AMAZON_TOKEN_ENCRYPTION_KEY`** 로 분리(ADMIN_TOTP 키와 독립 회전).
 - 취소·환불 시 `cancelFulfillmentOrder` 연동 시점.
@@ -366,8 +415,13 @@ if (channel === 'AMAZON_MCF') {
 
 - **mock 모드**(빈 크레드) e2e: 결제→라우팅→합성 fulfillment order id→`Shipment(channel=AMAZON_MCF)`→
   정산 후보 노출. EFS 폴백(재고 0 케이스)도 확인. **아래 §13 불변식을 각 단계에서 함께 확인**.
-- **정산 금액 검증(F8)**: MCF 발급 라인은 `settlementPriceKrw`=MCF 정산가(물류비/2 미차감 역산), EFS 폴백 라인은 일반 정산가(물류비/2 차감 역산)로 세팅됐는지. 기본값에서
-  같은 상품을 MCF/EFS 로 보낼 때 **고객가는 동일**(MCF 판매가 기본=일반)하고 **MCF 정산가는 일반보다 물류비/2 높게** 잡히는지, `mcfMarginKrw` 를 조절하면 MCF 판매가만 독립적으로 바뀌는지 확인.
+- **가격 불변 검증(F8)**: 같은 장바구니를 MCF 적격/부적격 두 상태로 결제해 **고객 결제가·`Order.shippingFeeUsd`·
+  `shippingFeeByBrand`·`OrderItem.settlementPriceKrw` 가 완전히 동일**한지(라우팅 전후 diff 0). MCF 발급이 이 값들을
+  update 하는 코드가 **없어야** 한다(grep 으로 확인).
+- **정산 금액 검증**: 같은 상품을 EFS/MCF 로 보낸 두 주문의 브랜드 정산액이 동일한지. (§8-4 (B) 채택 시엔 MCF 쪽에
+  `perBrandShareUsd × fx` 만큼만 더 크고, 무료배송 국가에서는 다시 동일한지.)
+- **청구서 검증(F10)**: MCF 송장이 `efs-billing` 리포트(일반주문 시트)에 **뜨지 않는지** — 뜬다면 `efsTrackingNumber` 를
+  잘못 채운 것이다.
 - **dynamic sandbox**: `createFulfillmentOrder`→`getFulfillmentOrder` 실호출 검증.
 - 마이그레이션은 `npx prisma migrate dev` (interactive — 사용자 실행 요청).
 
@@ -378,18 +432,21 @@ if (channel === 'AMAZON_MCF') {
 
 | # | 불변식 | 깨질 때 증상 | 근거(실측) |
 |---|---|---|---|
-| F1 | MCF 행도 `carrier`/`efsServiceType`/`requestPayload` 를 채우거나 컬럼을 nullable 로 | MCF `Shipment` INSERT 실패 | 세 컬럼 non-null (schema Shipment) |
-| F2 | MCF 경로도 `Shipment` + `ShipmentItem`(items.create) 생성, status=`submitted` | 주문이 shipped 로 안 넘어감 + 정산금 0 | `maybeMarkOrderShipped`·settlement 후보 쿼리가 `items→orderItem` 조인 (shipments.service:1003, settlement.service:63-68,97-105) |
-| F2b | `executeCreate` 반환은 `{ shipment, warnings }` (void 아님) | 타입 에러 / 상위 `createForOrder` 집계 깨짐 | executeCreate 시그니처(:630-635) |
-| F3 | 재발급 update 시 `channel` 세팅 + 반대 채널 컬럼 clear | 재발급 후 EFS/MCF 식별자 혼재 → 폴링·정산 오작동 | 재발급은 같은 row update(:678-698), 현재 efs 컬럼만 리셋 |
-| F4 | 시딩 판정은 `order.isSeeding` 사용(seedingLink 조회 불필요) | 불필요 쿼리 / v1 시딩이 MCF 로 새어 실패 | `Order.isSeeding`(schema:513), loadOrderWithItems 가 order 전체 로드 |
-| F5 | delivered 게이트는 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput` 로 4곳 치환 | MCF 배송완료분이 정산 후보에서 누락 (candidate/settle 불일치) | 게이트가 Prisma where 인라인 4곳(settlement.service:100/193/298/328) |
-| F7 | MCF 는 별도 폴링 cron (기존 EFS cron 이 `efsTrackingNumber:{not:null}` 로 자동 제외) | (양성) 확장 시 MCF 를 EFS 로 잘못 폴링하지 않도록 | refreshTrackingDue where(:611) |
-| F8 | 발급 시 `OrderItem.settlementPriceKrw` 를 **실제 채널 정산가**로 세팅(MCF→물류비/2 미차감 역산, EFS폴백→물류비/2 차감 역산) | MCF 표시가로 결제 후 EFS 폴백 시 물류비/2 이중지급·브랜드 정산 오류 | 정산가 채널별 2벌(§8-1), `mcfMarginKrw`(§1) |
+| F1 | MCF 행도 `carrier`/`efsServiceType`/`requestPayload` 를 채우거나 컬럼을 nullable 로 | MCF `Shipment` INSERT 실패 | 세 컬럼 non-null (schema Shipment). `carrierForBrand` 는 캐리어 없으면 throw(:1212) |
+| F2 | MCF 경로도 `Shipment` + `ShipmentItem`(items.create) 생성, status=`submitted` | 주문이 shipped 로 안 넘어감 + 정산금 0 | `maybeMarkOrderShipped`(:1021)·settlement 후보 쿼리가 `items→orderItem` 조인 |
+| F2b | `executeCreate` 반환은 `{ shipment, warnings }` (void 아님) | 타입 에러 / 상위 `createForOrder` 집계 깨짐 | executeCreate 시그니처(:644-649) |
+| F3 | 재발급 update 시 `channel` 세팅 + 반대 채널 컬럼 clear | 재발급 후 EFS/MCF 식별자 혼재 → 폴링·정산 오작동 | 재발급은 같은 row update(:691-715), 현재 efs 컬럼만 리셋 |
+| F4 | 시딩 판정은 `order.isSeeding` 사용(seedingLink 조회 불필요) | 불필요 쿼리 / v1 시딩이 MCF 로 새어 실패 | `Order.isSeeding`(schema:607), loadOrderWithItems 가 order 전체 로드 |
+| F5 | delivered 게이트는 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput` 로 4곳 치환 + MCF 폴링이 `latestStatusAt` 도 채움 | MCF 배송완료분이 정산 후보/월 집계에서 누락 (candidate/settle 불일치) | 게이트가 Prisma where 인라인 4곳(settlement.service:216/390/470/527), 월 버킷은 `latestStatusAt` 범위 |
+| F6 | MCF 행은 `brandConfirmedShippedAt` 을 발급 시 채운다(또는 브랜드 목록 쿼리를 채널 분기) | 브랜드 정산 탭에 MCF 송장이 영영 안 뜸 | `listDeliveredForBrand` 가 `brandConfirmedShippedAt:{not:null}` 로 거름(:81-) — MCF 는 인계 액션 없음 |
+| F7 | MCF 는 별도 폴링 cron (기존 EFS cron 이 `efsTrackingNumber:{not:null}` 로 자동 제외) | (양성) 확장 시 MCF 를 EFS 로 잘못 폴링하지 않도록 | refreshTrackingDue where(:617-) |
+| F8 | **발급은 가격을 건드리지 않는다** — `OrderItem.settlementPriceKrw`·`Order.shippingFee*` 는 주문 시점 스냅샷 그대로(읽기도 불필요) | 주문 시점 fx 스냅샷 파괴 → 같은 주문 라인끼리 기준 환율 불일치·정산 오류 | 정산가·배송비 모두 채널 무관 1벌(§8-1), `priceLine()`·`shippingFeeByBrand` 가 주문 시점 확정 |
 | F9 | 한 MCF 주문 = **복수 패키지/추적번호 가능** → `amazonPackages Json?` 로 배열 저장, 종료판정은 전 패키지 delivered | "한 주문=한 추적번호" 가정 시 추적 누락·조기 배송완료 오판 | getFulfillmentOrder `fulfillmentShipments`/`packages`(§7·§1) |
-| R5 | 모호 실패 시 `getFulfillmentOrder` 접수 확인 후 폴백 | Amazon+EFS 이중출고 | executeCreate try/catch(:718-749) |
-| R6 | 라우팅 0단계 `order.countryCode==null → EFS` | legacy 주문에서 마켓플레이스 판정 NPE | countryCode nullable(schema:490) |
+| F10 | MCF 행은 `efsTrackingNumber` 를 **비워 둔다** → efs-billing(일반+시딩 공용)에서 자동 제외 | EFS 실비가 없는 행에 배송비 청구서가 생성(허위 청구) | efs-billing 후보 where `efsTrackingNumber:{not:null}`(efs-billing.service:278-) |
+| R5 | 모호 실패 시 `getFulfillmentOrder` 접수 확인 후 폴백 | Amazon+EFS 이중출고 | executeCreate try/catch(:731-760) |
+| R6 | 라우팅 0단계 `order.countryCode==null → EFS` | legacy 주문에서 마켓플레이스 판정 NPE | countryCode nullable(schema:578) |
 | R7 | Amazon 주소는 raw `order.*` (EFS sanitize/buildCityState 미적용) | 주소 훼손·city+state 병합 오배송 | payload-builder sanitize/buildCityState |
+| R8 | MCF 는 **구매 가능 국가를 넓히지 못한다** — 배송지원 제외국·요율/캐리어 미설정국·EFS 제외구역은 주문 생성에서 차단 | "Amazon 이 배송하는 나라니 팔릴 것" 이라 가정하면 파일럿 국가가 통째로 안 열림 | 배송비/캐리어 산출이 주문 생성 단계(`resolveProductShipping`), 라우팅은 결제 이후 |
 
 **트리거 경로 재확인(적용 가정)**: `payment.markPaid`(await, 에러 삼킴→미발급 큐) / `seeding.claim`(fire-and-forget) →
 둘 다 `shipments.createForOrder(orderId, null)` → 그룹별 `executeCreate` → (신규) 채널 분기. 라우팅/발급 실패가 상위

@@ -120,8 +120,9 @@ Amazon 에 상품을 등록/판매하는 게 아니라 **출고만 위임**하�
   - `createFulfillmentOrder` — 문서값 **확인 필요**. burst 여유 크지 않으니 결제 시 1건씩 호출 + 실패
     재시도 backoff.
 - **MCF 수수료 — 누가 내나 (중요)**: Amazon 이 출고 건당 MCF fulfillment fee 를 **재고 소유자=브랜드의 셀러 계정에서 차감**한다
-  (KLOW 엔 청구 안 됨 — Amazon 공식. KLOW 는 SP-API 사용료만 별도 부담). KLOW 설계는 **MCF 고정 판매가/정산가 트랙** — 브랜드가 이 수수료를
-  **MCF 판매가/정산가**에 미리 반영해 값을 잡으므로 **KLOW 가 실제 수수료를 조회·보전하지 않는다**(상세 flow §7·implementation-plan §8).
+  (KLOW 엔 청구 안 됨 — Amazon 공식. KLOW 는 SP-API 사용료만 별도 부담). KLOW 설계는 **가격 채널 무관 1벌**(2026-08-01 확정) —
+  판매가·정산가가 EFS/MCF 동일하고 이 수수료는 가격이 아니라 **"이 제품을 MCF 로 보낼지" 브랜드 판단**에 반영되므로
+  **KLOW 가 실제 수수료를 조회·보전하지 않는다**(상세 flow §7·implementation-plan §8).
   → `getFulfillmentPreview`/Finances API 로 실비를 뽑을 필요 없음(원하면 분석용으로만). `mcfChargeKrw` 는 옵션.
 - **2026 usage fee**: SP-API 사용료가 2026 발효 예정. Solution Provider Portal 에서 실제 과금 정책 확인 필요.
 - **DPP/AUP 컴플라이언스**(PII 취급): 자격증명 안전 저장, 배송 후 30일 내 PII 삭제, 로그 12개월 보관,
