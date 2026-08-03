@@ -92,3 +92,12 @@
 | DELETE | `/admin/shipping-rates`                     | `(carrier, iso2, weightG)` 셀 삭제                 |
 | POST   | `/admin/shipping-rates/import/preview`      | 캐리어 요율표 엑셀 파싱 → 국가별 상태 diff         |
 | POST   | `/admin/shipping-rates/import/apply`        | 같은 파일 재파싱 + 선택 국가 요율 티어 통째 교체(셀 값 그대로 저장) |
+| POST   | `/admin/shipping-rates/:carrier/:iso2/import/ai-preview` | 임의 포맷 요율표 엑셀 → AI 추출 + diff (적용 안 함) |
+| PUT    | `/admin/shipping-rates/:carrier/:iso2/tiers` | 한 캐리어·국가 티어 일괄 저장(`mode: replace \| merge`) |
+
+**AI 요율표 추출 (국가 상세, 2026-08)** — 위 배송비용(`/admin/seeding-rates/:iso2/import/ai-preview`)과 **같은 기능·같은 엔진**(`RateSheetAiService`)을 비교요율에도 붙인 것이다. 동작 규칙(레이아웃만 AI·금액은 서버가 원본 셀에서 직접·엄격한 숫자 파싱·`candidates` 로 열 재선택 시 AI 재호출 없음·`skipped[]` 노출·KRW 아니면 400·적용은 AI 미경유)은 전부 동일하므로 위 절을 참고한다. 다른 점만:
+
+- **캐리어 축이 하나 더 있다.** `(carrier, iso2)` 가 URL 파라미터이고 body 에는 없다(`ShippingRateBulkReplace` = `{tiers, mode}`). `ShippingRateService.aiImportPreview()` / `replaceTiers()` 가 담당하며, ⚠️ **조회·삭제 범위에 `carrier` 가 반드시 들어간다** — 빠지면 같은 국가의 반대 캐리어 요율이 통째로 지워진다(`__tests__/shipping-rate-ai-import.spec.ts` 가 이걸 잠근다).
+- 금액 필드명이 다르다 — 추출기는 시딩과 공용이라 `costKrw` 로 돌려주므로 서비스가 `rateKrw` 로 옮긴다. 상·하한은 `ShippingRateUpsert` 와 동일(무게 1~50,000g / 0~10,000,000원).
+- 목록 페이지의 `import/preview`·`import/apply`(고정 포맷 다국가 매트릭스)와 **병존**한다 — 그쪽은 `원본요율(할인전)`/`DHL수출요율(개인·물품)` 시트 전용이고, 이쪽은 캐리어가 보내온 국가 하나짜리 임의 포맷용이다.
+- 어드민 UI 는 `/shipping-rates/[iso2]?carrier=EMS|DHL` 국가 상세이고, 미리보기 모달은 배송비용과 **같은 컴포넌트**(`klow_admin/src/components/AiRateImportModal.tsx`)를 쓴다 — 모달은 금액 필드를 읽지 않아(무게·개수·중립 `diff` 만) 두 도메인 DTO 를 그대로 받는다.
