@@ -75,8 +75,13 @@
   - `countryPrices[]{iso2, priceLocal}` 는 국가별 현장가 핀. **현지통화 major** 로 저장하며 일반 판매의
     `ProductCountryPrice.priceLocal` 과 의미가 같다(현장은 할인·무료배송이 없어 가격 하나뿐).
     ⚠️ **제품별 replace-all** 이라 클라는 늘 그 제품의 전체 배열을 보내야 한다.
-  - ⚠️ 저장 테이블이 `ProductOnsiteCountryPrice` 로 **분리돼 있다** — 스튜디오의 일반 국가별 가격
-    (`ProductCountryPrice`)도 replace-all 이라, 한 테이블을 공유하면 두 저장이 서로의 행을 지운다.
+  - ⚠️ 저장 테이블이 `ProductOnsiteCountryPrice` 로 **분리돼 있다**. 이유는 스키마 주석 참고 —
+    핵심은 한 테이블 + `scope` 컬럼이면 기존 리더가 필터를 빠뜨릴 때 현장 핀이 소매가로 새는
+    **fail-open** 이 되기 때문이다(테이블 분리는 fail-closed).
+  - 저장은 보낸 제품 전체를 **deleteMany + createMany 한 쌍**으로 처리한다(제품 수와 무관하게 2문).
+    스칼라 UPDATE 는 **값이 실제로 바뀐 제품만** — `Product.updatedAt` 이 튀면 `ProductTranslation`
+    캐시가 로케일마다 무효화돼 가격 한 글자 수정이 카탈로그 전체 재번역을 부른다.
+    클라(klow_brand)도 같은 이유로 **건드린 제품만** 보낸다.
   - `settleKrw`/`countryPrices` 는 신규 필드라 nullable / `.default([])` — 서버를 먼저 배포해도
     구 klow_brand 가 400 을 맞지 않는다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.

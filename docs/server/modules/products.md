@@ -48,7 +48,8 @@
 - **`mode=onsite`**: 현장(박람회 부스) QR 모드. **`brandId` 와 함께일 때만 유효** — 목록에서 `onsiteExcluded=true` 제품을 숨기고, 표시가를 `onsitePriceLine()` 이 산출한 단일가로 덮는다(할인/취소선 없음, `customerDiscountPercent=0`). 현장주문 생성(`orders.createOnsite`)이 **같은 함수**로 청구액을 산출하므로 표시가==청구가. raw `onsitePriceUsd`/`onsiteExcluded` 필드는 응답에서 제거된다. (상세 라우트는 `brandId` 없이 `mode=onsite` 만으로 표시가를 덮는다.)
   - **가격 우선순위**: `?country=` 목적국의 `ProductOnsiteCountryPrice.priceLocal`(현지통화 → `customerUsdCentsFromLocal` 로 USD 센트 환산) > `Product.onsitePriceUsd`(브랜드가 정한 기준 현장가) > `defaultListUsd(row)`(일반 default 판매가 = 신모델은 `salePrice`+`basePriceFxRate` 파생, legacy 는 `basePriceUsd`).
   - ⚠️ 마지막 폴백이 **`basePriceUsd ?? 0` 이 아니라 `defaultListUsd`** 인 게 중요하다 — 이전 구현은 `basePriceUsd` 가 null 인 브랜드 신모델 제품을 현장모드에서 **$0 으로 표시·청구**했다(공짜 판매). 회귀 가드는 `__tests__/onsite-pricing.spec.ts`.
-  - 국가별 **할인·캠페인·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없고 할인 개념도 없다). 응답의 `freeShipping` 은 현장모드에서 의미 없는 파생값이다.
+  - 국가별 **할인·캠페인·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없고 할인 개념도 없다). 현장 응답의 `freeShipping` 은 항상 `false` 다 — 소매 국가 행의 값을 흘리면 부스 화면에 엉뚱한 "무료배송" 배지가 뜬다.
+  - **분기 위치**: 현장/일반은 `PricingCtx.onsite` 로 갈리고 판정은 `attachCustomerPricing()` **안**에서 끝난다. 호출부가 DTO 를 사후에 덮어쓰지 않는다 — 예전엔 목록·단건이 각자 `delete bag.onsitePriceUsd` 로 원본을 지웠고, 그 손으로 관리하던 목록에 새 컬럼(`onsiteSettleKrw`)이 누락돼 공개 응답으로 샜다. 지금은 현장 원본 4종(`onsitePriceUsd`/`onsiteSettleKrw`/`onsiteExcluded`/`onsiteCountryPrices`)이 전부 선언적 `StrippedPricingKeys` 로 벗겨진다.
 
 ## 참고
 
