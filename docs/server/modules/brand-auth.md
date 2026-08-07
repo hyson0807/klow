@@ -110,6 +110,8 @@
 
 - **탈퇴 요청은 세션 쿠키만 지우는 게 아니다** — 같은 트랜잭션에서 (1) `Brand.status = withdrawal_pending` + 요청자 스냅샷(`withdrawalRequested*`) 기록, (2) `canceled` 가 아닌 **모든 `BrandSubscription` 즉시 해지**(안 끊으면 cron 이 `brand.status` 를 안 봐서 탈퇴 브랜드 카드가 계속 결제된다), (3) **그 브랜드에 속한 모든 BrandUser 의 세션 삭제**. 이미 `withdrawn` 이거나 브랜드가 없으면 400.
 - **탈퇴 신청/완료 브랜드는 인증 자체가 막힌다** — 세션 발급은 403(`assertCanAuthenticate`), 기존 세션은 `me`/`getSession` 이 조회 시점에 삭제하고 null 을 돌려준다.
+- **접속 추적 (`lastSeenAt`, 2026-08)** — `getSession()` 이 세션 검증에 성공하면 `BRAND_LAST_SEEN_REFRESH_MS`(5분, `brand-session.ts`) 스로틀로 **`BrandSession.lastSeenAt` 과 `BrandUser.lastSeenAt` 두 곳에** 시각을 찍는다. `AdminSession.lastSeenAt` 과 같은 fire-and-forget 패턴이고, `BrandGuard` 가 모든 브랜드 요청마다 여기를 지나므로 스로틀이 필수다. 만료·탈퇴로 **삭제할 세션에는 기록하지 않도록** 두 삭제 분기 뒤에 놓는다.
+  **두 곳에 찍는 이유**: `BrandSession` 은 만료 시 하드 삭제되고 TTL 이 7일이라 그것만으로는 "20일 전 접속"과 "한 번도 접속 안 함"이 구분되지 않는다. 계정 레벨 미러인 `BrandUser.lastSeenAt` 이 **어드민 대시보드 브랜드 활동 지표의 접속 축 정본**이다([stats](./stats.md) `/brand-activity`). 마이그레이션 `add_brand_last_seen` 은 추가 전용(롤링 안전)이지만 **과거 기록은 복구 불가 — 전진 채움만** 된다.
 - **Google `mode` 분기**: `mode=login`(LoginModal 발) 은 **신규 계정을 만들지 않고**, 미가입이면 `BRAND_FRONTEND_URL/?signup=guide` 로 보내 랜딩에서 슬러그부터 입력하게 한다. 그 외(기본 `signup`)는 `slug` 쿠키로 brand draft 까지 만든다. 두 경로 모두 `googleId` 미매칭이어도 **이메일이 같은 기존 계정이 있으면 그 계정에 `googleId` 를 링크**한다(신규 생성 아님).
 
 ## 참고
