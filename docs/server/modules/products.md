@@ -45,7 +45,10 @@
 - **`sort`**: `discount_desc`(=`discount` desc) / `popular`(=`rating` desc → `reviewCount` desc — 삭제된 discover 모듈의 bestsellers 정렬을 승계한 "추천/인기" 단일 출처). 미지정 시 `brandId` 필터가 있으면 어드민 수동 정렬(`order` asc → `createdAt` desc), 그 외 `updatedAt` desc.
 - **`country`**: ISO2 목적국. 위 "공개 응답의 가격 필드" 참고(미지정 US).
 - **`campaign`**: 인플루언서 캠페인 링크 유입 시의 캠페인 code. 서버가 재검증해 대상 브랜드·국가일 때만 할인을 적용한다([campaigns](./campaigns.md)).
-- **`mode=onsite`**: 현장(박람회 부스) QR 모드. **`brandId` 와 함께일 때만 유효** — 목록에서 `onsiteExcluded=true` 제품을 숨기고, 표시가를 `onsitePriceUsd ?? basePriceUsd` 단일가로 덮는다(할인/취소선 없음, `customerDiscountPercent=0`). 현장주문 생성(`orders.createOnsite`)이 정확히 같은 값을 청구하므로 표시가==청구가. raw `onsitePriceUsd`/`onsiteExcluded` 필드는 응답에서 제거된다. (상세 라우트는 `brandId` 없이 `mode=onsite` 만으로 표시가를 덮는다.)
+- **`mode=onsite`**: 현장(박람회 부스) QR 모드. **`brandId` 와 함께일 때만 유효** — 목록에서 `onsiteExcluded=true` 제품을 숨기고, 표시가를 `onsitePriceLine()` 이 산출한 단일가로 덮는다(할인/취소선 없음, `customerDiscountPercent=0`). 현장주문 생성(`orders.createOnsite`)이 **같은 함수**로 청구액을 산출하므로 표시가==청구가. raw `onsitePriceUsd`/`onsiteExcluded` 필드는 응답에서 제거된다. (상세 라우트는 `brandId` 없이 `mode=onsite` 만으로 표시가를 덮는다.)
+  - **가격 우선순위**: `?country=` 목적국의 `ProductOnsiteCountryPrice.priceLocal`(현지통화 → `customerUsdCentsFromLocal` 로 USD 센트 환산) > `Product.onsitePriceUsd`(브랜드가 정한 기준 현장가) > `defaultListUsd(row)`(일반 default 판매가 = 신모델은 `salePrice`+`basePriceFxRate` 파생, legacy 는 `basePriceUsd`).
+  - ⚠️ 마지막 폴백이 **`basePriceUsd ?? 0` 이 아니라 `defaultListUsd`** 인 게 중요하다 — 이전 구현은 `basePriceUsd` 가 null 인 브랜드 신모델 제품을 현장모드에서 **$0 으로 표시·청구**했다(공짜 판매). 회귀 가드는 `__tests__/onsite-pricing.spec.ts`.
+  - 국가별 **할인·캠페인·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없고 할인 개념도 없다). 응답의 `freeShipping` 은 현장모드에서 의미 없는 파생값이다.
 
 ## 참고
 

@@ -29,8 +29,15 @@
   status 는 `PATCH /admin/orders/:id/status` 로 **전진만** 가능(역행 400, `cancelled` 는 재전이 불가)하고,
   `cancelled` 로 가는 유일한 경로는 환불/취소 액션(`/refund`, `/cancel`, `guest-cancel`)이다.
 - **현장(onsite) 주문**: 박람회 부스 QR 결제 — `channel='onsite'`, 배송지·캐리어·배송비 없음(`shippingFeeUsd=0`),
-  단가는 `Product.onsitePriceUsd ?? basePriceUsd`, `onsiteExcluded` 제품은 차단. 결제 성공 시 송장 없이 바로
-  `completed` 로 전이된다(`payment.markPaid`).
+  `onsiteExcluded` 제품은 차단. 결제 성공 시 송장 없이 바로 `completed` 로 전이된다(`payment.markPaid`).
+  - 단가는 **`onsitePriceLine()`** — 표시 경로(`products.service` 의 `mode=onsite`)와 같은 함수라 표시가==청구가.
+    우선순위·$0 폴백 규칙은 [`products.md`](./products.md) 의 `mode=onsite` 항목 참고.
+  - **`countryCode` 는 배송지가 아니라 가격 기준국**이다(현장은 배송이 없다). 브랜드가 그 나라에 현장가를
+    핀해뒀으면 그 값으로 청구된다. optional 이며 미지정 시 `US`(표시 경로 기본값과 같아 일치가 유지된다).
+    파생은 `pricingIso2()` 단일 출처. 이 값은 감사 추적을 위해 `Order.countryCode` 에 저장된다 — 현장주문은
+    송장을 만들지 않으므로 `countryCode` 의 유일한 소비처인 shipments 경로와 무관하다.
+  - ⚠️ 국가 핀이 있는데 그 통화의 FX 행이 없으면 **`billingRate` 가 차단**한다(일반 주문과 공유하는 가드).
+    안 막으면 `¥3,420` 을 `$3,420` 로 청구한다.
 - **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `chargeable-brands.ts`(청구 대상 브랜드·배송비 스냅샷·읽기 짝), `brand-weights.ts`(브랜드별 청구중량 → 캐리어 분기), `guest-order-token.ts`(비회원 주문 HMAC 토큰)
 
 ## admin-orders.controller.ts (`@Controller('admin/orders')`)
@@ -52,7 +59,7 @@
 | Method | Path                                | Guard            | 기능                                                                          |
 |--------|-------------------------------------|------------------|-------------------------------------------------------------------------------|
 | POST   | `/v1/orders`                        | OptionalUser     | 주문 생성 (약관 3종 동의 + IP + fxRateSnapshot 저장, `Zod literal(true)` 검증). 비회원이면 `userId=null` + 해당 주문 한정 HMAC 게스트 쿠키 발급. 응답은 `{ id }` |
-| POST   | `/v1/orders/onsite`                 | OptionalUser     | 현장(박람회 부스) QR 주문 생성 — 배송지 없이 `email` + `items` + 동의 2종(`agreedToTerms`·`agreedToPgDataSharing`). 게스트면 동일하게 주문 바인딩 쿠키 발급. 응답 `{ id }` |
+| POST   | `/v1/orders/onsite`                 | OptionalUser     | 현장(박람회 부스) QR 주문 생성 — 배송지 없이 `email` + `items` + `countryCode?`(가격 기준국, 미지정 US) + 동의 2종(`agreedToTerms`·`agreedToPgDataSharing`). 게스트면 동일하게 주문 바인딩 쿠키 발급. 응답 `{ id }` |
 | POST   | `/v1/orders/quote`                  | public           | 결제 전 가격 견적 — 목적국 기준 라인 단가/배송비/합계(read-only). 주문 생성과 **동일 `priceLine`** 이라 견적가 == 청구가. 배송 불가면 `shippable:false` |
 | GET    | `/v1/orders/mine`                   | User             | 내 주문 목록 — `paymentStatus ∈ {paid, refunded}` 만, 최근 50건. (미결제·실패 주문은 `/v1/orders/:id` 직접 접근으로만) |
 | POST   | `/v1/orders/lookup`                 | public (TIGHT)   | 비회원 주문 조회 — `orderId`(cuid) + `email` 매칭                              |

@@ -42,7 +42,7 @@
 | POST   | `/v1/brand/products/bulk`         | 상품 일괄 생성 (draft 다건)                                       |
 | GET    | `/v1/brand/products`              | 내 브랜드 상품 목록                                               |
 | PATCH  | `/v1/brand/products/reorder`      | 상품 노출 순서 변경 (드래그&드롭, `ids[]` 최대 500 — 자기 브랜드 소유만 반영) |
-| PUT    | `/v1/brand/products/onsite`       | 현장(박람회 부스) QR 판매가 일괄 저장 (`items[]{id, onsitePriceUsd(센트\|null), onsiteExcluded}` 최대 500, `:id` 위에 선언) |
+| PUT    | `/v1/brand/products/onsite`       | 현장(박람회 부스) QR 판매가 일괄 저장 (`items[]{id, onsitePriceUsd(센트\|null), onsiteExcluded, settleKrw(₩\|null), countryPrices[]{iso2, priceLocal}}` 최대 500, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id/hidden`   | 상품 가리기 On/Off 토글 (`Product.hidden`, status 유지·노출/판매만 제외; 단일 필드 전용 PATCH, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id`          | 상품 수정 (자기 brandId 확인)                                     |
 | DELETE | `/v1/brand/products/:id`          | 상품 삭제                                                         |
@@ -69,6 +69,16 @@
 - **현장 QR 판매가(`PUT /products/onsite`)**: `onsitePriceUsd=null` 이면 기본가로 되돌리고,
   `onsiteExcluded` 는 그 제품을 현장 판매에서 제외한다. 서버가 `brandId` 로 소유권을 재검증해
   남의 productId 가 섞여 오면 조용히 무시하고, `{ ok, saved }`(반영된 건수)를 돌려준다.
+  - `settleKrw` 는 브랜드가 친 정산가(₩) **원문**이다 — 표시 전용이고 청구는 `onsitePriceUsd`(USD 센트).
+    `salePrice ↔ basePriceUsd` 와 같은 관계로, USD 센트 왕복 시 붙는 ceil/floor 잔차(~13원)가 입력칸에
+    되비치는 걸 막는다. `null` 이면 클라가 `onsitePriceUsd` 에서 역산해 보여준다.
+  - `countryPrices[]{iso2, priceLocal}` 는 국가별 현장가 핀. **현지통화 major** 로 저장하며 일반 판매의
+    `ProductCountryPrice.priceLocal` 과 의미가 같다(현장은 할인·무료배송이 없어 가격 하나뿐).
+    ⚠️ **제품별 replace-all** 이라 클라는 늘 그 제품의 전체 배열을 보내야 한다.
+  - ⚠️ 저장 테이블이 `ProductOnsiteCountryPrice` 로 **분리돼 있다** — 스튜디오의 일반 국가별 가격
+    (`ProductCountryPrice`)도 replace-all 이라, 한 테이블을 공유하면 두 저장이 서로의 행을 지운다.
+  - `settleKrw`/`countryPrices` 는 신규 필드라 nullable / `.default([])` — 서버를 먼저 배포해도
+    구 klow_brand 가 400 을 맞지 않는다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
