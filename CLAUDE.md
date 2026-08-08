@@ -74,7 +74,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 
 `src/` 를 정리하면서 세운 불변식이다. 어기면 정리 전 상태로 되돌아간다.
 
-1. **`src/` 는 정확히 3레벨: `src/<area>/<module>/<file>.ts`.** 모듈 안에 `__tests__/` 외 하위 폴더를 만들지 않는다. 이 깊이를 지키기 때문에 상대경로가 최대 `../../` 로 끝나고 **`@/` 경로 별칭이 필요 없다** (별칭은 의도적으로 도입하지 않았다 — `nest build` 가 순수 tsc 라 `tsc-alias` 없이는 `dist/` 가 깨진다).
+1. **`src/` 는 정확히 3레벨: `src/<area>/<module>/<file>.ts`.** 모듈 안에 `__tests__/` 외 하위 폴더를 만들지 않는다. 이 깊이를 지키기 때문에 소스 파일의 상대경로가 최대 `../../` 로 끝나고(`__tests__/` 만 한 단계 더 깊어 `../../../`) **`@/` 경로 별칭이 필요 없다** (별칭은 의도적으로 도입하지 않았다 — `nest build` 가 순수 tsc 라 `tsc-alias` 없이는 `dist/main` 이 `MODULE_NOT_FOUND` 로 죽는다).
 2. **`src/common/` 은 `src/modules/` 를 절대 import 하지 않는다.** 지금 0건이고, 0건을 유지한다.
 3. **`common/` 입주 조건: 서로 다른 모듈 2개 이상이 쓰고 도메인 로직이 없을 것.** 소비자가 하나면 그 소비자 모듈 안에 둔다. 도메인 상수(쿠키 이름 등)는 소유 모듈이 갖는다 — `common/cookies.ts`(배관) vs `modules/auth/session.ts`(`klow_sid`) 가 그 예다.
 4. **모듈 파일은 평면.** 분류는 폴더가 아니라 **파일명 접미사**가 한다: `.controller` / `.service` / `.module` / `.cron` / `.client` / `.strategy` / `.adapter` / `.mapper` / `.types` / `.prompts`. 컨트롤러는 여기에 **URL surface 접두**를 더 붙인다: `admin-` / `brand-` / `public-` / `webhook-`. 순수 헬퍼는 접미사 없는 명사(`brand-weights.ts`). `helpers/` 같은 폴더를 새로 만들면 분류 축이 둘이 되어 더 나빠진다.
