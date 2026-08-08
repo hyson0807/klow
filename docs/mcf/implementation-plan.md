@@ -194,7 +194,7 @@ src/modules/amazon/
 현재 `executeCreate(order, group, shippingFeeShareUsd, adminId)` (:644–760): `carrierForBrand`(:670) →
 `buildPayload` → `Shipment` 저장 → `efs.newCreateShipment`(:733).
 `shippingFeeShareUsd` 는 호출부(`createForOrder`/재발급)가 `perBrandShareUsd(order, brandId, groups.length)`
-(`orders/chargeable-brands.ts`)로 구해 넘기는 **고객 선결제 배송비의 이 브랜드 몫**이다 — EFS 는 이걸 27번 필드에 싣는다.
+(`pricing/chargeable-brands.ts`)로 구해 넘기는 **고객 선결제 배송비의 이 브랜드 몫**이다 — EFS 는 이걸 27번 필드에 싣는다.
 MCF 는 Amazon 에 보낼 곳이 없으므로 **`requestPayload` 스냅샷에만 남긴다**(§8-4 (B) 를 택하면 정산이 같은 함수로 다시 구한다).
 
 **변경**: `carrierForBrand` 직후 채널 판정. **executeCreate 의 반환 계약을 반드시 지킨다** —
@@ -352,7 +352,7 @@ if (channel === 'AMAZON_MCF') {
 | **(A)** KLOW 보유 | 없음(코드 변경 0) | v1 파일럿 기본. 브랜드는 EFS 후청구가 사라지는 대신 Amazon 수수료를 전액 부담 — 유불리는 `Amazon 수수료 ⋛ 실측−선결제` |
 | **(B)** 브랜드 크레딧 *(권고)* | 정산 집계에 `+ perBrandShareUsd(order, brandId, brandCount) × Order.fxRateSnapshot` (MCF 송장만) | "선결제 = 그 브랜드 배송의 선납금" 정의를 채널 무관하게 유지. 무료배송 국가는 선결제 0 → 크레딧도 0(자동) |
 
-- (B) 를 택하면 **금액 출처는 반드시 `perBrandShareUsd`(`orders/chargeable-brands.ts`)** — EFS 27번·EFS 청구서와 같은 함수를 써야
+- (B) 를 택하면 **금액 출처는 반드시 `perBrandShareUsd`(`pricing/chargeable-brands.ts`)** — EFS 27번·EFS 청구서와 같은 함수를 써야
   세 곳(송장·청구서·정산 크레딧)의 값이 갈리지 않는다. legacy 주문(`shippingFeeByBrand=null`)은 균등분배 폴백이 이미 그 안에 있다.
 - (B) 의 파급: `settlement.service` 의 정산액이 더 이상 `Σ settlementPriceKrw × qty` 만이 아니게 되므로 **어드민 정산 후보/월별 집계·
   브랜드 정산 탭 표시까지 같이 손봐야 한다**(라인 단가와 배송 크레딧을 분리 표기 권장). 파일럿은 (A) 로 시작하고 별도 릴리스로 붙이는 게 안전.

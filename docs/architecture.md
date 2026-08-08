@@ -117,11 +117,33 @@ Some modules intentionally diverge from the multi-controller shape: `stats`/`upl
 
 ### Shared product selects & pricing
 
-`klow_server/src/modules/products/product-selects.ts` is the single place that owns product read shape **and** customer-facing price computation:
+These were one 758-line file (`products/product-selects.ts`) until they were split into two
+owners. The split line is **catalog gate vs. price computation** — keep it.
+
+**`klow_server/src/modules/products/product-selects.ts`** — the **catalog gate**: what counts as
+a visible/sellable product. Owned by the `products` module; `cart`, `creators`, `videos` read it.
 
 - `PRODUCT_LIST_SELECT` — the lean field set for cards (detail-only fields excluded to keep list payloads small). `concerns` is in the list select so the free-text tags can render on cards; `recommendedFor` is detail-only.
 - `PUBLIC_PRODUCT_WHERE` / `PURCHASABLE_PRODUCT_WHERE` — the **single visibility+purchasability gate** (they are identical: subscription-gated for self-signup brands, exempt for admin-created/legacy brands).
-- `priceLine(row, cp, rateKrw, fx)` — the one function that turns a product row + optional `ProductCountryPrice` + FX into the customer price line, so **display price == charged price** across cards, order creation, and quotes. See the Pricing section.
+- `hasSellablePrice` / `SELLABLE_PRICE_WHERE` — the completeness half of that gate. ⚠️ It must stay
+  in lockstep with `pricing/`'s default-price derivation, or you get products that show but can't be bought.
+
+**`klow_server/src/pricing/`** — the **price kernel**, a sibling of `modules/` rather than a member
+of it, because six modules depend on it (products, orders, cart, videos, creators, brand-applications).
+A barrel in the same style as `common/validation/`:
+
+| file | owns |
+|---|---|
+| `formulas.ts` | the 5 arithmetic primitives (PG fee, KRW↔USD, discount, per-brand shipping) |
+| `fx.ts` | `resolveFxRate` (settlement KRW) + `resolveCurrencyUsdRate{,Strict}` (display/billing local currency) |
+| `country-price.ts` | `ProductCountryPrice` select/lookup/write, `resolveFreeShipping` |
+| `campaign.ts` | campaign discount context + `campaignPctFor` |
+| `price-line.ts` | `priceLine` / `onsitePriceLine` / `attachCustomerPricing` |
+| `chargeable-brands.ts` | which brands get charged shipping, and each one's share |
+
+`priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` is the one function that turns a product
+row + optional `ProductCountryPrice` + FX into the customer price line, so **display price ==
+charged price** across cards, order creation, and quotes. See the Pricing section.
 
 ---
 
@@ -235,7 +257,7 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 
 ### Pricing (판매가 고정 → 정산 유동) → [`pricing-model.md`](./pricing-model.md)
 
-**가격 정본은 고정 판매가**이고 **마진/정산가는 그 고정가에서 역산**된다 — 미핀 국가 default 는 **두 모델**: 브랜드 신모델(`Product.basePriceFxRate` 有)은 정산가 저장값(`salePrice`≈원가+마진)에서 `ceil(salePrice/0.95/basePriceFxRate×100)` 로 파생하고(저장 시점 fx 로 **판매가 고정**), 어드민/legacy 는 단일 `Product.basePriceUsd`. **판매가에 물류비가 들어가지 않으므로 미핀 default 는 전 국가 동일**하고, 국가차는 핀·할인에서만 생긴다(2026-07-28 전환). 국가별 핀 `ProductCountryPrice.priceLocal`(현지통화 고정, 없으면 default 상속). **브랜드 정산가(KRW)는 주문 시점 환율로 역산**되어 환율 리스크를 브랜드가 진다: `floor(customerPriceUsd/100 × usdKrwRate × (1−0.05))` — 물류비 차감 없음(배송비는 고객이 별도 결제하고 실측 차액만 브랜드 후청구). 역산 정산가 < `costKrw` 면 `belowCost` 경고(구매·저장은 막지 않음). 제품 무게는 가격에 영향 없음. 국가별 할인(`discountPct`, 기간 없음)은 판매가에 `×(1−pct/100)`, 있으면 글로벌 `Product.discount` 대신 우선(스택 안 함). 완성도/구매 게이트 = **`hasSellablePrice`**(`basePriceUsd>0 OR (basePriceFxRate≠null AND salePrice>0)`). 배송비 정본은 `SeedingRate` 국가×무게 요율표(어드민 **배송비용** 탭)이고, 고객 결제 배송비는 그 **500g 티어 값 그대로** — **가격과 무관하다**. **무료배송은 국가별 설정**(`ProductCountryPrice.freeShipping`, 2026-07-29)이다 — 목적국 행이 true 인 제품만 그 나라에서 배송비가 면제된다(행 없음 = 유료, `resolveFreeShipping(row, iso2)`). 배송비는 브랜드 단위(한 브랜드=한 송장)라 **그 브랜드 라인이 전부 무료일 때만** 면제(`chargeableBrandIds(lines, iso2)`). 공개 응답의 `freeShipping` 은 `?country=` 기준 파생값이라 카트에 스냅샷하면 배송지 변경 시 어긋난다 — klow_web 은 배송비 금액·라벨을 서버 견적으로만 그린다. **입력 방식은 앱마다 다르지만 저장 정본은 동일**(cost-pricing.ts 미러): **어드민** = 원가 + 기본 판매가(USD) 직접 입력(마진 입력란 없음 — 역산 표시); **브랜드** = 기본가는 원가 + 마진(KRW) **편의 입력** → 앱이 고정 판매가로 변환·저장 + 서버가 basePriceFxRate 스냅샷(국가별 default 파생), 국가별은 **현지통화 판매가 직접 입력 → priceLocal 핀 그대로 저장**(마진/정산가는 읽기전용 역산). **서버가 목적국별 최종가를 계산해 응답에 싣는다**(공개 read `?country=`, 미지정 US; 응답 `customerPriceUsd`/`listPriceUsd`/`customerDiscountPercent`). 단일 계산 출처 `product-selects.ts priceLine()` — 표시·주문·견적이 모두 거쳐 **표시가 == 청구가** 보장. 미설정국·EFS 제외구역·**핀 국가인데 통화 환율 미해결**은 구매 차단(과청구 방지).
+**가격 정본은 고정 판매가**이고 **마진/정산가는 그 고정가에서 역산**된다 — 미핀 국가 default 는 **두 모델**: 브랜드 신모델(`Product.basePriceFxRate` 有)은 정산가 저장값(`salePrice`≈원가+마진)에서 `ceil(salePrice/0.95/basePriceFxRate×100)` 로 파생하고(저장 시점 fx 로 **판매가 고정**), 어드민/legacy 는 단일 `Product.basePriceUsd`. **판매가에 물류비가 들어가지 않으므로 미핀 default 는 전 국가 동일**하고, 국가차는 핀·할인에서만 생긴다(2026-07-28 전환). 국가별 핀 `ProductCountryPrice.priceLocal`(현지통화 고정, 없으면 default 상속). **브랜드 정산가(KRW)는 주문 시점 환율로 역산**되어 환율 리스크를 브랜드가 진다: `floor(customerPriceUsd/100 × usdKrwRate × (1−0.05))` — 물류비 차감 없음(배송비는 고객이 별도 결제하고 실측 차액만 브랜드 후청구). 역산 정산가 < `costKrw` 면 `belowCost` 경고(구매·저장은 막지 않음). 제품 무게는 가격에 영향 없음. 국가별 할인(`discountPct`, 기간 없음)은 판매가에 `×(1−pct/100)`, 있으면 글로벌 `Product.discount` 대신 우선(스택 안 함). 완성도/구매 게이트 = **`hasSellablePrice`**(`basePriceUsd>0 OR (basePriceFxRate≠null AND salePrice>0)`). 배송비 정본은 `SeedingRate` 국가×무게 요율표(어드민 **배송비용** 탭)이고, 고객 결제 배송비는 그 **500g 티어 값 그대로** — **가격과 무관하다**. **무료배송은 국가별 설정**(`ProductCountryPrice.freeShipping`, 2026-07-29)이다 — 목적국 행이 true 인 제품만 그 나라에서 배송비가 면제된다(행 없음 = 유료, `resolveFreeShipping(row, iso2)`). 배송비는 브랜드 단위(한 브랜드=한 송장)라 **그 브랜드 라인이 전부 무료일 때만** 면제(`chargeableBrandIds(lines, iso2)`). 공개 응답의 `freeShipping` 은 `?country=` 기준 파생값이라 카트에 스냅샷하면 배송지 변경 시 어긋난다 — klow_web 은 배송비 금액·라벨을 서버 견적으로만 그린다. **입력 방식은 앱마다 다르지만 저장 정본은 동일**(cost-pricing.ts 미러): **어드민** = 원가 + 기본 판매가(USD) 직접 입력(마진 입력란 없음 — 역산 표시); **브랜드** = 기본가는 원가 + 마진(KRW) **편의 입력** → 앱이 고정 판매가로 변환·저장 + 서버가 basePriceFxRate 스냅샷(국가별 default 파생), 국가별은 **현지통화 판매가 직접 입력 → priceLocal 핀 그대로 저장**(마진/정산가는 읽기전용 역산). **서버가 목적국별 최종가를 계산해 응답에 싣는다**(공개 read `?country=`, 미지정 US; 응답 `customerPriceUsd`/`listPriceUsd`/`customerDiscountPercent`). 단일 계산 출처 `pricing/price-line.ts priceLine()` — 표시·주문·견적이 모두 거쳐 **표시가 == 청구가** 보장. 미설정국·EFS 제외구역·**핀 국가인데 통화 환율 미해결**은 구매 차단(과청구 방지).
 
 ### Payment — Eximbay consumer checkout → [`payment-integration.md`](./payment-integration.md)
 

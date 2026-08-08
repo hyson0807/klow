@@ -24,7 +24,7 @@
 - **ticket 은 in-process `Map`** — login step1 ↔ step2 사이의 단명 중간값. `totp` 5분 / `setup` 15분 TTL, 1회 소모. **단일 인스턴스 전용**(수평 확장 시 Redis/DB 로 이전 필요).
 - `verify-totp` 성공 시 최초 1회 `totpVerifiedAt` 을 채워 enroll 을 확정하고, 락 윈도우 내 실패 기록을 지운다.
 
-## admins.controller.ts (`@Controller('admin/admins')`)
+## admin-admins.controller.ts (`@Controller('admin/admins')`)
 
 > 전체 라우트 `@UseGuards(AdminGuard, SuperAdminGuard)` — **`super` role 만 접근**. Throttle 없음.
 

@@ -6,9 +6,9 @@
 - **자기 브랜드 연결**: `BrandUser.brandId` (승인 후에도 본인 상품 추가 가능; 추가 상품은 `pending` 으로 시작)
 - **승인은 구독 게이트로 이관됨**: 결제 = 자동 승인 정책이라 **어드민 검수 큐가 없다**. 과거 `admin-brand-applications.controller.ts`(approve/reject/unapprove/product approve·reject) 는 제거되었고, 그 기능은 [subscription](./subscription.md) 의 `/admin/brand-subscriptions/*` 로 옮겨졌다. 이 모듈은 이제 **브랜드 셀프-서비스(공개) 컨트롤러만** 남았다.
 - **입점 흐름**: studio OnboardingGate 에서 송화인 4 + 계좌 3 필드를 저장 → `submit-for-review` 가 `pgCustomerKey` 발급 → NicePay 포스타트 빌링 결제 → `approveApplication()` 자동 승인 (자세히는 [subscription](./subscription.md) + `../../../docs/brand-subscription.md`).
-- **관련 파일**: `brand-applications.service.ts`, `public-brand-applications.controller.ts`, `draft-brand.ts`(공통 draft 데이터·P2002 매핑)
+- **관련 파일**: `brand-applications.service.ts`, `brand-applications.controller.ts`, `draft-brand.ts`(공통 draft 데이터·P2002 매핑)
 
-## public-brand-applications.controller.ts (`@Controller('v1/brand')`)
+## brand-applications.controller.ts (`@Controller('v1/brand')`)
 
 > 전체 라우트 `BrandGuard` (자기 brandId scope).
 

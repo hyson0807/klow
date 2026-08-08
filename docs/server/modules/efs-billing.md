@@ -32,7 +32,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 모달이 보여주는 "무료배송 vs 고객 부담" 부담액과 같은 규칙이다. **여기서 무료배송 플래그를 직접 읽지는
 않는다** — 그 브랜드의 `perBrandShareUsd` 가 0 으로 스냅샷돼 있어 자동으로 전액이 된다.
 
-- **고객 선결제액 정본**: `perBrandShareUsd`(`orders/chargeable-brands.ts`) → `Order.fxRateSnapshot` 로 KRW 환산.
+- **고객 선결제액 정본**: `perBrandShareUsd`(`pricing/chargeable-brands.ts`) → `Order.fxRateSnapshot` 로 KRW 환산.
   **송장 발급이 EFS 27번(배송비) 필드에 박는 값과 같은 함수**라 송장 == 청구서가 구조적으로 보장된다.
   스냅샷(`Order.shippingFeeByBrand`)이 없는 legacy 주문은 `총배송비 / 브랜드수` 균등분배로 폴백한다
   (2026-07-28 이전 주문 전부가 이 경로). ⚠️ 그 **분모는 주문 라인의 브랜드 수**(`orderBrandCount`)다 —
@@ -92,7 +92,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 
 `efs-billing.service.ts`(`monthlyReport`·`saveCharge`·`extractFromSettlement`·`importPreview/Apply`·
 `feeResolver`·**`buildStatement`**·`renderXlsx`+시트 빌더·`exportExcel`·`publish`·`markPaid`·브랜드 열람),
-`admin-efs-billing.controller.ts`. 선결제 share 는 `orders/chargeable-brands.ts` `perBrandShareUsd`,
+`admin-efs-billing.controller.ts`. 선결제 share 는 `pricing/chargeable-brands.ts` `perBrandShareUsd`,
 EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settlement/brand-settlement.controller.ts`.
 
 ## admin-efs-billing.controller.ts (`@Controller('admin/efs-billing')`)

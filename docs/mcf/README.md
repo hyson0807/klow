@@ -44,7 +44,7 @@ Fulfillment)되게 하는 기능의 설계·구현 문서 모음.
 | 혼합 주문 | **브랜드 단위 all-or-nothing** — 브랜드 라인 중 하나라도 재고 부족 시 그 브랜드 전체 EFS |
 | 배송 범위(v1) | **도메스틱 MCF 만** — 도착국 == Amazon 마켓플레이스 창고국 (크로스보더 미시도) |
 | 시딩 | **v1 에서 항상 EFS (MCF 는 v2 연기)** — 시딩 라인은 `OrderItem.productId` 가 null 이고, `SeedingLink.selectedSkus`/`selectionSkus` 는 **제품 ID 가 아니라 자유텍스트 제품명 라벨**이라 현 스키마로는 SKU/재고 판정 경로를 못 탄다. 시딩 MCF 는 선택 필드에 실제 productId 를 심는 스키마 변경(v2) 이후로 미룬다 |
-| 가격(판매가·정산가) | **채널 무관 1벌 — MCF 전용 가격 트랙 없음.** 2026-07-28 전환으로 판매가·정산가에서 물류비가 완전히 빠졌다(`판매가USD = ceil(salePrice/0.95/basePriceFxRate ×100)`, `정산가 = floor(청구USD × fx × 0.95)` — `product-selects.ts priceLine()`). 물류비가 애초에 안 들어가니 **MCF 라고 뺄 게 없다** → 옛 "2벌·`mcfMarginKrw`·물류비/2 차감 생략" 설계 **폐기**. 고객 표시가·결제가·브랜드 정산가가 EFS/MCF 동일 |
+| 가격(판매가·정산가) | **채널 무관 1벌 — MCF 전용 가격 트랙 없음.** 2026-07-28 전환으로 판매가·정산가에서 물류비가 완전히 빠졌다(`판매가USD = ceil(salePrice/0.95/basePriceFxRate ×100)`, `정산가 = floor(청구USD × fx × 0.95)` — `pricing/price-line.ts priceLine()`). 물류비가 애초에 안 들어가니 **MCF 라고 뺄 게 없다** → 옛 "2벌·`mcfMarginKrw`·물류비/2 차감 생략" 설계 **폐기**. 고객 표시가·결제가·브랜드 정산가가 EFS/MCF 동일 |
 | 고객 결제 배송비 | **채널과 무관하게 주문 시점에 확정**(`500g 요율/fx × 청구 대상 브랜드수`, 무료배송은 국가별 `ProductCountryPrice.freeShipping`). 라우팅은 **결제 이후**라 MCF 로 나가도 고객이 낸 배송비는 그대로다 — MCF 는 배송비 계산·견적·카트 경로를 **전혀 건드리지 않는다** |
 | refresh token | **암호화 저장** (Admin TOTP AES-256-GCM 선례 — 단, 키는 신규 `AMAZON_TOKEN_ENCRYPTION_KEY` 로 분리해 독립 회전) |
 | 정산(매출) | **채널 판별 불필요** — `OrderItem.settlementPriceKrw`(주문 시점 역산 스냅샷)를 그대로 `Σ × qty`. **발급 시 정산가를 다시 쓰지 않는다**(F8). 남는 작업은 delivered gate(`latestStatusCode='33'`, Prisma where 4곳)를 `settleableDeliveredWhere(): Prisma.ShipmentWhereInput`(EFS `'33'`+MCF 종료상태) where-빌더로 치환하는 것뿐 |
@@ -61,9 +61,9 @@ Fulfillment)되게 하는 기능의 설계·구현 문서 모음.
 - 발급 엔진(분기 지점): `klow_server/src/modules/shipments/shipments.service.ts` `executeCreate`(:644)
 - 결제/시딩 트리거: `klow_server/src/modules/payment/payment.service.ts` `markPaid`(→ `createForOrder` :571),
   `klow_server/src/modules/seeding/seeding.service.ts` `claim`(→ :653)
-- **가격 정본(변경 금지 · MCF 는 읽기만)**: `products/product-selects.ts` `priceLine()`,
-  `common/pricing.ts`(`settlementKrwFromCustomerUsd`/`perBrandShippingFeeUsdCents`),
-  `orders/chargeable-brands.ts`(`chargeableBrandIds`/`shippingFeeByBrand`/`perBrandShareUsd`) — 전체 모델은
+- **가격 정본(변경 금지 · MCF 는 읽기만)**: `pricing/price-line.ts` `priceLine()`,
+  `pricing/formulas.ts`(`settlementKrwFromCustomerUsd`/`perBrandShippingFeeUsdCents`),
+  `pricing/chargeable-brands.ts`(`chargeableBrandIds`/`shippingFeeByBrand`/`perBrandShareUsd`) — 전체 모델은
   [`../pricing-model.md`](../pricing-model.md)
 - 정산 게이트: `settlement/settlement.service.ts`(`EFS_STATUS_DELIVERED` 4곳) ·
   배송비 후청구: `efs-billing/efs-billing.service.ts`(일반+시딩 공용, MCF 는 `efsTrackingNumber` 필터로 자연 제외 — F10)

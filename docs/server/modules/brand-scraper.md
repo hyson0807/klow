@@ -5,8 +5,8 @@
 - **입력이 두 종류다**: `analyze-homepage` 만 **서버가 URL 을 직접 fetch** 하고, `analyze-product`/`analyze-deck` 은 **클라가 올린 이미지 배열(`imageUrls`)** 을 그대로 OpenAI Vision 에 태운다(서버가 그 이미지를 fetch 하지 않는다).
 - **LLM**: OpenAI chat completions (`OPENAI_API_KEY` 필수, 모델은 `OPENAI_MODEL` ?? `gpt-4o-mini`), `response_format: json_object` + zod 검증. 응답이 비었거나 JSON/스키마 검증에 실패하면 **502(BadGateway)**.
 - **홈페이지 fetch 전략**: HTTP fetch(5s 타임아웃) → 본문이 2KB 미만이거나 `__next`/`root` 빈 컨테이너면 SPA 로 보고 **Playwright(chromium, 15s)** 폴백. 본문이 비면 502. chromium 미설치 등 브라우저 기동 실패는 503.
-- **SSRF 방어**: 사용자가 넣은 홈페이지 URL 을 그대로 fetch 하므로, `common/ssrf-guard.ts` 의 `assertPublicUrl` 로 **목적지 호스트가 공인 IP 로 리졸브되는지 먼저 검사**해 사내망·클라우드 메타데이터(169.254.169.254 등) 대역을 차단한다(`BlockedHostError` → 400 "접근할 수 없는 주소입니다"). HTTP fetch 는 `redirect:'manual'` 로 최대 5홉을 돌며 홉마다 재검증하고(follow 가 사후 호스트검사를 우회하므로), Playwright fetch 도 브라우저가 만드는 모든 http(s) 요청(네비게이션·리다이렉트·서브리소스)에 동일 가드를 건다.
-- **관련 파일**: `brand-scraper.service.ts`, `brand-scraper.controller.ts`, `scraper.prompts.ts`, `common/ssrf-guard.ts`
+- **SSRF 방어**: 사용자가 넣은 홈페이지 URL 을 그대로 fetch 하므로, `brand-scraper/ssrf-guard.ts` 의 `assertPublicUrl` 로 **목적지 호스트가 공인 IP 로 리졸브되는지 먼저 검사**해 사내망·클라우드 메타데이터(169.254.169.254 등) 대역을 차단한다(`BlockedHostError` → 400 "접근할 수 없는 주소입니다"). HTTP fetch 는 `redirect:'manual'` 로 최대 5홉을 돌며 홉마다 재검증하고(follow 가 사후 호스트검사를 우회하므로), Playwright fetch 도 브라우저가 만드는 모든 http(s) 요청(네비게이션·리다이렉트·서브리소스)에 동일 가드를 건다.
+- **관련 파일**: `brand-scraper.service.ts`, `brand-scraper.controller.ts`, `scraper.prompts.ts`, `brand-scraper/ssrf-guard.ts`
 
 ## brand-scraper.controller.ts (`@Controller('v1/brand/scraper')`)
 

@@ -80,6 +80,6 @@
 
 | 읽는 곳                                                   | 무엇을                                                                                   |
 |-----------------------------------------------------------|------------------------------------------------------------------------------------------|
-| `common/fx.ts` `resolveFxRate(prisma)`                    | `KRW` 행의 `usdRate` = **정산 정본 환율**. 행이 없으면 `FX_RATE_FALLBACK`. 정산가 역산·주문 결제·`basePriceFxRate` 스냅샷이 공유 |
-| `products/product-selects.ts` `resolveCurrencyUsdRate` / `…Strict` | 목적국 현지통화 환율(핀 현지가 `priceLocal` → USD 환산). 관대 버전은 미매핑/무효 시 `1`(USD) 폴백 + 경고 로깅, **strict 버전은 `null` 반환** → `orders.service` 가 그 핀 상품 라인을 차단한다(¥1500 → $1500 과청구 방지) |
+| `pricing/fx.ts` `resolveFxRate(prisma)`                    | `KRW` 행의 `usdRate` = **정산 정본 환율**. 행이 없으면 `FX_RATE_FALLBACK`. 정산가 역산·주문 결제·`basePriceFxRate` 스냅샷이 공유 |
+| `pricing/fx.ts` `resolveCurrencyUsdRate` / `…Strict` | 목적국 현지통화 환율(핀 현지가 `priceLocal` → USD 환산). 관대 버전은 미매핑/무효 시 `1`(USD) 폴백 + 경고 로깅, **strict 버전은 `null` 반환** → `orders.service` 가 그 핀 상품 라인을 차단한다(¥1500 → $1500 과청구 방지) |
 | `shop/shop.service.ts` `getFxRate()`                      | `GET /v1/shop/fx-rate` 응답 — `{ usdKrwRate, updatedAt }`                                |

@@ -74,7 +74,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **원가 밑 경고**: 역산 정산가 < `Product.costKrw` 이면 `belowCost` — 브랜드/어드민 UI 가 경고, **구매·저장은 막지 않는다.**
 - 환율 **단일 테이블 `CurrencyFxRate`** 로 통합: `['KRW']` 행 = **정산 정본**(USD↔KRW, 정산 역산·결제·basePriceFxRate 스냅샷.
   수동 고정 manualOverride, cron 미갱신), 그 외 코드 = USD→현지통화(핀가 청구 환산 + 표시, 매일 cron + 수동 보정).
-  둘 다 어드민 **통화 환율(/currency-rates)** 페이지에서 관리. 정산 fx 는 `resolveFxRate`(`common/fx.ts`)가 KRW 행을 읽는다.
+  둘 다 어드민 **통화 환율(/currency-rates)** 페이지에서 관리. 정산 fx 는 `resolveFxRate`(`pricing/fx.ts`)가 KRW 행을 읽는다.
   실시간 아님 — 어드민 갱신 시 계단식. (구 `ShopSettings.usdKrwRate` 는 dormant, 후속 릴리스에서 드롭.)
 - **국가별 고객 배송비**는 `SeedingRate` 국가×무게 요율표의 **기준 무게(500g) 티어**(어드민 **배송비용** 탭,
   엑셀 `KLOW_시딩_가격표` 고객_가격표). 공개 응답엔 `customerShippingKrw` 로 실린다.
@@ -144,18 +144,18 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 
 - `customerPriceUsdCents(settlementKrw, fxRate)` / `customerUsdCentsFromLocal(priceLocal, currencyUsdRate)` /
   `settlementKrwFromCustomerUsd(customerUsdCents, fxRate)` / `applyDiscountUsdCents(cents, pct)` /
-  `shippingFeeUsdCents(rateKrw, fxRate, brandCount)`(브랜드 단위 반올림 × n) — `klow_server/src/common/pricing.ts`
-- `priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` — `product-selects.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
+  `shippingFeeUsdCents(rateKrw, fxRate, brandCount)`(브랜드 단위 반올림 × n) — `klow_server/src/pricing/formulas.ts`
+- `priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` — `pricing/price-line.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
   의 1라인 단일 출처. 표시(`attachCustomerPricing`)·주문 생성·견적(`quote`)이 모두 이 함수를 거쳐 "표시가 == 청구가"를 보장한다.
 - `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ **currencyUsdRate** + campaign. 물류비는 없다) /
-  `writeProductCountryPrices(tx, productId, rows)` — `product-selects.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice`/`brandRef` strip(`StrippedPricingKeys`).
+  `writeProductCountryPrices(tx, productId, rows)` — `pricing/country-price.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice`/`brandRef` strip(`StrippedPricingKeys`).
 - 물류비·캐리어: `resolveProductShipping(iso2, address, brandWeights)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
   요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`), 브랜드별 박스 무게는 `orders/brand-weights.ts` `brandChargeableWeights`.
-  환율: `resolveFxRate(prisma)` — `common/fx.ts`.
-- 무료배송: `resolveFreeShipping(row, iso2)` — `product-selects.ts`(목적국 `ProductCountryPrice` 행의 `freeShipping`).
+  환율: `resolveFxRate(prisma)` — `pricing/fx.ts`.
+- 무료배송: `resolveFreeShipping(row, iso2)` — `pricing/country-price.ts`(목적국 `ProductCountryPrice` 행의 `freeShipping`).
   **`(cp)` 가 아니라 `(row, iso2)` 를 받는 건 fail-closed 를 위해서다** — 호출부가 `countryPrices` 를 목적국으로
   필터하는 걸 깜빡해도 iso2 가 안 맞아 유료로 떨어진다(cp 를 받으면 다른 나라 설정으로 배송비가 샌다).
-  `chargeableBrandIds(lines, iso2)` — `orders/chargeable-brands.ts`. **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**
+  `chargeableBrandIds(lines, iso2)` — `pricing/chargeable-brands.ts`. **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**
   (그 브랜드 라인이 전부 무료일 때만 면제).
 
 ## 프론트

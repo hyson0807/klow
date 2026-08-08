@@ -156,7 +156,7 @@ sequenceDiagram
 
 ### 7-2. 고객 결제 배송비 — 채널과 무관, 주문 시점 확정
 - 고객 배송비 = **`SeedingRate` 500g 티어 / fx × 청구 대상 브랜드수**(한 브랜드 = 한 송장). 무료배송은 **국가별**
-  (`ProductCountryPrice.freeShipping`)이고 **그 브랜드 라인이 전부 무료일 때만** 면제 — `orders/chargeable-brands.ts`
+  (`ProductCountryPrice.freeShipping`)이고 **그 브랜드 라인이 전부 무료일 때만** 면제 — `pricing/chargeable-brands.ts`
   `chargeableBrandIds`/`shippingFeeByBrand` 가 단일 출처.
 - **순서가 핵심**: 배송비는 `POST /v1/orders`(결제 전)에서 확정·스냅샷(`Order.shippingFeeUsd` + `shippingFeeByBrand`)되고,
   채널 라우팅은 **결제 확정 후** `executeCreate` 에서 일어난다. → **MCF 로 나가도 고객이 낸 배송비는 EFS 요율 그대로**이고,

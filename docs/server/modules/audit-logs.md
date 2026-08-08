@@ -4,9 +4,9 @@
 - **주 클라이언트**: `klow_admin` (port 3000)
 - **권한**: `AdminGuard + SuperAdminGuard` — **`super` role 만**.
 - **데이터 소스**: `AdminAuditLog` 테이블 (`AdminAuditInterceptor` 가 자동 기록).
-- **관련 파일**: `audit-logs.controller.ts`, `audit-logs.service.ts`
+- **관련 파일**: `admin-audit-logs.controller.ts`, `audit-logs.service.ts`
 
-## audit-logs.controller.ts (`@Controller('admin/audit-logs')`)
+## admin-audit-logs.controller.ts (`@Controller('admin/audit-logs')`)
 
 | Method | Path                  | 기능                                                                |
 |--------|-----------------------|---------------------------------------------------------------------|
