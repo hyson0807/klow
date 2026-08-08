@@ -83,7 +83,12 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 7. **배럴 패턴**(`common/validation/`, `src/pricing/`)은 `index.ts` 에 re-export 만 두고 새 코드는 도메인 파일에 넣는다.
 
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
-`npx tsc --noEmit` (스펙 포함 — import 파손) → `npm run test:e2e` (`test/app.e2e-spec.ts` 가 **DB 없이** 30개 모듈 DI 그래프 전체를 해석. provider 미등록·미export·순환 모듈을 잡는다) → `npm run start` (env 가드 + cron 등록. ⚠️ **미등록 provider 의 cron 은 조용히 안 돈다** — tsc 도 DI 테스트도 통과하므로 부팅으로만 확인된다).
+
+1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이** 30개 모듈 DI 그래프 전체를 해석한다. provider 미등록·미export·순환 모듈을 잡는다.
+3. **`npm run start`** — env 가드 + cron 등록. ⚠️ **미등록 provider 의 cron 은 조용히 안 돈다** — typecheck 도 DI 테스트도 통과하므로 부팅 로그로만 확인된다. cron 목록은 `SchedulerRegistry.getCronJobs()` 로 찍어볼 수 있다(현재 5개).
+
+⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
 
 ⚠️ `nest-cli.json` 이 `deleteOutDir: false` + `incremental: true` 라 **파일을 대량 이동한 뒤 증분 빌드가 `dist/` 를 반쪽만 남긴다**. 이동 후 첫 빌드 전엔 `rm -rf dist *.tsbuildinfo`.
 
