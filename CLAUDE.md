@@ -75,8 +75,12 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 `src/` 를 정리하면서 세운 불변식이다. 어기면 정리 전 상태로 되돌아간다.
 
 1. **`src/` 는 정확히 3레벨: `src/<area>/<module>/<file>.ts`.** 모듈 안에 `__tests__/` 외 하위 폴더를 만들지 않는다. 이 깊이를 지키기 때문에 소스 파일의 상대경로가 최대 `../../` 로 끝나고(`__tests__/` 만 한 단계 더 깊어 `../../../`) **`@/` 경로 별칭이 필요 없다** (별칭은 의도적으로 도입하지 않았다 — `nest build` 가 순수 tsc 라 `tsc-alias` 없이는 `dist/main` 이 `MODULE_NOT_FOUND` 로 죽는다).
-2. **`src/common/` 은 `src/modules/` 를 절대 import 하지 않는다.** 지금 0건이고, 0건을 유지한다.
-3. **`common/` 입주 조건: 서로 다른 모듈 2개 이상이 쓰고 도메인 로직이 없을 것.** 소비자가 하나면 그 소비자 모듈 안에 둔다. 도메인 상수(쿠키 이름 등)는 소유 모듈이 갖는다 — `common/cookies.ts`(배관) vs `modules/auth/session.ts`(`klow_sid`) 가 그 예다.
+2. **`src/common/` 은 `src/modules/` 를 절대 import 하지 않는다.** 지금 0건이고, `eslint.config.mjs` 의 `no-restricted-imports` 가 `src/common/**` 에서 이걸 막는다(위반 시 에러 + 이 문서를 가리키는 메시지). ⚠️ **tsc 는 이걸 못 잡는다** — 경로가 문법적으로 맞으면 방향이 틀려도 통과한다. 그래서 규칙으로 못박았다.
+3. **`common/` 입주 조건 — 순서가 있다.**
+   - **(불변식, 우선)** `common/` 안의 파일이 import 하는 것은 반드시 `common/` 에 있어야 한다. 이게 규칙 2를 성립시킨다.
+   - **(휴리스틱, 차선)** 그 밖에는 **서로 다른 모듈 2개 이상이 쓰고 + 도메인 로직이 없을 때**만 올린다. 둘 중 하나라도 안 되면 소비자 모듈 안에 둔다. 도메인 상수(쿠키 이름 등)는 소유 모듈이 갖는다 — `common/cookies.ts`(배관) vs `modules/auth/session.ts`(`klow_sid`) 가 그 예다.
+   - ⚠️ **소비자를 셀 때 `common/` 내부 소비자도 센다.** 안 세면 규칙이 스스로 규칙 2를 깨뜨린다 — `common/reserved-slugs.ts` 는 모듈 소비자가 `brand-auth` 하나지만 `common/validation/shared.ts` 도 쓰므로 내리면 `validation` 이 `modules/` 를 import 하게 된다(2026-08 정리에서 실제로 내렸다가 되돌렸다).
+   - ⚠️ 기존 예외: `common/constants.ts` 는 도메인 그 자체(HS 코드·EFS 필드길이)라 휴리스틱상 내려가야 하지만 `klow_admin/src/lib/constants.ts` 와의 **의도된 크로스 레포 미러**라 남는다. 새 파일에 이 예외를 확대 적용하지 말 것.
 4. **모듈 파일은 평면.** 분류는 폴더가 아니라 **파일명 접미사**가 한다: `.controller` / `.service` / `.module` / `.cron` / `.client` / `.strategy` / `.adapter` / `.mapper` / `.types` / `.prompts`. 컨트롤러는 여기에 **URL surface 접두**를 더 붙인다: `admin-` / `brand-` / `public-` / `webhook-`. 순수 헬퍼는 접미사 없는 명사(`brand-weights.ts`). `helpers/` 같은 폴더를 새로 만들면 분류 축이 둘이 되어 더 나빠진다.
 5. **`@Cron` 은 서비스 메서드가 아니라 `*.cron.ts` 파일에.** 파일 목록만으로 스케줄 작업 전체가 보여야 한다.
 6. **가격 계산은 `src/pricing/`, 카탈로그 게이트는 `modules/products/product-selects.ts`.** 경계를 흐리지 말 것.
@@ -85,8 +89,8 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이** 30개 모듈 DI 그래프 전체를 해석한다. provider 미등록·미export·순환 모듈을 잡는다.
-3. **`npm run start`** — env 가드 + cron 등록. ⚠️ **미등록 provider 의 cron 은 조용히 안 돈다** — typecheck 도 DI 테스트도 통과하므로 부팅 로그로만 확인된다. cron 목록은 `SchedulerRegistry.getCronJobs()` 로 찍어볼 수 있다(현재 5개).
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — `onModuleInit` 을 가진 provider 는 그것뿐이다) `AppModule` 을 `init()` 까지 띄운다. 두 가지를 잡는다: ① 30개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 5개 등록 여부**. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 287개). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
 
