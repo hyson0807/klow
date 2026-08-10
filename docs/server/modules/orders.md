@@ -46,11 +46,18 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc` |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `type` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc` |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 | PATCH  | `/admin/orders/:id/status`    | 주문 상태 변경 — `{ status: 'pending'\|'processing'\|'shipped'\|'completed' }`. 역행·`cancelled` 주문 변경은 400 |
 | PATCH  | `/admin/orders/:id/refund`    | 환불/취소 처리 — `{ reason: 1~500자 }`. `paid` 면 Eximbay cancel 호출 후 `refunded`, `pending` 이면 결제 없이 `cancelled`. 이미 취소·환불·실패 주문은 400 |
 | PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN→신분증)는 주문의 기존 `countryCode` 로 강제. 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
+
+**`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` 두 컬럼을 한 축으로 접은
+값이라 DB enum 이 아니다. `seeding`(무가 시딩) / `onsite`(부스 QR 현장결제, 배송 없음) /
+`general`(그 외 일반 결제 주문) 셋은 배타적이라 합집합이 전체다. ⚠️ **시딩 주문도 `channel` 은
+기본값 `web`** 이므로 `isSeeding` 을 먼저 걸러야 `general` 에 섞이지 않는다. 화이트리스트 밖 값은
+필터를 걸지 않고 무시한다(무검증인 `status`/`paymentStatus` 와 달리 Prisma 에러로 새지 않는다).
+어드민 주문 목록의 **유형 컬럼 배지**(일반/시딩/현장)와 상단 필터 pill 이 이 축을 쓴다.
 
 ## public-orders.controller.ts (`@Controller('v1/orders')`)
 
