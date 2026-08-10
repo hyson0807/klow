@@ -53,6 +53,7 @@
 | Method | Path                                    | 기능                                          |
 |--------|-----------------------------------------|-----------------------------------------------|
 | GET    | `/admin/seeding-rates`                  | 국가 목록 + 티어 커버리지 + 캐리어            |
+| GET    | `/admin/seeding-rates/export`           | 현재 요율표 + 청구 수수료 xlsx (⚠️ `:iso2` 보다 위) |
 | GET    | `/admin/seeding-rates/:iso2`            | 국가의 무게→비용 티어                         |
 | PUT    | `/admin/seeding-rates`                  | `(iso2, weightG, costKrw)` 셀 upsert          |
 | DELETE | `/admin/seeding-rates`                  | `(iso2, weightG)` 셀 삭제                     |
@@ -62,6 +63,8 @@
 | PUT    | `/admin/seeding-rates/:iso2/tiers`      | 한 국가 티어 일괄 저장(`replace`/`merge`)     |
 
 초기 적재 시드: `prisma/data/seeding_rates.json`(엑셀 `KLOW_시딩_가격표` 고객_가격표) → `npm run seed:seeding-rates`.
+
+**엑셀 왕복(다운로드 → 편집 → 재업로드, 2026-08)** — `export` 가 내는 파일을 그대로 `import/preview` 에 올릴 수 있다. 자세히는 [seeding](./seeding.md#admin-seeding-ratecontrollerts-controlleradminseeding-rates).
 
 국가 상세의 AI 추출(`rate-sheet-ai.service.ts`)은 **AI 에게 레이아웃만 묻고 금액은 서버가 원본 셀에서 직접 읽는** 2단계 구조다 — 자세히는 [seeding](./seeding.md#admin-seeding-ratecontrollerts-controlleradminseeding-rates).
 서비스는 `shipping/logistics-rate.service.ts` `LogisticsRateService`(컨트롤러만 seeding 모듈에 남음).
