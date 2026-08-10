@@ -65,8 +65,11 @@
 | Method | Path                          | 기능                                                                 |
 |--------|-------------------------------|----------------------------------------------------------------------|
 | GET    | `/v1/seeding/:token`          | 링크 공개 정보(상태·`claimable`·`mode`/`maxClaims`/`remaining`/`unavailableReason`/`retryAfter`·국가 또는 `countryOptions`·2×2·선택후보 카드·`shippingFeeKrw/Usd`·`productPriceKrw/Usd`) |
+| GET    | `/v1/seeding/:token/product?label=&lang=` | 고객 선택 후보 1건의 상세(모달) — 바이어가 카드를 눌러야 조회하는 lazy 경로 |
 | POST   | `/v1/seeding/:token/claim`    | 무료 claim — ₩0 주문 생성, paid 자동, 송장/메일 발급                |
 | POST   | `/v1/seeding/:token/checkout` | 유료 checkout — pending 주문 생성, 게스트 쿠키, 이후 /v1/payment/*   |
+
+**후보 제품 상세 모달 (2026-08)**: 바이어가 후보 행을 누르면 `GET /v1/seeding/:token/product?label=` 로 그 제품의 상세(대표+상세이미지·용량·상세설명·핵심성분·사용법·전성분·고민/추천 태그)를 받아 모달로 보여준다. **조회 키는 후보 라벨 그대로**다 — `selectionProducts[].id` = claim/checkout 에 보내는 `selectedSkus` 값과 같은 문자열이라, 목록 배열 순서가 바뀌어도 엉뚱한 제품이 열리지 않는다(배열 인덱스를 키로 쓰면 "이 목록을 정렬·필터하지 말 것"이라는 불변식이 생기고 위반이 조용히 잘못된 제품을 연다). 서버는 `link.selectionSkus.includes(label)` 로 `validateSelection` 과 같은 멤버십 검사를 한다. 라벨이 Product ID 가 아니라 이름이라 상세도 **이름 조인 best-effort** 이고, 목록 카드가 함께 내려주는 **`hasDetail`** 이 그 판정이다 — 브랜드가 직접 입력한 자유 텍스트이거나 이후 삭제·개명된 제품이면 `false` 라 klow_web 이 상세 진입 어포던스를 감추고 클릭 시 선택만 토글한다(빈 모달을 띄우지 않는다). ⚠️ 동명 제품(브랜드 내 `Product.name` 유니크 제약 없음 — 소개서 일괄 초안 임포트가 만든다)의 승자 규칙은 **`seeding-product-detail.ts` 의 `resolveProductsByLabel()` 한 함수**에만 있다: 목록 카드와 상세가 같은 함수를 호출하므로 `where`·정렬(`createdAt asc, id asc`)·"먼저 온 행이 이긴다"가 갈릴 수 없다(주석으로 맞춰두면 셋 중 하나가 어긋나 썸네일과 모달이 다른 제품을 가리킨다). ⚠️ **판매가능 게이트(`PUBLIC_PRODUCT_WHERE`)를 의도적으로 적용하지 않는다** — 시딩 후보는 승인 전이거나 판매가가 없는 샘플이 흔해 게이트를 걸면 상세가 거의 안 뜬다(그래서 일반 PDP `GET /v1/products/:id` 를 재사용하지 않는다). 대신 select 를 **화이트리스트**로 두어 가격·원가·재고·평점·리뷰수·status 를 원천 차단한다(include+사후 delete 금지 — 새 컬럼이 조용히 샌다). 제품명은 select 에는 있지만(라벨 매칭 키) 응답에서 벗긴다: 모달 제목은 바이어가 실제로 고르는 라벨이 단일 출처여야 하므로. `?lang=` 은 `ProductTranslation` MT 캐시를 태운다(전성분 INCI 는 원문 유지). 쓰로틀은 전역 기본(60회/분)이다.
 
 에러: 없는 토큰 404, 정원 마감·수동 마감·취소된 링크 409, 결제주체가 맞지 않으면 400(고객 결제 링크에 claim / 브랜드 결제 링크에 checkout). 고객 선택 링크의 `selectedSkus` 는 후보 멤버십·중복·`selectionLimit` 위반 시 400. 표시용 USD(`shippingFeeUsd`/`productPriceUsd`)는 조회 시점 fxRate 환산이고, 결제 정본은 checkout 이 주문에 동결하는 `fxRateSnapshot` 이다.
 
