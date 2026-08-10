@@ -123,6 +123,7 @@
 | Method | Path                                        | 기능                                               |
 |--------|---------------------------------------------|----------------------------------------------------|
 | GET    | `/admin/shipping-rates?carrier=`            | 캐리어 국가 목록 + 요율 티어 커버리지(개수·무게·요율 범위) |
+| GET    | `/admin/shipping-rates/export?carrier=`     | 그 캐리어의 현재 요율표 xlsx 다운로드              |
 | GET    | `/admin/shipping-rates/:carrier/:iso2`      | 캐리어·국가의 base 무게 티어(오름차순)             |
 | PUT    | `/admin/shipping-rates`                     | `(carrier, iso2, weightG, rateKrw)` 셀 upsert      |
 | DELETE | `/admin/shipping-rates`                     | `(carrier, iso2, weightG)` 셀 삭제                 |
@@ -130,6 +131,15 @@
 | POST   | `/admin/shipping-rates/import/apply`        | 같은 파일 재파싱 + 선택 국가 요율 티어 통째 교체(셀 값 그대로 저장) |
 | POST   | `/admin/shipping-rates/:carrier/:iso2/import/ai-preview` | 임의 포맷 요율표 엑셀 → AI 추출 + diff (적용 안 함) |
 | PUT    | `/admin/shipping-rates/:carrier/:iso2/tiers` | 한 캐리어·국가 티어 일괄 저장(`mode: replace \| merge`) |
+
+**엑셀 왕복 (목록 페이지, 2026-08)** — 배송비용 탭과 같은 왕복을 비교요율에도 붙였다. `export` 는 **임포트 파서가 그대로 읽는 포맷**으로 내보내므로, 내려받아 고친 파일을 같은 업로드 입력에 되올리면 반영된다(캐리어 원본 요율표도 종전 경로를 그대로 쓴다 — 새 업로드 버튼 없음).
+
+- **캐리어당 파일 1개**다(`?carrier=`, 시트 1장). 두 캐리어를 한 파일에 담지 않는 이유는 시트명이 캐리어별이기 때문이다.
+- ⚠️ **탭을 잘못 고른 업로드는 리더가 거절한다**(`WrongSheetError` → 400). 왕복을 붙이면서 세 탭(EMS·DHL·배송비용)의 내보내기 파일이 **형태가 완전히 같아졌다** — 헤더도 국가 열도 동일하고 시트명만 다르다. 첫 시트 폴백을 그대로 뒀더니 EMS 파일을 DHL 탭에 올려도 `unmatchedHeaders: []` 로 **미리보기가 완벽해 보이는 채** EMS 요율이 DHL 에 저장됐다(반대 방향은 비교요율이 고객 결제 배송비로 들어간다 — 더 비싸다). 그래서 **아는 시트명일 때만** 거절하고, 시트명이 제각각인 **운영팀 원본은 종전대로 첫 시트 폴백**을 탄다(폴백은 그쪽을 받으려고 있는 것이다). 경계는 `__tests__/shipping-rate-export.spec.ts` 의 '탭을 잘못 고른 업로드' 3케이스가 잠근다.
+- 시트명은 `xlsx-grid.ts` 의 `CARRIER_SHEET_NAMES`(EMS `원본요율(할인전)` / DHL `DHL수출요율(개인·물품)`) — **리더와 라이터가 이 상수 하나를 공유하는 게 왕복의 전부다.** col0 헤더 `무게(kg)` 도 파서의 헤더 행 탐색 조건이라 고정이다.
+- 매트릭스 라이터는 배송비용 export 와 **공용**(`shipping/rate-matrix-xlsx.ts` `buildRateMatrixSheet`). 행=DB 에 존재하는 `weightG` 전체의 합집합, 열=`ShippingCountry` 전체라 **티어 0개 국가도 빈 열로 나간다**(엑셀에서 바로 채우게). 빈 칸은 파서가 건너뛰므로 그 국가는 미리보기에 아예 안 뜬다 — 되올려도 기존 값이 지워지지 않는다.
+- ⚠️ **임포트 리더가 SheetJS 가 아니다.** 배송비용은 `XLSX.read` 로 읽지만 비교요율은 `xlsx-grid.ts` 의 자체 OOXML 리더(`readSheetAOA` → `parseCarrierSheet`)로 읽는다(운영팀 EMS 원본이 한컴셀 산 `x:` 접두사 파일이라 SheetJS 0.18.5 가 조용히 로드 실패). 즉 **SheetJS 가 쓴 파일을 자체 리더가 되읽는** 구조라, 라이터를 건드리면 `__tests__/shipping-rate-export.spec.ts` 의 왕복 스펙이 먼저 깨진다. 그 스펙이 이 기능의 안전장치다.
+- **미리보기가 삭제를 먼저 보여준다** — 적용이 국가 단위 전체 교체라 엑셀에서 지운 무게 칸은 사라진다. `removedTierCount`/`removedTiers[]` 로 국가별·티어별 노출(배송비용과 동형). `status` 는 손댈 필요가 없었다 — 기존 `tierStatus` 가 집합 크기 차이로 이미 `changed` 를 낸다.
 
 **AI 요율표 추출 (국가 상세, 2026-08)** — 위 배송비용(`/admin/seeding-rates/:iso2/import/ai-preview`)과 **같은 기능·같은 엔진**(`RateSheetAiService`)을 비교요율에도 붙인 것이다. 동작 규칙(레이아웃만 AI·금액은 서버가 원본 셀에서 직접·엄격한 숫자 파싱·`candidates` 로 열 재선택 시 AI 재호출 없음·`skipped[]` 노출·KRW 아니면 400·적용은 AI 미경유)은 전부 동일하므로 위 절을 참고한다. 다른 점만:
 
