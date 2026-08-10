@@ -34,8 +34,6 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | **감사**   | [audit-logs](./modules/audit-logs.md)                                 | `AdminAuditLog` 조회 (super-admin 전용)                  |
 | **상품**   | [products](./modules/products.md)                                     | 상품 CRUD + 공개 카탈로그 (`PUBLIC_PRODUCT_WHERE` 필터)  |
 |            | [brands](./modules/brands.md)                                         | 브랜드 CRUD + 공개 조회 (slug/id)                        |
-|            | [creators](./modules/creators.md)                                     | 크리에이터 CRUD + 공개 조회 (상품 연관 포함)             |
-|            | [videos](./modules/videos.md)                                         | 비디오 CRUD + 공개 조회 (creatorId/productId 필터)       |
 |            | [reviews](./modules/reviews.md)                                       | 리뷰 CRUD + 공개 조회                                    |
 |            | [shop](./modules/shop.md)                                             | 운영 환율 조회(`/v1/shop/fx-rate`) — Today's Pick·쇼핑 설정은 2026-07-30 제거 |
 |            | [currency](./modules/currency.md)                                     | 통화 환율 — 표시용 현지통화 + 정산 정본 KRW (cron 자동 갱신 + 어드민 수동 보정) |
