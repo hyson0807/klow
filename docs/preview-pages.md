@@ -86,6 +86,10 @@ mock 으로 렌더**하는 개발/디자인 전용 페이지 모음이다. 백�
 |---|---|
 | `/seed/preview?state=success` | **신청 완료** — 바이어가 주소 입력을 완료했을 때 나오는 성공 카드(`seed.success`) |
 | `/seed/preview?state=claimed` | **이미 신청됨** — 링크가 이미 사용된 상태(`seed.claimed`) |
+| `/seed/preview?state=full` | **정원 마감** — 다인원 링크가 정원까지 찬 상태(`seed.full`) |
+| `/seed/preview?state=closed` | **수동 마감** — 브랜드가 신청을 닫은 상태(`seed.closed`) |
+| `/seed/preview?state=busy` | **다른 사람이 결제 중** — 마지막 자리가 예약된 상태(`seed.busy`) |
+| `/seed/preview?state=duplicate` | **이미 신청한 사람** — 이메일·연락처·주소가 겹쳐 제출이 422 로 거절된 상태(`seed.duplicate`). 링크 사유가 아니라 **제출 응답**에서만 나오는 화면이라 `unavailableReason` 으로는 재현되지 않는다 |
 
 - **위치:** `klow_web/src/app/seed/[token]/page.tsx`
   (`PREVIEW_TOKENS`, `previewLink()`, `previewState`).
