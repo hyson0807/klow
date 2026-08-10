@@ -28,6 +28,10 @@
   `Order.paymentStatus`(`pending / paid / failed / cancelled / refunded`)는 **별개 컬럼**이다.
   status 는 `PATCH /admin/orders/:id/status` 로 **전진만** 가능(역행 400, `cancelled` 는 재전이 불가)하고,
   `cancelled` 로 가는 유일한 경로는 환불/취소 액션(`/refund`, `/cancel`, `guest-cancel`)이다.
+  `shipped` / `completed` 는 수동 외에 **송장이 자동으로 구동한다** — 전 라인 발급 시 `shipped`,
+  전 라인 배송완료(EFS 추적 코드) 시 `completed`. 판정·주의점은 [`shipments.md`](./shipments.md) 의
+  `maybeMarkOrderShipped` / `maybeMarkOrderCompleted` 참고. 이미 배송완료라 cron 폴링 대상에서
+  빠진 과거 주문은 `npm run backfill:order-completed`(멱등) 로 한 번 정리한다.
 - **현장(onsite) 주문**: 박람회 부스 QR 결제 — `channel='onsite'`, 배송지·캐리어·배송비 없음(`shippingFeeUsd=0`),
   `onsiteExcluded` 제품은 차단. 결제 성공 시 송장 없이 바로 `completed` 로 전이된다(`payment.markPaid`).
   - 단가는 **`onsitePriceLine()`** — 표시 경로(`products.service` 의 `mode=onsite`)와 같은 함수라 표시가==청구가.
