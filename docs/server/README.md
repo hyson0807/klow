@@ -28,7 +28,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 
 | 카테고리   | 모듈                                                                  | 주요 책임                                                |
 |------------|-----------------------------------------------------------------------|----------------------------------------------------------|
-| **인증**   | [auth](./modules/auth.md)                                             | 일반 유저 가입/로그인 (email OTP + Google OAuth)         |
+| **인증**   | [web-auth](./modules/web-auth.md)                                             | 일반 유저 가입/로그인 (email OTP + Google OAuth)         |
 |            | [admin-auth](./modules/admin-auth.md)                                 | 어드민 로그인 (TOTP 2FA), 초대, admins 관리              |
 |            | [brand-auth](./modules/brand-auth.md)                                 | 브랜드 가입/로그인 (phone OTP 메인 + email + Google)     |
 | **감사**   | [audit-logs](./modules/audit-logs.md)                                 | `AdminAuditLog` 조회 (super-admin 전용)                  |

@@ -292,7 +292,7 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 - **Admin**(`klow_admin`) — 이메일+비밀번호(argon2id) + TOTP 2FA. `AdminSession` + `klow_admin_sid`(24h, 30분 idle). `AdminGuard`/`SuperAdminGuard`. 초대 기반 프로비저닝(공개 가입 없음), 5회 실패 15분 락, 모든 mutation `AdminAuditLog` 기록.
 - **Brand**(`klow_brand`) — **전화+SMS OTP(Solapi) 가 메인**, 이메일+비밀번호·Google 은 보조. `BrandSession` + `klow_brand_sid`(7일). `BrandGuard`. 공개 자체 가입, TOTP 없음(마찰 최소화), `email`/`phone`/`googleId` 각 독립.
 
-자세한 규칙은 workspace `CLAUDE.md` 의 Key Facts + [`server/modules/auth.md`](./server/modules/auth.md)·`admin-auth.md`·`brand-auth.md`.
+자세한 규칙은 workspace `CLAUDE.md` 의 Key Facts + [`server/modules/web-auth.md`](./server/modules/web-auth.md)·`admin-auth.md`·`brand-auth.md`.
 
 ---
 
@@ -332,7 +332,7 @@ Browser-direct two-step upload, used for both images and videos:
 - Toast context: `klow_admin/src/components/Toast.tsx`, mounted once in `app/layout.tsx` via `<ToastProvider>`, consumed via `useToast()` → `success/error/info/show`.
 - The shared CRUD hook `klow_admin/src/hooks/useFormState.ts` already emits the right toasts — form-based flows get it for free.
 - Ad-hoc flows that bypass `useFormState` (e.g. `concierge-requests`, `reviews` moderation) call `useToast()` directly.
-- Server errors are thrown by `api.ts` as `Error(message)`; forwarding `e.message` into the toast is enough.
+- Server errors are thrown by `klow_admin/src/lib/api/client.ts` as `Error(message)`; forwarding `e.message` into the toast is enough (or `extractApiError(e, fallback)` from that file to strip the `API 400: ` prefix).
 - **Not** for background list fetches (use inline placeholders) or field-validation hints (use inline helper text). Toasts are for _actions the user just took_.
 
 ---
@@ -342,7 +342,7 @@ Browser-direct two-step upload, used for both images and videos:
 ### Example 1: Admin creates a product
 
 ```
-ProductForm.tsx (klow_admin)  → api.products.create(state)   // klow_admin/src/lib/api.ts
+ProductForm.tsx (klow_admin)  → api.products.create(state)   // klow_admin/src/lib/api/products.ts
   ↓ POST http://localhost:4000/admin/products
 AdminProductsController.create()   // klow_server
   ↓ AdminGuard.canActivate() → validates klow_admin_sid session

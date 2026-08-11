@@ -1,10 +1,10 @@
-# auth — 일반 유저 인증
+# web-auth — 일반 유저 인증
 
-- **모듈 경로**: `src/modules/auth/`
+- **모듈 경로**: `src/modules/web-auth/`
 - **주 클라이언트**: `klow_web` (port 3001)
 - **세션 쿠키**: `klow_sid` (httpOnly, DB `Session` 테이블 기반, 30일 — `SESSION_TTL_DAYS`)
 - **인증 방식**: 이메일 + 비밀번호 (이메일 OTP 6자리/10분 TTL·5회 시도제한 → 15분 가입 토큰) + Google OAuth
-- **관련 파일**: `auth.service.ts`, `password.ts`, `session.ts`, `email-verification.service.ts`, `email.service.ts`, `google.strategy.ts`
+- **관련 파일**: `web-auth.service.ts`, `password.ts`, `session.ts`, `email-verification.service.ts`, `email.service.ts`, `google.strategy.ts`
 - **같은 폴더의 공용 인프라**: `sms.service.ts`(Solapi SMS) · `phone-verification.service.ts` 는 [brand-auth](./brand-auth.md) 의 전화 OTP 가, `kakao.service.ts`(알림톡) 는 [payment](./payment.md) 가 쓴다 — 일반 유저 인증 경로에서는 호출되지 않는다.
 
 ## public-auth.controller.ts (`@Controller('v1/auth')`)

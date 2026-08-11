@@ -3,7 +3,7 @@
 - **모듈 경로**: `src/modules/contact/`
 - **목적**: klow_brand 랜딩(`/`) 최종 CTA "상담 문의" 모달이 보내는 공개 폼을 받아 **운영팀 문의함으로 메일만 보낸다**.
 - **데이터 모델**: **없다.** Prisma 테이블·마이그레이션 없이 Resend 발송만 한다 — 접수 이력은 문의함(메일)이 정본이다.
-- **관련 파일**: `contact.service.ts`, `public-contact.controller.ts`, `contact.module.ts`, 검증 스키마 `common/validation/contact.ts`, 메일 템플릿 `modules/auth/email.service.ts` (`sendBrandContactInquiry` / `buildContactInquiryHtml`)
+- **관련 파일**: `contact.service.ts`, `public-contact.controller.ts`, `contact.module.ts`, 검증 스키마 `common/validation/contact.ts`, 메일 템플릿 `modules/web-auth/email.service.ts` (`sendBrandContactInquiry` / `buildContactInquiryHtml`)
 
 ## public-contact.controller.ts (`@Controller('v1/contact-inquiries')`)
 
