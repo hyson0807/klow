@@ -49,7 +49,7 @@
 
 ## 참고
 
-- **취급 품목 게이트**: 두 생성 경로(`POST /v1/brand/products`, `/products/bulk`)는 `Brand.category` 가 `null` 이면 `400 "제품을 등록하기 전에 브랜드 카테고리를 먼저 선택해 주세요"` 로 거부한다(`assertBrandCategoryChosen`). 품목이 EFS 통관 신고값의 정본이라 첫 제품보다 먼저 정해져야 하기 때문 — 안 그러면 첫 제품이 화장품 전제로 등록된 뒤에야 바꿀 수 있다. 품목은 `PUT /v1/brand/applications` 의 `category` 로 저장하며, klow_brand 스튜디오가 제품 0개 온보딩에서 소개서 업로드보다 먼저 묻는다. 수정 경로(`PATCH /products/:id` 등)는 게이트하지 않는다.
+- **취급 품목 게이트**: 두 생성 경로(`POST /v1/brand/products`, `/products/bulk`)는 `Brand.category` 가 `null` 이면 `400 "제품을 등록하기 전에 브랜드 카테고리를 먼저 선택해 주세요"` 로 거부한다(`assertBrandCategoryChosen`). 품목이 EFS 통관 신고값의 정본이라 첫 제품보다 먼저 정해져야 하기 때문 — 안 그러면 첫 제품이 화장품 전제로 등록된 뒤에야 바꿀 수 있다. 품목은 `PUT /v1/brand/applications` 의 `category` 로 저장하며, klow_brand 스튜디오가 **제품 등록 진입점(빈 그리드의 "상품 추가" · "브랜드 소개서로 일괄 등록하기")에서 관문으로 한 번** 묻는다. 수정 경로(`PATCH /products/:id` 등)는 게이트하지 않는다.
 - **제품 텍스트 필드는 영문(ASCII) 전용** — 국제 노출 원문이자 `ProductTranslation`(en 소스) 번역의
   입력이라 non-ASCII 를 거부한다. 두 종류로 갈린다:
   **①서술형(`EnglishText`: usage·precautions·qualityAssuranceStandard·volume·manufacturer 등)** 은
