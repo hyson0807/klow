@@ -93,7 +93,7 @@ The **26 feature modules** under `src/modules/`:
 | Domain              | Modules                                                                            |
 |---------------------|------------------------------------------------------------------------------------|
 | Catalog             | `products`, `brands`, `reviews`, `shop`, `stats`                                   |
-| Commerce            | `cart`, `orders`, `payment`, `concierge`                                            |
+| Commerce            | `cart`, `orders`, `payment`                                                         |
 | Fulfilment          | `shipments`, `shipping`, `seeding`, `settlement`                                    |
 | User auth           | `auth`                                                                              |
 | Admin auth          | `admin-auth`, `audit-logs`                                                          |
@@ -240,11 +240,10 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 
 ### 기타 (Misc)
 
-- **`ConciergeRequest`** — 고객 제품 컨시어지("대신 찾기") 요청. `imageUrl?`/`product?`/`brand?`/`note?`, `status`(ConciergeStatus). `imageUrl` 또는 `product` 중 최소 하나 필수(Zod). 독립 테이블.
 
 ### Enums (Postgres-native, 18개)
 
-`ProductCategoryKey`(cleanser/toner/serum/cream/mist/suncream/mask) · `ProductStatus`(pending/approved/rejected) · `BrandStatus`(pending/approved/rejected/draft/withdrawal_pending/withdrawn) · `BrandLogoLayout`(circle/wide/tall/rounded) · `ConciergeStatus`(pending/replied/completed) · `OrderStatus`(pending/processing/shipped/completed/cancelled) · `PaymentStatus`(pending/paid/failed/cancelled/refunded) · `AdminRole`(operator/super) · `ShippingCarrier`(EFS/EMS/DHL) · `ShipmentStatus`(pending/submitted/failed/cancelled) · `ShippingExclusionKind`(zip/city/state) · `SeedingLinkStatus`(pending/claimed/cancelled) · `SeedingPaymentBy`(brand/customer) · `SeedingSelectionMode`(brand/customer) · `BrandSubscriptionStatus`(active/past_due/canceled) · `SubscriptionInvoiceStatus`(pending/paid/failed/refunded) · `CampaignStatus`(active/ended) · `CampaignPlatform`(IG/YT/TT). The string-based `CONCERNS` constant lives in `src/common/constants.ts`.
+`ProductCategoryKey`(cleanser/toner/serum/cream/mist/suncream/mask) · `ProductStatus`(pending/approved/rejected) · `BrandStatus`(pending/approved/rejected/draft/withdrawal_pending/withdrawn) · `BrandLogoLayout`(circle/wide/tall/rounded) · `OrderStatus`(pending/processing/shipped/completed/cancelled) · `PaymentStatus`(pending/paid/failed/cancelled/refunded) · `AdminRole`(operator/super) · `ShippingCarrier`(EFS/EMS/DHL) · `ShipmentStatus`(pending/submitted/failed/cancelled) · `ShippingExclusionKind`(zip/city/state) · `SeedingLinkStatus`(pending/claimed/cancelled) · `SeedingPaymentBy`(brand/customer) · `SeedingSelectionMode`(brand/customer) · `BrandSubscriptionStatus`(active/past_due/canceled) · `SubscriptionInvoiceStatus`(pending/paid/failed/refunded) · `CampaignStatus`(active/ended) · `CampaignPlatform`(IG/YT/TT). The string-based `CONCERNS` constant lives in `src/common/constants.ts`.
 
 ---
 
@@ -331,7 +330,7 @@ Browser-direct two-step upload, used for both images and videos:
 
 - Toast context: `klow_admin/src/components/Toast.tsx`, mounted once in `app/layout.tsx` via `<ToastProvider>`, consumed via `useToast()` → `success/error/info/show`.
 - The shared CRUD hook `klow_admin/src/hooks/useFormState.ts` already emits the right toasts — form-based flows get it for free.
-- Ad-hoc flows that bypass `useFormState` (e.g. `concierge-requests`, `reviews` moderation) call `useToast()` directly.
+- Ad-hoc flows that bypass `useFormState` (e.g. `reviews` moderation) call `useToast()` directly.
 - Server errors are thrown by `klow_admin/src/lib/api/client.ts` as `Error(message)`; forwarding `e.message` into the toast is enough (or `extractApiError(e, fallback)` from that file to strip the `API 400: ` prefix).
 - **Not** for background list fetches (use inline placeholders) or field-validation hints (use inline helper text). Toasts are for _actions the user just took_.
 
@@ -430,8 +429,8 @@ Always `npx prisma migrate dev --name <이름>` — never `migrate deploy`, manu
 
 ## Frontend Surfaces (route map)
 
-- **klow_web** (`src/app/`): `[brandSlug]`, `brand`, `cart`, `checkout`, `concierge`, `customer-center`, `faq`, `legal`, `login`, `my`, `orders`, `product`, `seed`, `shop`, `signup`, `track`.
-- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `campaigns`, `concierge-requests`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `tracking`. Public: `login`, `accept-invite/[token]`.
+- **klow_web** (`src/app/`): `[brandSlug]`, `brand`, `cart`, `checkout`, `customer-center`, `faq`, `legal`, `login`, `my`, `orders`, `product`, `seed`, `shop`, `signup`, `track`.
+- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `campaigns`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `tracking`. Public: `login`, `accept-invite/[token]`.
 - **klow_brand** (`src/app/`): landing `/`, `signup`, `legal`, and `(authed)/{campaigns, creators, seeding, settings, studio}` — product management lives under **studio** (the old onboarding/dashboard structure is gone).
 
 ---

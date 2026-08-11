@@ -48,7 +48,6 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [subscription](./modules/subscription.md)                             | 브랜드 멤버십 정기구독 (NicePay 빌링) + 승인 게이트      |
 |            | [brand-scraper](./modules/brand-scraper.md)                           | 자사몰 URL → AI 자동 데이터 추출                         |
 | **고객**   | [customers](./modules/customers.md)                                   | 어드민이 보는 유저 목록/상세                             |
-| **컨시어지**| [concierge](./modules/concierge.md)                                  | 공개 폼 제출 + 어드민 검토                               |
 |            | [contact](./modules/contact.md)                                       | 랜딩 "상담 문의" 폼 → 운영팀 문의함 메일 (저장 없음)     |
 | **마케팅** | [campaigns](./modules/campaigns.md)                                  | 인플루언서 캠페인 단축링크(`/r/{code}`) + 유입 추적      |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
