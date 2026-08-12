@@ -10,6 +10,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | `/v1/*`            | `klow_web` (port 3001)    | `UserGuard` 또는 public      | 공개 surface. 로그인 필요시 `UserGuard`.                |
 | `/v1/brand/*`      | `klow_brand` (port 3002)  | `BrandGuard` 또는 public     | 브랜드 셀프-서비스. 자기 브랜드 scope.                  |
 | `/webhooks/*`      | 외부 (Eximbay 등)         | IP 화이트리스트              | 결제사 콜백 등.                                         |
+| `/embed/*`         | 브랜드 자사몰(카페24) 등  | 없음 (공개)                  | 임베드 버튼. GET 전용·쿠키 없음·CORS `*`. ⚠️ preflight 유발 금지 — [embed](./modules/embed.md) 참고. |
 
 ## 인증 가드
 
@@ -24,7 +25,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 
 ## 모듈 색인
 
-> 31개 모듈, 약 200여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
+> 32개 모듈, 약 200여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
 
 | 카테고리   | 모듈                                                                  | 주요 책임                                                |
 |------------|-----------------------------------------------------------------------|----------------------------------------------------------|
@@ -50,6 +51,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | **고객**   | [customers](./modules/customers.md)                                   | 어드민이 보는 유저 목록/상세                             |
 |            | [contact](./modules/contact.md)                                       | 랜딩 "상담 문의" 폼 → 운영팀 문의함 메일 (저장 없음)     |
 | **마케팅** | [campaigns](./modules/campaigns.md)                                  | 인플루언서 캠페인 단축링크(`/r/{code}`) + 유입 추적      |
+|            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
 |            | [settlement](./modules/settlement.md)                                 | 브랜드 매출 정산 (delivered 송장 + 현장결제 주문 집계)   |
