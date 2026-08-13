@@ -19,7 +19,13 @@
 - **자유 텍스트 태그 (2026-07-30)**: `concerns`(8개) / `recommendedFor`(6개)는 고정 enum 이 아니라 **영문 자유 텍스트 태그**다.
   `concerns` 는 `PRODUCT_LIST_SELECT` 에도 포함돼 카드에서 상세 fetch 없이 노출되고, `?lang=` 이 오면
   `ProductTranslationService.localize()` 가 `ProductTranslation` MT 캐시로 로케일 문자열을 덮어쓴다.
-- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이)
+- **피부 타입 프리셋 예외 (2026-08-13)**: `recommendedFor` 만 고정 선택지 5종(지성·건성·민감성·복합성·수부지 →
+  `Oily skin`/`Dry skin`/`Sensitive skin`/`Combination skin`/`Dehydrated oily skin`)이 **MT 대신 큐레이션 번역**을 탄다.
+  한 단어짜리 태그라 문맥이 없어 Google 이 "지성"을 `Intellect` 로 옮겼기 때문. 사전은 `skin-type-presets.ts`,
+  치환은 `localize()` **overlay** 에서 한다 — ⚠️ `translateAndCache()` 에서 하면 스테일 판정에 걸린 행만 고쳐져
+  이미 캐시된 로케일 행이 오번역을 계속 서빙한다(overlay 라 캐시 무효화·백필 없이 소급된다).
+  저장 정본·컬럼·검증(`EnglishTagList(6)`)은 그대로이고 `concerns` 는 순수 자유 텍스트로 남는다.
+- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이), `skin-type-presets.ts`(피부 타입 고정 사전)
 
 ## admin-products.controller.ts (`@Controller('admin/products')`)
 
