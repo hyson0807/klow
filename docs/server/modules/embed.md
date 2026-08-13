@@ -95,11 +95,24 @@ where: { AND: [PUBLIC_PRODUCT_WHERE, { brandId: brand.id, externalProductCode: c
 ### 삽입 자리
 
 1. `<script data-mount="{셀렉터}">`
-2. `<div id="klow-buy"></div>` ← 문서화된 정상 경로
+2. `<div id="klow-buy"></div>` ← **정상 경로. 스튜디오가 이걸 복사시킨다**
 3. 카페24 구매 버튼 후보 셀렉터 첫 매치 뒤(`.btnBuy`, `#btnBuy`, `.btn_buy`, `a[href*="order_form"]`, `a[href*="basket"]` …)
 4. 못 찾으면 렌더하지 않는다 — **`document.body` 폴백 금지**(페이지 아무 데나 떠 있는 고아 버튼은 없는 것보다 나쁘다)
 
 `data-position="after|before"` 로 위치를 뒤집을 수 있다.
+
+⚠️ **3번(자동 탐지)은 폴백이지 주력이 아니다.** 실제 몰 2개로 확인한 결과:
+
+| 스킨 | 구매 버튼 마크업 | 후보 셀렉터 매치 |
+|---|---|---|
+| 카페24 기본 `base` | `<a class="btnSubmit sizeL">` + `<button id="actionCart">` | ❌ 하나도 안 걸림 |
+| 커스텀 `detail_B_b` | `<a class="btnSubmit sizeL … btn_buy">` | ✅ `.btn_buy` |
+
+즉 "스크립트 한 줄만 붙이면 된다"는 스킨 복불복이다. 게다가 `detail_B_b` 처럼 걸리는 경우에도 그 버튼들이 `order: 1~4` 로 순서를 강제하는 flex 컨테이너 안이라 엉뚱한 자리에 끼어들 수 있다. 그래서 스튜디오 안내는 **마운트 div + 스크립트 두 줄**을 정상 경로로 제시한다.
+
+카페24 상품상세 템플릿은 `<!--@layout(...)-->` 으로 시작하는 **모듈 조각**이라 `</body>` 가 없다 — 스크립트는 파일 맨 끝에 붙인다(레이아웃의 `</body>` 에 넣으면 몰 전 페이지에서 실행되는데, 상품코드가 없으면 DOM 탐색 전에 빠져나오므로 무해하긴 하다).
+
+⚠️ 마운트 div 는 `module="product_detail"` **범위 안**에 둬야 `{$product_no}` 가 채워진다. `module="product_action"` 같은 중첩 모듈 안쪽은 변수 범위가 달라 안전하지 않다. 실측 확인된 안전한 자리는 `fixedActionButton` 이 닫힌 직후 · `orderFixArea` 시작 직전이다.
 
 ### 스타일 / 문구
 
@@ -111,8 +124,12 @@ where: { AND: [PUBLIC_PRODUCT_WHERE, { brandId: brand.id, externalProductCode: c
 
 ## 설치 방식 2가지
 
-**(A) 스크립트 한 줄** — 카페24 관리자 → 디자인 → 스마트디자인 편집 → **상품 상세** → `</body>` 직전
+**(A) 스킨에 두 줄** — 카페24 관리자 → 디자인 → 스마트디자인 편집 → **상품 상세**
 ```html
+<!-- ① 버튼 자리: 구매 버튼 묶음 바로 아래 (product_detail 범위 안) -->
+<div id="klow-buy" data-code="{$product_no}"></div>
+
+<!-- ② 스크립트: 파일 맨 끝 -->
 <script src="https://api.klow.kr/embed/v1.js" data-brand="{brandSlug}" defer></script>
 ```
 ⚠️ 카페24는 **PC 스킨과 모바일 스킨이 별도 템플릿**이다. 해외 트래픽은 대부분 모바일이므로 **양쪽 모두**에 붙여야 한다.
