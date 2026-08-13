@@ -76,7 +76,7 @@
 | POST   | `/v1/orders/lookup`                 | public (TIGHT)   | 비회원 주문 조회 — `orderId`(cuid) + `email` 매칭                              |
 | POST   | `/v1/orders/guest-cancel/request-otp` | public (TIGHT) | 비회원 취소 1단계 — 주문/이메일 매칭 시에만 OTP 발송. 응답은 항상 `{ ok: true }`(존재 oracle 차단) |
 | POST   | `/v1/orders/guest-cancel`           | public (TIGHT)   | 비회원 취소 2단계 — 주문 바인딩 OTP 검증 후 취소/환불                          |
-| GET    | `/v1/orders/:id/tracking`           | OptionalUser     | 고객용 배송추적 — 결제완료 메일 서명 토큰(`?t=`) / 회원 세션 / 게스트 쿠키 중 하나로 인증, 캐시된 추적 데이터 반환. 고객 선택 시딩 주문은 표시 제품명을 `SeedingClaim.selectedSkus` 로 파생(→ [seeding](./seeding.md) 고객 대면 제품명) |
+| GET    | `/v1/orders/:id/tracking`           | OptionalUser     | 고객용 배송추적 — 결제완료 메일 서명 토큰(`?t=`) / 회원 세션 / 게스트 쿠키 중 하나로 인증, 캐시된 추적 데이터 반환. 고객 선택 시딩 주문은 표시 제품명을 `SeedingClaim.selectedSkus` 로 파생(→ [seeding](./seeding.md) 고객 대면 제품명). ⚠️ `shipmentTrackingStatus` 는 **국내 자체배송(`carrier='DOMESTIC'`)에 별도 분기**가 있다 — EFS 송장번호가 영영 없어 기본 `!trackingNumber → preparing` 규칙을 그대로 태우면 발송 후에도 "배송 준비 중"에 갇힌다 |
 | GET    | `/v1/orders/:id`                    | User             | 주문 상세 (본인 ownership 확인)                                               |
 | PATCH  | `/v1/orders/:id/cancel`             | User             | 주문 취소 — `paid` 면 Eximbay 환불 후 `refunded`, `pending` 이면 `cancelled`. `shipped`/`completed`/`cancelled` 는 400(반품 절차로) |
 
