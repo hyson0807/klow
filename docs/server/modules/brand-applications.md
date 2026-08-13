@@ -42,7 +42,7 @@
 | POST   | `/v1/brand/products/bulk`         | 상품 일괄 생성 (draft 다건)                                       |
 | GET    | `/v1/brand/products`              | 내 브랜드 상품 목록                                               |
 | PATCH  | `/v1/brand/products/reorder`      | 상품 노출 순서 변경 (드래그&드롭, `ids[]` 최대 500 — 자기 브랜드 소유만 반영) |
-| PUT    | `/v1/brand/products/onsite`       | 현장(박람회 부스) QR 판매가 일괄 저장 (`items[]{id, onsitePriceUsd(센트\|null), onsiteExcluded, settleKrw(₩\|null), countryPrices[]{iso2, priceLocal}}` 최대 500, `:id` 위에 선언) |
+| PUT    | `/v1/brand/products/onsite`       | 현장(박람회 부스) QR 판매가 일괄 저장 (`items[]{id, onsitePriceUsd(센트\|null), onsiteExcluded, settleKrw(₩\|null), discountPct(0~90\|생략=현재값 유지), countryPrices[]{iso2, priceLocal}}` 최대 500, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id/hidden`   | 상품 가리기 On/Off 토글 (`Product.hidden`, status 유지·노출/판매만 제외; 단일 필드 전용 PATCH, `:id` 위에 선언) |
 | PATCH  | `/v1/brand/products/:id`          | 상품 수정 (자기 brandId 확인)                                     |
 | DELETE | `/v1/brand/products/:id`          | 상품 삭제                                                         |
@@ -84,6 +84,12 @@
     클라(klow_brand)도 같은 이유로 **건드린 제품만** 보낸다.
   - `settleKrw`/`countryPrices` 는 신규 필드라 nullable / `.default([])` — 서버를 먼저 배포해도
     구 klow_brand 가 400 을 맞지 않는다.
+  - `discountPct` (2026-08-13, → `Product.onsiteDiscountPct`)는 **취소선 표시용 할인율**이다.
+    세팅한 가격이 이미 할인가라 청구·정산은 불변이고, 손님 화면에만 할인 전 가격이 그어져 함께 보인다
+    (파생 규칙은 [`products.md`](./products.md) `mode=onsite` 항목).
+    ⚠️ 위 두 필드의 `.default()` 패턴을 **일부러 따르지 않고 `.nullish()`** 다 — `.default(0)` 이면
+    배포 창에 열려 있던 구 klow_brand 탭이 저장할 때 브랜드가 켠 할인율을 조용히 0 으로 지운다.
+    **안 보내면 현재 값 유지**가 계약이고, 서버가 `owned` 행에서 현재 값을 읽어 폴백한다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
