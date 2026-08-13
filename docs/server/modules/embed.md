@@ -85,10 +85,19 @@ where: { AND: [PUBLIC_PRODUCT_WHERE, { brandId: brand.id, externalProductCode: c
 
 1. `<script>` 태그의 `data-code`
 2. 마운트 엘리먼트(`#klow-buy` 등)의 `data-code`
-3. **`location.search` 의 `product_no`** ← 주력. 브랜드가 스킨 템플릿을 전혀 안 고쳐도 동작한다
-4. `location.pathname` 정규식 (카페24 SEO 재작성 URL `/product/{name}/{no}/`)
+3. **`location.search` 의 `product_no`** ← 쿼리형 URL. 브랜드가 스킨 템플릿을 전혀 안 고쳐도 동작한다
+4. `location.pathname` 정규식 (카페24 SEO 재작성 URL) ← **실제로 더 흔하다**
 5. `window.iProductNo` (비공식 전역, `typeof` 가드)
 6. 실패 → **아무것도 렌더하지 않는다**
+
+⚠️ **3번보다 4번이 현실의 기본값이다.** 실측한 몰의 상품 주소는 쿼리스트링이 아니라 SEO 재작성 형태였다:
+
+```
+/skin-skin5/product/배리어-케어-장벽-로션/21/category/1/display/10/?icid=…
+                                        ^^ 상품번호
+```
+
+정규식 `/\/product\/[^/]+\/(\d+)\//` 가 이걸 잡는다(스킨 프리뷰 prefix `/skin-skin5` 가 앞에 붙어도 무관). **브랜드 안내 문구에 `?product_no=` 형태만 보여주면 안 된다** — 자기 주소창에 그 글자가 없어서 숫자를 못 찾는다. 스튜디오 자사몰 탭은 두 형태를 나란히 보여준다.
 
 폴백이 "버튼 미노출"이지 "브랜드관 링크"가 아닌 이유: 상품 A 페이지에서 브랜드관으로 보내면 손님이 A 를 다시 찾아야 하고, 최악은 엉뚱한 상품으로 보내는 것이다. 확신이 없으면 침묵한다.
 
