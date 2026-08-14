@@ -25,7 +25,29 @@
   치환은 `localize()` **overlay** 에서 한다 — ⚠️ `translateAndCache()` 에서 하면 스테일 판정에 걸린 행만 고쳐져
   이미 캐시된 로케일 행이 오번역을 계속 서빙한다(overlay 라 캐시 무효화·백필 없이 소급된다).
   저장 정본·컬럼·검증(`EnglishTagList(6)`)은 그대로이고 `concerns` 는 순수 자유 텍스트로 남는다.
-- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이), `skin-type-presets.ts`(피부 타입 고정 사전)
+- **카테고리 표시명 번역 (2026-08-14)**: `Product.category`(자유 문자열 1~60자)도 `?lang=` 에서 로케일화된다.
+  종전엔 번역 대상이 아니어서 klow_web PDP 가 영문 원문을 그대로 렌더했다. **하이브리드**다 —
+  고정 7종(`categoryKey != null`)은 `category-presets.ts` 큐레이션 사전, 브랜드 "직접 입력" 카테고리
+  (`categoryKey == null`)는 `ProductTranslation.category` MT 캐시. 프리셋을 못박은 이유는 피부 타입과 같다:
+  한 단어라 MT 가 문맥을 못 잡아 `serum` → `血清`/`Huyết thanh`(혈청), `cream`(zh) → `奶油`(유제품),
+  `mask`(zh) → `面具`(가면), `mist` → 6개 중 5개 로케일이 **기상 안개**로 나왔다.
+  ⚠️ 치환은 여기서도 `localize()` **overlay** 이고, 추가로 **`if (!t) continue` 앞**에 둔다 —
+  프리셋은 캐시 행이 아예 없어도(신규 제품 첫 조회·번역 실패) 적용돼야 한다.
+  ⚠️ `categoryLabel()` 은 **키뿐 아니라 저장된 영문 표시명까지 대조**한다. 어드민 제품 폼은 `category` 를
+  `categoryKey` 와 독립된 자유 텍스트로 받으므로(`categoryKey='serum'` + `category='Vitamin C Ampoule'`),
+  키만 보고 치환하면 운영자가 정한 이름을 프리셋이 뭉갠다. 어긋나면 `null` → MT 폴백.
+  ⚠️ 스테일 마커가 `t.concerns === null` → **`t.category === null`** 로 이동했다. 그래서 배포 직후
+  **기존 캐시 전 행 × 전 로케일이 한 번씩 재번역**된다(제품당 1회, 읽기 경로에서 점진 해소, 백필 없음).
+  마이그레이션 `20260814123933_add_product_translation_category` 는 nullable ADD COLUMN 이라 **롤링 배포 안전**.
+  klow_web `src/i18n/locales/*` 의 `labels.category.*`(쇼핑 카테고리 바)와 klow_brand `src/lib/i18n.ts` 의
+  목업 라벨은 **의도된 크로스 레포 미러**다 — 셋 다 같은 MT 오번역을 갖고 있었고 같은 커밋에서 함께 고쳤다.
+  ⚠️ **직접 입력 카테고리는 `categoryKey` 가 없어 klow_web 쇼핑 카테고리 바·추천 필터에 잡히지 않는다**
+  (치과재료 선례와 동일한 트레이드오프 — 브랜드 폼 힌트가 이 점을 안내한다).
+- **국가별 가격 배열 상한 (2026-08-14)**: `countryPrices` 의 zod 상한이 `98` → `COUNTRY_PRICE_ROWS_MAX = 250`.
+  ⚠️ 98은 `SeedingRate` 요율표 국가 수(= 주문 가능국 수)를 그대로 베낀 값이라 **여유가 정확히 0** 이었다.
+  klow_brand 가격 탭의 "모든 국가 무료배송" 일괄 토글이 주문 가능국 전체를 한 배열로 보내므로, 요율표에
+  국가가 하나만 늘거나 주문 불가국에 옛 핀이 남아 있으면 99행이 되어 **제품 저장 전체가 400** 이 됐다.
+- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이), `skin-type-presets.ts`(피부 타입 고정 사전), `category-presets.ts`(카테고리 고정 사전)
 
 ## admin-products.controller.ts (`@Controller('admin/products')`)
 
