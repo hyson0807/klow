@@ -33,32 +33,56 @@
 로 해석하고 응답 `range` 에 에코한다. 기본 기간 정의를 서버 한 곳에만 두려는 것이라
 klow_admin 은 최초 호출을 인자 없이 한다. 한쪽만 보내면 400(`from 과 to 는 함께 보내야 합니다`).
 
-지표 9개는 전부 `{ inRange, total }` 이다 — 타일이 `inRange` 를 크게, `total` 을 작게 병기한다.
+지표는 전부 `{ inRange, total }` 이다 — 타일이 `inRange` 를 크게, `total` 을 작게 병기한다.
 ⚠️ **`paidMembers.total` 만 예외**로 누적이 아니라 **현재 active 스냅샷**이다.
+
+> **누적(전체 기간) 조회는 서버를 다시 부르지 않는다.** 응답이 이미 지표마다 전 기간 `total`
+> 을 싣고 있으므로 어드민 기간 바의 "누적" 버튼은 큰 숫자의 출처를 `inRange` → `total` 로
+> 바꾸기만 한다(왕복 0회·즉시 전환). 그래서 `all` 같은 쿼리 파라미터가 없다.
+> 다만 실비 미입력 경고는 기간분(`pendingChargeCount`)과 전 기간분(`pendingChargeCountTotal`)
+> 이 달라 **둘 다** 내려준다.
 
 ```
 { range: { from, to, days }, fxFallbackRate,
-  brandSignups, paidMembers, subscriptionRevenueKrw, shippingBilledKrw, totalRevenueKrw,
+  brandSignups, paidMembers, subscriptionRevenueKrw,
+  shippingBilledKrw, exportMarginKrw, totalRevenueKrw,
   mrrKrw,                    // 현재 스냅샷 (기간 무관)
-  shipmentCount, gmvKrw, exportRevenueKrw,
-  pendingChargeCount,        // 실비 미입력 송장 수 (기간 내)
+  shipmentCount, gmvKrw, paymentFeeKrw,
+  shippedProductValueKrw,    // 계산은 하되 대시보드에 없음
+  pendingChargeCount, pendingChargeCountTotal,
   detail: { activeCompCount, pastDueCount, canceledInRange,
             seedingClaimedInRange, seedingClaimedTotal, seedingPendingCount } }
 ```
 
-| 지표 | 술어 |
-|---|---|
-| `brandSignups` | `Brand` where `submittedById != null AND status <> 'draft' AND submittedAt != null`, `submittedAt` 기준 (어드민이 직접 만든 브랜드 제외 — 신청 큐와 같은 술어) |
-| `paidMembers` | inRange = `BrandSubscription.createdAt ∈ 기간` / total = `status='active'` **현재 수** |
-| `subscriptionRevenueKrw` | `Σ SubscriptionInvoice.amountKrw` where `status='paid' AND paidAt ∈ 기간` |
-| `shippingBilledKrw` | efs-billing `rangeChargeTotal` — 아래 별도 항목 |
-| `totalRevenueKrw` | 구독 매출 + 배송 청구액 (= **우리 매출**) |
-| `mrrKrw` | active 구독 주기별 월환산 합. ⚠️ `planCode='brand_comp'`(무료 구독권) **제외** |
-| `shipmentCount` | `Shipment` where `submittedAt != null AND status <> 'cancelled'` |
-| `gmvKrw` | `Σ Order.totalUsd/100 × fx` where `paymentStatus='paid' AND paidAt ∈ 기간`. 시딩·현장 **포함**(= "전체 결제") |
-| `exportRevenueKrw` | 아래 SQL |
+| 지표 | 대시보드 라벨 | 술어 |
+|---|---|---|
+| `brandSignups` | 회원가입 파트너사 | `Brand` where `submittedById != null AND status <> 'draft' AND submittedAt != null`, `submittedAt` 기준 (어드민이 직접 만든 브랜드 제외 — 신청 큐와 같은 술어) |
+| `paidMembers` | 유료회원수 | inRange = `BrandSubscription.createdAt ∈ 기간` / total = `status='active'` **현재 수** |
+| `subscriptionRevenueKrw` | 구독 매출 | `Σ SubscriptionInvoice.amountKrw` where `status='paid' AND paidAt ∈ 기간` |
+| `shippingBilledKrw` | **수출 매출액** | efs-billing `rangeChargeTotal` — 아래 별도 항목 |
+| `exportMarginKrw` | 수출 마진 | `shippingBilledKrw × 10%` (`EXPORT_MARGIN_RATE`) |
+| `totalRevenueKrw` | 총 매출 | 구독 매출 + 수출 매출액 (= **우리 매출**) |
+| `mrrKrw` | MRR | active 구독 주기별 월환산 합. ⚠️ `planCode='brand_comp'`(무료 구독권) **제외** |
+| `shipmentCount` | 수출량 | `Shipment` where `submittedAt != null AND status <> 'cancelled'` |
+| `gmvKrw` | 거래액 | `Σ Order.totalUsd/100 × fx` where `paymentStatus='paid' AND paidAt ∈ 기간`. 시딩·현장 **포함**(= "전체 결제") |
+| `paymentFeeKrw` | 결제 수수료 | `gmvKrw × 5%` (`PAYMENT_FEE_RATE`) |
+| `shippedProductValueKrw` | *(없음)* | 아래 SQL |
 
-**수출 매출 SQL** — Shipment→ShipmentItem→OrderItem→Order 조인, `Σ unitPriceUsd × quantity / 100 × fx`:
+> ⚠️⚠️ **`shippingBilledKrw` 가 화면의 "수출 매출액"이다.** 발급 송장 상품가
+> (`shippedProductValueKrw`)와 헷갈리지 말 것 — 완전히 다른 값이고 후자는 대시보드에 없다.
+> 그래서 후자의 서버 필드·메서드 이름에서 `exportRevenue` 를 일부러 뺐다(예전 이름이었다).
+> 계산과 회귀 스펙은 살려 뒀다 — 실제 수출 상품가는 언제든 다시 필요해진다.
+
+> ⚠️ **파생 두 개(`exportMarginKrw`·`paymentFeeKrw`)는 표시 전용**이고 `totalRevenueKrw` 에
+> 더하지 않는다 — 마진은 수출 매출액의 일부이고 수수료는 거래액의 일부라, 더하면 이중계상이다.
+> 비율은 `stats.service.ts` 상단 상수 두 개가 정본이고 `scaled()` 가 inRange·total 양쪽에
+> 같은 규칙으로 적용한다(누적 조회가 어긋나지 않게).
+
+> ⚠️ **"수출 마진"은 회계상 매출총이익이 아니다.** 밑단인 배송 청구액에는 EFS 실비
+> pass-through 가 섞여 있다(우리가 실제로 남기는 건 국가별 청구수수료뿐). 운영이 합의한
+> 관리 지표로 이해할 것.
+
+**발급 송장 상품가 SQL** — Shipment→ShipmentItem→OrderItem→Order 조인, `Σ unitPriceUsd × quantity / 100 × fx`:
 
 ```sql
 WHERE s."submittedAt" IS NOT NULL
