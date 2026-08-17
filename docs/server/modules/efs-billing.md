@@ -50,6 +50,26 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 `submittedAt ∈ [월초 − 60일, 월말]`(픽업 ≥ 발송)로 **상위집합만 DB 에서 좁히고** 정확한 월은 JS 가 정한다.
 (`Shipment.submittedAt` 인덱스는 아직 없다 — 현 볼륨에선 불필요, 증가하면 검토.)
 
+### 예외 — 대시보드 KPI 는 발급일로 자른다 (`rangeChargeTotal`, 2026-08-17)
+
+어드민 대시보드의 **배송 청구액** 타일은 임의 기간(주 단위)을 조회해야 하는데 픽업월 귀속으론
+그게 표현되지 않는다. 그래서 `rangeChargeTotal(start, endExclusive)` 는 **`Shipment.submittedAt`**
+기준으로 자르고(`status <> cancelled`, `carrier <> DOMESTIC`), 수출량·수출매출 KPI 와 같은
+모집단을 쓴다. `endExclusive: null` 이면 전 기간(누적).
+
+⚠️ **따라서 KPI 합계와 발행된 월별 청구서 합계는 일치하지 않는다** — 기준일이 다르고 청구서는
+publish 시점에 동결된다. 자릿수·부호가 맞는지만 대조할 것.
+
+⚠️ 청구 공식 자체는 **`buildStatement` 를 그대로 태운다**(KPI 전용 산식을 새로 쓰면 대시보드
+숫자와 실제 청구서가 갈라진다). 두 경로가 같은 `BILLING_SHIPMENT_SELECT` + `buildBillingRows` 를
+공유하므로 한쪽만 필드를 늘리면 그쪽 금액만 조용히 달라진다는 점에 주의.
+
+⚠️ **EFS live 조회를 하지 않는다**(빈 맵을 넘긴다). `buildStatement` 가 저장값만 청구 근거로 쓰므로
+금액에 영향이 없고, 대시보드가 외부 API 를 때리면 EFS 장애가 대시보드 장애가 된다. 대신
+**정산표 업로드 전 송장은 금액에서 빠지므로** `pendingChargeCount`(= `build.missingCharge`)를 함께
+돌려주고 어드민 타일이 `⚠ 실비 미입력 N건 — 과소집계` 로 표시한다. 실측(2026-08-17 dev): 청구 대상
+102건 중 **101건이 실비 미입력**이었다 — 이 경고가 없으면 팀이 미확정 숫자를 확정으로 제출한다.
+
 ## EFS 실비의 출처
 
 `Shipment.efsChargeSource` 로 구분한다:
@@ -104,7 +124,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 
 ## 관련 파일
 
-`efs-billing.service.ts`(`monthlyReport`·`saveCharge`·`extractFromSettlement`·`importPreview/Apply`·
+`efs-billing.service.ts`(`monthlyReport`·**`rangeChargeTotal`**(대시보드 KPI)·`buildBillingRows`·`saveCharge`·`extractFromSettlement`·`importPreview/Apply`·
 `feeResolver`·**`buildStatement`**·`renderXlsx`+시트 빌더·`exportExcel`·`publish`·`markPaid`·브랜드 열람),
 `admin-efs-billing.controller.ts`. 선결제 share 는 `pricing/chargeable-brands.ts` `perBrandShareUsd`,
 EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settlement/brand-settlement.controller.ts`.

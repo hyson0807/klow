@@ -10,8 +10,7 @@
 
 | Method | Path                              | 기능                                                                 |
 |--------|-----------------------------------|----------------------------------------------------------------------|
-| GET    | `/admin/stats`                    | 카운트 묶음 — `{ products, creators, videos }`                        |
-| GET    | `/admin/stats/revenue`            | 구독 수익(KPI) 집계 — 이번 달 + 누적(KRW) + 시딩 신청 건수            |
+| GET    | `/admin/stats/kpi?from=&to=`      | **기간별 KPI 9종** — 기간 내 신규 + 전체 누적/현재 (KRW)              |
 | GET    | `/admin/stats/export-trend`       | 주별 수출(배송예약 발급) 물량 — **비누적** + 4주 이동평균, 최근 26주  |
 | GET    | `/admin/stats/subscription-trend` | 주별 신규 구독 브랜드 — **비누적** + 4주 이동평균, 최근 26주          |
 | GET    | `/admin/stats/order-type-trend`   | 주별 결제완료 주문 — 유형별(일반·시딩·현장) 건수 + 결제금액, 최근 26주 |
@@ -25,19 +24,99 @@
 
 ## 응답 상세
 
-### `/revenue`
+### `/kpi?from=YYYYMMDD&to=YYYYMMDD`
 
-모든 금액 KRW 정수, "이번 달"은 **KST 기준 당월 1일 00:00**(`kstMonthStart`) 이후.
+대표 팀원이 **매주 투자사에 제출할 수치를 엑셀에 수기 입력**하는 화면이 쓴다(어드민 대시보드
+홈 상단 기간 바). 구 `/revenue`(이번 달 고정)를 흡수해 대체했다.
+
+`from`/`to` 는 **KST 달력일 포함 구간**이고 둘 다 optional — 미지정 시 **최근 7일(당일 포함)**
+로 해석하고 응답 `range` 에 에코한다. 기본 기간 정의를 서버 한 곳에만 두려는 것이라
+klow_admin 은 최초 호출을 인자 없이 한다. 한쪽만 보내면 400(`from 과 to 는 함께 보내야 합니다`).
+
+지표 9개는 전부 `{ inRange, total }` 이다 — 타일이 `inRange` 를 크게, `total` 을 작게 병기한다.
+⚠️ **`paidMembers.total` 만 예외**로 누적이 아니라 **현재 active 스냅샷**이다.
 
 ```
-{ subscription: { activeCount, pastDueCount, canceledCount, newThisMonth, canceledThisMonth,
-                  mrrKrw, revenueThisMonthKrw, revenueTotalKrw },
-  seeding: { claimedThisMonth, claimedTotal, pendingCount } }
+{ range: { from, to, days }, fxFallbackRate,
+  brandSignups, paidMembers, subscriptionRevenueKrw, shippingBilledKrw, totalRevenueKrw,
+  mrrKrw,                    // 현재 스냅샷 (기간 무관)
+  shipmentCount, gmvKrw, exportRevenueKrw,
+  pendingChargeCount,        // 실비 미입력 송장 수 (기간 내)
+  detail: { activeCompCount, pastDueCount, canceledInRange,
+            seedingClaimedInRange, seedingClaimedTotal, seedingPendingCount } }
 ```
 
-MRR 은 active 구독을 주기별 월환산으로 합산(연 44,000 / 6개월 55,000 / legacy 월 49,500).
-구독 매출은 `SubscriptionInvoice(status='paid')` 합계. 시딩은 **건수만** — 이익 추정치는 폐기됐다.
-시딩 신청은 `SeedingClaim`(사람 수) 기준이고 `pendingCount` 만 링크 수다(다인원 링크 1개 = N명).
+| 지표 | 술어 |
+|---|---|
+| `brandSignups` | `Brand` where `submittedById != null AND status <> 'draft' AND submittedAt != null`, `submittedAt` 기준 (어드민이 직접 만든 브랜드 제외 — 신청 큐와 같은 술어) |
+| `paidMembers` | inRange = `BrandSubscription.createdAt ∈ 기간` / total = `status='active'` **현재 수** |
+| `subscriptionRevenueKrw` | `Σ SubscriptionInvoice.amountKrw` where `status='paid' AND paidAt ∈ 기간` |
+| `shippingBilledKrw` | efs-billing `rangeChargeTotal` — 아래 별도 항목 |
+| `totalRevenueKrw` | 구독 매출 + 배송 청구액 (= **우리 매출**) |
+| `mrrKrw` | active 구독 주기별 월환산 합. ⚠️ `planCode='brand_comp'`(무료 구독권) **제외** |
+| `shipmentCount` | `Shipment` where `submittedAt != null AND status <> 'cancelled'` |
+| `gmvKrw` | `Σ Order.totalUsd/100 × fx` where `paymentStatus='paid' AND paidAt ∈ 기간`. 시딩·현장 **포함**(= "전체 결제") |
+| `exportRevenueKrw` | 아래 SQL |
+
+**수출 매출 SQL** — Shipment→ShipmentItem→OrderItem→Order 조인, `Σ unitPriceUsd × quantity / 100 × fx`:
+
+```sql
+WHERE s."submittedAt" IS NOT NULL
+  AND s."status"       <> 'cancelled'   -- 취소 후 재발급이 두 번 잡힌다
+  AND s."carrier"      <> 'DOMESTIC'    -- 국내 자체배송(시딩 전용)은 수출이 아니다
+  AND o."isSeeding"     = false         -- 시딩 unitPriceUsd 는 EFS 통관 신고가라 실결제액과 무관
+  AND o."paymentStatus" = 'paid'        -- 환불 소급 차감(확정 정책)
+```
+
+⚠️ **필터 4개가 전부 필수다.** 하나라도 빠지면 에러 없이 **매출이 조용히 부풀어 오른다**.
+회귀 잠금은 `modules/stats/__tests__/kpi.spec.ts` 가 SQL 문자열을 직접 검사한다.
+현장(onsite) 주문은 Shipment 자체가 없어 조인에서 자동으로 빠진다.
+`ShipmentItem.orderItemId @unique` 라 조인 fan-out 중복 합산은 구조적으로 불가능하다.
+배송비를 빼는 이유는 EFS 실비로 그대로 나가는 pass-through 라 수출액이 아니기 때문이다.
+
+> **환율**: USD 금액은 **`Order.fxRateSnapshot`(주문 시점 환율)** 으로 환산한다. 라이브 환율을
+> 쓰면 지난주 제출한 숫자가 이번주 재조회 때 달라져 투자사 자료로 못 쓴다. 스냅샷이 없는
+> legacy 주문만 `resolveFxRate()` 라이브값으로 폴백하고 그 값을 `fxFallbackRate` 로 함께 내린다.
+
+> **⚠️ `::float8` 로 캐스트할 것.** `::bigint` 로 바꾸면 Prisma 가 JS `BigInt` 를 돌려주고
+> `JSON.stringify` 가 `TypeError: Do not know how to serialize a BigInt` 로 죽는다. KRW 합계는
+> 2^53 근처도 못 가므로 float8 이 안전하다. `COALESCE(…::numeric, …)` 의 `::numeric` 캐스트도
+> 필수 — `fxRateSnapshot` 이 `Float`(double)이라 없으면 `ROUND(v)` 단일인자 오버로드가 없어 에러난다.
+
+> **⚠️ 기간 필터에는 `AT TIME ZONE` 이중 캐스트가 필요 없다.** 아래 `kstWeekBucketSql` 이
+> 이중 캐스트를 하는 건 SQL *안에서 버킷 키를 만들기* 때문이고, 기간 필터는 JS(`kstYmdRange`)가
+> 이미 계산한 UTC 인스턴트를 파라미터로 넘길 뿐이라 캐스트가 낄 자리가 없다. 모든 기간 비교는
+> **반열림** `>= start AND < endExclusive` 다 — `lte 23:59:59` 로 쓰면 그날 마지막 1초가 잘린다.
+
+> **⚠️ MRR 단가 정정 (2026-08-17)**: 그전까지 stats 는 반기 330,000 / 연 528,000(월환산
+> 55,000 / 44,000)이라는 **가격 인상 전 구 가격표**를 들고 있었다. 실제 청구는 396,000 / 660,000
+> (월환산 66,000 / 55,000)이고 env(`SUBSCRIPTION_*_PRICE_KRW`) 오버라이드도 무시했다. 즉
+> **2026-08 이전 리포트의 MRR 은 약 20% 과소집계**였다 — 투자사에 이미 낸 수치보다 커진다.
+> 재발 방지로 단가 정본을 `src/pricing/subscription-price.ts` 하나로 뽑았고(청구 경로와 공유),
+> 회귀 잠금은 `pricing/__tests__/subscription-price.spec.ts`.
+
+> **⚠️ 배송 청구액은 확정 금액이 아니다.** `buildStatement` 가 `efsChargeSource ∈ ('excel','manual')`
+> 인 송장만 청구 근거로 삼으므로(API 폴백값은 안 씀) **EFS 정산표 업로드 전 송장은 금액에서 빠진다**.
+> 그만큼 과소집계이고, 정산표를 나중에 올리면 과거 기간 수치가 올라간다. `pendingChargeCount` 를
+> 함께 내리는 이유이고 어드민 타일이 `⚠ 실비 미입력 N건 — 과소집계` 로 표시한다.
+> 또한 KPI 는 **송장 발급일(`submittedAt`)** 기준인데 실제 청구서는 **EFS 픽업 이벤트(코드 03) 월**
+> 기준이라 **KPI 합계와 발행된 월별 청구서 합계는 일치하지 않는다**(대시보드가 임의 기간을
+> 조회해야 하는데 픽업월 귀속으론 표현이 안 된다). 대신 수출량·수출매출과 **같은 모집단**이라
+> 세 타일이 서로 설명된다.
+
+> **⚠️ 기준일이 지표마다 다르다.** 수출매출·수출량·배송청구액은 **발급일**, 거래액·구독매출은
+> **결제일**이다. 그래서 같은 창에서 대소가 역전될 수 있다(발급은 결제보다 늦다).
+
+> **교차검증**: `shipmentCount.total` 은 `/export-trend` 의 `allTimeTotalCount` 와 **항상 같아야
+> 한다**(술어가 글자 그대로 같다). 대시보드 한 화면에 둘 다 뜨므로 어긋나면 즉시 보인다.
+> `totalRevenueKrw = subscriptionRevenueKrw + shippingBilledKrw` 도 응답 자체로 검산된다.
+> 누적에 `paidAt IS NOT NULL` 을 거는 것도 같은 이유 — 누적이 기간 합계의 상한이어야 성립한다.
+
+> **인덱스**: `Shipment.submittedAt`·`Order.paidAt`·`SubscriptionInvoice.paidAt`·`Brand.submittedAt`
+> ·`BrandSubscription.createdAt` 에 인덱스가 없다. 기존 추이 3종이 이미 같은 컬럼을 풀스캔 중이고
+> 현 규모(브랜드 수십, 송장 수천)에서 seq scan 이 수 ms 라 **이번엔 추가하지 않았다**. 재검토 임계는
+> Shipment 10만 행 또는 p95 500ms. ⚠️ 그때 `CREATE INDEX CONCURRENTLY` 를 쓰려면 Prisma Migrate 가
+> 마이그레이션을 트랜잭션으로 감싸므로 **수동 적용 후 `migrate resolve --applied`** 여야 한다.
 
 ### `/export-trend` · `/subscription-trend`
 

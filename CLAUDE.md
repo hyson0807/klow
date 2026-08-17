@@ -89,7 +89,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — `onModuleInit` 을 가진 provider 는 그것뿐이다) `AppModule` 을 `init()` 까지 띄운다. 두 가지를 잡는다: ① 30개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 5개 등록 여부**. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — `onModuleInit` 을 가진 provider 는 그것뿐이다) `AppModule` 을 `init()` 까지 띄운다. 두 가지를 잡는다: ① 30개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 6개 등록 여부**. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
 3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 289개). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
