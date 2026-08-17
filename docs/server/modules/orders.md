@@ -50,12 +50,13 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total }` |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal }` — `pendingTotal` 은 **필터와 무관한 전체 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다) |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 
 > ⚠️ 위 두 조회만 `ADMIN_ORDER_INCLUDE`(= `items` + `seedingClaim`)를 쓴다. `seedingClaim` 은 **고객 선택 시딩의 표시 제품명**용이다 — `OrderItem.productName` 이 실제 제품명이 아니라 발급 시 동결된 영문 통관 품명이라, 어드민 화면이 바이어가 고른 제품으로 갈아끼우려면 필요하다(→ [seeding](./seeding.md), 클라 미러는 `klow_admin/src/lib/seeding-display.ts`). 공용 `ORDER_INCLUDE` 를 넓히지 않은 이유는 그게 create/quote/고객 조회까지 공유해 결제 경로에 불필요한 조인이 얹히기 때문이다.
 
 | PATCH  | `/admin/orders/:id/status`    | 주문 상태 변경 — `{ status: 'pending'\|'processing'\|'shipped'\|'completed' }`. 역행·`cancelled` 주문 변경은 400 |
+| PATCH  | `/admin/orders/:id/reconcile-payment` | **결제 재확인** — 미결제로 남은 주문을 Eximbay 에 직접 조회(`/v1/payments/retrieve`, `key_field='order_id'`)해 실제 승인(`SALE`/`AUTH`)이면 `markPaid` 로 확정. 응답 `{ result: 'paid'\|'not_paid'\|'not_found'\|'mismatch', order }` (확정 성공 시에만 `order` 동봉 — 어드민이 재조회하지 않게, `refund` 와 같은 관례). 15분 주기 `payment-reconcile` 크론과 **같은 경로**이고 운영자가 즉시 처리하기 위한 수동 트리거다. ⚠️ **임의로 `paid` 를 찍는 엔드포인트가 아니다** — 반드시 PG 재조회를 거치고 금액이 어긋나면(`mismatch`) 전이하지 않는다. 손으로 결제완료를 찍게 하면 미결제 주문이 정산에 섞인다 |
 | PATCH  | `/admin/orders/:id/refund`    | 환불/취소 처리 — `{ reason: 1~500자 }`. `paid` 면 Eximbay cancel 호출 후 `refunded`, `pending` 이면 결제 없이 `cancelled`. 이미 취소·환불·실패 주문은 400 |
 | PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN→신분증)는 주문의 기존 `countryCode` 로 강제. 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
 

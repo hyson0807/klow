@@ -257,7 +257,7 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 
 ### Payment — Eximbay consumer checkout → [`payment-integration.md`](./payment-integration.md)
 
-소비자 결제는 **Eximbay**(해외 카드 acquiring, 통화 USD). 흐름: `POST /v1/orders`(동의 3종 + IP + fxRate 스냅샷) → `POST /v1/payment/prepare`(ownership·동의 재검증, fgkey echo) → klow_web Eximbay JS SDK → `return_url` → `/checkout/redirect` → `POST /v1/payment/verify`(Eximbay 재조회 + `fxRateSnapshot` 기준 금액 검증 + `paymentStatus` 멱등 전이). 보강 경로 `POST /webhooks/eximbay`(IP 화이트리스트), 실패 보고 `POST /v1/payment/report-failure`(pending→failed 멱등). 환불은 `payment.refundOrder` 가 Eximbay cancel API 호출. **금액 진실은 서버** — 클라 금액 불신, `Order.totalUsd` 정본. 전체 상태머신·엣지케이스·안전망은 payment-integration.md 참고(별도로 확장 중).
+소비자 결제는 **Eximbay**(해외 카드 acquiring, 통화 USD). 흐름: `POST /v1/orders`(동의 3종 + IP + fxRate 스냅샷) → `POST /v1/payment/prepare`(ownership·동의 재검증, fgkey echo) → klow_web Eximbay JS SDK → `return_url` = **서버 `POST /payment/return`**(Eximbay 재조회 + `fxRateSnapshot` 기준 금액 검증 + `paymentStatus` 멱등 전이까지 **그 요청 안에서** 끝내고 klow_web 결과 화면으로 303). 보강 경로 `POST /webhooks/eximbay`(IP 화이트리스트) + **`payment-reconcile` 크론(15분)** + 수동 `PATCH /admin/orders/:id/reconcile-payment`, 실패 보고 `POST /v1/payment/report-failure`(pending→failed 멱등). ⚠️ 결제 확정이 **브라우저 JS 실행에 의존하지 않는다** — 예전엔 의존해서 "카드는 승인, 주문은 미결제" 가 발생했다(현장 QR 결제에서 특히). 환불은 `payment.refundOrder` 가 Eximbay cancel API 호출. **금액 진실은 서버** — 클라 금액 불신, `Order.totalUsd` 정본. 전체 상태머신·엣지케이스·안전망은 payment-integration.md 참고(별도로 확장 중).
 
 ### Brand subscription — NicePay billing → [`brand-subscription.md`](./brand-subscription.md)
 
@@ -373,11 +373,19 @@ Key points: the same service method serves both `AdminProductsController` and `P
 klow_web /checkout  → POST /v1/orders   (UserGuard; cart + address + 4 동의 literal(true))
   ↓ server snapshots unitPriceUsd/totalUsd via priceLine(), stamps fxRateSnapshot + agreementIp
   → POST /v1/payment/prepare   → Eximbay /payments/ready → fgkey (echoed for anti-tamper)
-  → Eximbay JS SDK (klow_web/src/lib/eximbay.ts) → return_url → /checkout/redirect
-  → POST /v1/payment/verify   → Eximbay re-query + fxRateSnapshot amount check
+  → Eximbay JS SDK (klow_web/src/lib/eximbay.ts) → return_url → POST /payment/return (server)
+  → Eximbay re-query + fxRateSnapshot amount check
   → order.updateMany({where:{paymentStatus:'pending'}}) idempotent → paid
+  → 303 → klow_web /checkout/redirect?<qs>&klow_verified=1  (screen routing + cart cleanup only)
   ↖ (reinforced by POST /webhooks/eximbay, IP-whitelisted)
+  ↖ (self-healed by the payment-reconcile cron, every 15 min)
 ```
+
+Confirmation never depends on the buyer's browser running JS. It used to: `return_url` pointed at
+klow_web and a client page fired a second, fire-and-forget `verify` whose errors were swallowed —
+so a buyer who paid and never came back (QR → in-app browser → card app) left the order `pending`
+forever with the card charged. Three independent paths now reach `markPaid`; see
+[`server/modules/payment.md`](./server/modules/payment.md).
 
 Amount truth is always server-side (`Order.totalUsd`); the client's numbers are never trusted. Full state machine and edge cases: [`payment-integration.md`](./payment-integration.md).
 
@@ -439,6 +447,6 @@ Always `npx prisma migrate dev --name <이름>` — never `migrate deploy`, manu
 
 - **Type sharing across repos** — `klow_admin/src/lib/constants.ts`, `klow_server/src/common/constants.ts`, and `klow_web/src/lib/types.ts` are intentional hand-mirrored copies; a future shared workspace package will replace this.
 - **Pagination** — list endpoints clamp to `take ≤ 200` with no cursor/page params. Add a cursor API before catalogs grow past that.
-- **Payment/refund hardening** — partial refunds, outbox-based refund (PG↔DB drift is a known v1 gap), and abandoned-pending-order cleanup are not yet built.
+- **Payment/refund hardening** — partial refunds and outbox-based refund (PG↔DB drift on the *refund* leg is a known v1 gap) are not yet built. The *inbound* leg is covered as of 2026-08-17: server-side `return_url` + webhook + a 15-min `payment-reconcile` cron. Abandoned pending orders are still not swept into a terminal state — they are simply unpayable after 24h (`PENDING_ORDER_TTL_MS`).
 - **Auth hardening** — password reset, reCAPTCHA/rate-limit on signup, and expired-session cleanup crons remain TODO.
 - **Production deployment / CI/CD** — Railway (server) is being stood up; frontends are local dev today.
