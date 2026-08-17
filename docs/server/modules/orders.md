@@ -50,7 +50,7 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal }` — `pendingTotal` 은 **필터와 무관한 전체 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다) |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `yearMonth`(`YYYY-MM`) / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal, revenue }` — `pendingTotal` 은 **status/type/brand 필터와 무관한 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다). ⚠️ 단 **`yearMonth` 창은 따라간다** — 배너가 "클릭하면 보이는 건수"를 약속하는데 클릭이 설정하는 건 `paymentStatus` 뿐이고 월 창은 그대로 남으므로, 무시하면 "12건 숨겨져 있음"을 눌러 3건만 보이는 상태가 된다. `revenue` 는 `yearMonth` 를 보냈을 때만 채워지는 **월 매출액**(아래 항목) |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 
 > ⚠️ 위 두 조회만 `ADMIN_ORDER_INCLUDE`(= `items` + `seedingClaim`)를 쓴다. `seedingClaim` 은 **고객 선택 시딩의 표시 제품명**용이다 — `OrderItem.productName` 이 실제 제품명이 아니라 발급 시 동결된 영문 통관 품명이라, 어드민 화면이 바이어가 고른 제품으로 갈아끼우려면 필요하다(→ [seeding](./seeding.md), 클라 미러는 `klow_admin/src/lib/seeding-display.ts`). 공용 `ORDER_INCLUDE` 를 넓히지 않은 이유는 그게 create/quote/고객 조회까지 공유해 결제 경로에 불필요한 조인이 얹히기 때문이다.
@@ -80,6 +80,44 @@
   ⚠️ 감추는 축은 `paymentStatus` 뿐이고 **`status='pending'`(대기중)은 감추지 않는다** — 일반
   주문은 결제에 성공해도 발송 전까지 `status` 가 `pending` 이라(위 **상태** 항목) 그걸 감추면
   "결제완료·미발송" 처리 큐가 통째로 사라진다.
+- **`yearMonth`** (`YYYY-MM`, KST 캘린더월) — 어드민 목록의 월 선택기. zod 프리미티브
+  `KstYearMonth`(`common/validation/shared.ts`)가 `parseKstYearMonth` 로 달력 유효성까지 본다.
+  ⚠️ **`.default()` 를 주지 않는다** — 기본값을 주면 `yearMonth` 를 안 보내는 환불 페이지가 조용히
+  한 달로 잘린다(`excludePaymentStatus`·`take` 와 같은 함정). 미전달 = 전체 기간 = 종전 동작.
+
+### 월 매출액 (`revenue`)
+
+`yearMonth` 를 보내면 응답에 `revenue: { krw, paidCount, fxFallbackRate }` 가 실린다(미전달 시
+`null` — 집계 쿼리도 fx 조회도 하지 않으므로 환불 페이지는 추가 비용이 0 이다). 어드민 주문
+목록 상단의 매출 카드 3개(월 매출액 / 결제 건수 / 평균 주문액)가 이걸 쓴다.
+
+⚠️ **용어 주의 — 이 숫자는 `stats.service.gmvKrw`(대시보드 라벨 `거래액`)를 월·필터 범위로 좁힌
+값이다.** 같은 저장소에서 `매출`은 이미 세 가지를 가리킨다(`subscriptionRevenueKrw` 구독매출 /
+`shippingBilledKrw` 수출 매출액 / `totalRevenueKrw` 총매출 = 앞 둘의 합). 주문 화면 라벨이
+`월 매출액` 인 것은 UI 결정이고, 그래서 카드에 `결제완료 주문 총액(배송비 포함) · 환불 제외` 를
+병기한다 — 안 적으면 같은 공식이 대시보드에서는 `거래액`, 여기서는 `매출`로 보여 버그로 신고된다.
+배송비 포함 · 시딩(₩0)·현장 결제 포함이고, **환불이 나면 `paymentStatus` 가 `refunded` 로 바뀌어
+그 달 숫자가 소급 감소한다**(`gmvKrw` 와 같은 정책).
+
+- **월 경계는 `createdAt`(주문일) 기준**이고 목록 필터와 **같은 창**이다. 목록의 '주문일' 열·정렬
+  키와 같은 축이라 카드 숫자를 표에서 검산할 수 있고, 모든 주문이 가진 유일한 시각이므로
+  미결제·실패·취소 주문이 목록에서 사라지지 않는다("숨겨진 미결제 N건" 배너가 그에 의존한다).
+  ⚠️ 그래서 대시보드 `GET /admin/stats/kpi` 의 **`거래액`(`gmvKrw`, `paidAt` 기준)과 월경계에서
+  소폭 다르다** — 월말 주문 ↔ 월초 결제 건이 서로 다른 달에 잡힌다. 의도된 차이다.
+- **필터를 반영한다** — `buildAdminOrderWhere()` 가 만든 **같은 `where` 객체**를 재사용한다
+  (브랜드 필터가 2단계 조회라 조건을 다시 적으면 카드와 표가 조용히 갈린다). 단 **결제상태만
+  `paid` 로 덮는다** — 매출 정의가 결제완료 고정이기 때문이고, 반영하면 운영자가 '환불완료'를
+  고른 순간 카드가 "환불 주문 중 결제완료" = ₩0 이 되어 오해를 만든다.
+- **환산은 `Order.fxRateSnapshot`(주문 시점 환율)**, 없는 legacy 주문만 `resolveFxRate` 라이브
+  환율로 폴백하고 그 값을 `fxFallbackRate` 로 함께 내린다(`stats.service` 와 같은 규약).
+  라이브 환율로 통일하면 과거 달 숫자가 매일 바뀐다.
+- 집계는 `groupBy(by: ['fxRateSnapshot'], _sum: { totalUsd })` + 순수 함수
+  `order-revenue.ts foldRevenueKrw()`. `Σ(usdᵢ×fx) = fx×Σusdᵢ` 라 환율별로 묶어 곱하는 것이 행
+  단위 곱셈과 대수적으로 동일하면서 행 수가 유한하다(원시 SQL 은 where 복제, `findMany` 는 행
+  수 무제한이라 둘 다 탈락 — 자세한 근거는 그 파일 상단 주석). 반올림은 `gmvKrw` 의
+  `ROUND(SUM(line))` 과 맞춰 **총합에 한 번만**. 회귀 잠금 `__tests__/order-revenue.spec.ts`.
+  (인덱스는 `Order` 의 단일 컬럼 `createdAt`·`paymentStatus` 로 충분한 규모다 — 트래픽이 커지면
+  `@@index([paymentStatus, createdAt])` 이 다음 선택지이고, 지금 마이그레이션을 넣을 이유는 없다.)
 
 **`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` 두 컬럼을 한 축으로 접은
 값이라 DB enum 이 아니다. `seeding`(무가 시딩) / `onsite`(부스 QR 현장결제, 배송 없음) /
