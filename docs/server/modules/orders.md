@@ -50,11 +50,32 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `type` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc` |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total }` |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 | PATCH  | `/admin/orders/:id/status`    | 주문 상태 변경 — `{ status: 'pending'\|'processing'\|'shipped'\|'completed' }`. 역행·`cancelled` 주문 변경은 400 |
 | PATCH  | `/admin/orders/:id/refund`    | 환불/취소 처리 — `{ reason: 1~500자 }`. `paid` 면 Eximbay cancel 호출 후 `refunded`, `pending` 이면 결제 없이 `cancelled`. 이미 취소·환불·실패 주문은 400 |
 | PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN→신분증)는 주문의 기존 `countryCode` 로 강제. 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
+
+### 목록 쿼리 (`OrderAdminListQueryInput`)
+
+쿼리 검증은 `common/validation/order.ts` 의 zod 스키마 + `ZodValidationPipe` 가 한다(예전엔
+컨트롤러가 원시 문자열을 그대로 캐스팅해 `?status=zzz` 가 Prisma 까지 흘러 500 이 났다).
+목록과 총건수는 `buildAdminOrderWhere()` 가 만든 **같은 where** 를 쓴다 — 갈라지면 총계가
+조용히 거짓말을 한다. `ADMIN_ORDER_TYPES` 는 이 스키마가 쓰기 때문에 `modules/orders` 가 아니라
+`common/validation/order.ts` 에 있다(`common/` 은 `modules/` 를 import 할 수 없다).
+
+- **`brandId`** — 그 브랜드 제품이 한 줄이라도 든 주문. ⚠️ **`OrderItem` 에는 `Product` relation 이
+  없어**(`productId` 는 순수 스칼라) `items.some.product.brandId` 를 못 쓴다. 그래서 브랜드의
+  `productIds` 를 먼저 조회하는 2단계 패턴(settlement 와 동일)을 쓰고, 브랜드 소속 경로가 둘이라
+  `OR` 로 함께 잡는다 — 일반 라인은 `Product.brandId`, 제품 없는 시딩 직접입력 라인은
+  `OrderItem.brandId` 스냅샷. 한쪽만 걸면 시딩 주문이 조용히 빠진다.
+- **`excludePaymentStatus`** — 어드민 목록이 버려진 체크아웃(미결제)을 기본으로 감추는 용도.
+  ⚠️ **서버 기본값이 아니라 klow_admin 이 명시적으로 보내는 값**이다 — 기본값으로 만들면 같은
+  엔드포인트를 쓰는 환불 페이지 등 다른 소비자까지 조용히 필터링된다. `paymentStatus` 가 함께
+  오면 그쪽이 이긴다(어드민은 결제 상태 필을 고르면 제외를 안 보내 숨김이 자동 해제된다).
+  ⚠️ 감추는 축은 `paymentStatus` 뿐이고 **`status='pending'`(대기중)은 감추지 않는다** — 일반
+  주문은 결제에 성공해도 발송 전까지 `status` 가 `pending` 이라(위 **상태** 항목) 그걸 감추면
+  "결제완료·미발송" 처리 큐가 통째로 사라진다.
 
 **`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` 두 컬럼을 한 축으로 접은
 값이라 DB enum 이 아니다. `seeding`(무가 시딩) / `onsite`(부스 QR 현장결제, 배송 없음) /

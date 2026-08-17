@@ -14,6 +14,7 @@
 | GET    | `/admin/stats/revenue`            | 구독 수익(KPI) 집계 — 이번 달 + 누적(KRW) + 시딩 신청 건수            |
 | GET    | `/admin/stats/export-trend`       | 주별 수출(배송예약 발급) 물량 — **비누적** + 4주 이동평균, 최근 26주  |
 | GET    | `/admin/stats/subscription-trend` | 주별 신규 구독 브랜드 — **비누적** + 4주 이동평균, 최근 26주          |
+| GET    | `/admin/stats/order-type-trend`   | 주별 결제완료 주문 — 유형별(일반·시딩·현장) 건수 + 결제금액, 최근 26주 |
 | GET    | `/admin/stats/brand-activity`     | 구독중 브랜드의 마지막 활동 세그먼트 + 관리 필요 목록                 |
 
 > **2026-08 개편**: 구 `/export-weekly`(주별 **누적** 선차트)는 제거됐다. 누적은 정의상 절대
@@ -66,6 +67,43 @@ MRR 은 active 구독을 주기별 월환산으로 합산(연 44,000 / 6개월 5
 >
 > 무료 구독권(`planCode='brand_comp'`)·현금 결제 구독도 **필터하지 않는다** — `/brand-activity`
 > 의 모집단과 같아야 대시보드 두 섹션의 숫자가 서로 어긋나지 않는다.
+
+### `/order-type-trend`
+
+```
+{ weeks: 26,
+  series: [{ weekStart, general, seeding, onsite, count, amountUsd, partial }],
+  windowTotals: { count, amountUsd } }
+```
+
+- 모집단은 **`paymentStatus='paid'` 뿐**이다. 환불건은 `refunded` 로 바뀌므로 **자동으로 빠진다**
+  — 즉 과거 주의 매출이 환불 시점에 **소급 감소**한다. "환불 제외"의 의미가 그것이다.
+- 버킷 기준일은 **`paidAt`(결제일)** — 돈이 들어온 주에 잡힌다. 주문일(`createdAt`)이 아니다.
+- 유형 판정 순서는 어드민 목록 필터·`orderTypeOf` 와 같다 — **`isSeeding` 을 먼저** 본다.
+  시딩 주문도 `channel` 기본값이 `web` 이라 channel 을 먼저 보면 '일반'에 섞인다.
+- **`amountUsd`** 는 USD 센트. `ma` 가 **없다** — 선이 파생 지표가 아니라 그 주의 실제 결제금액이라서다.
+  대신 `partial` 은 그대로 내려가고, 어드민이 막대를 반투명하게·선 꼬리를 점선으로 그린다.
+- ⚠️ 어드민 차트가 **금액이 아니라 건수를 쌓는다.** 시딩 대부분이 브랜드 결제(무가) 링크라
+  금액이 0 이어서, 금액을 쌓으면 시딩 물량이 막대에서 사라진다(고객 결제 시딩만 금액이 붙는다).
+
+### ⚠️ 주별 버킷의 타임존 — `AT TIME ZONE` 을 두 번 쓴다
+
+추이 3종이 공유하는 `common/kst-time.ts` 의 `kstWeekBucketSql()` 이야기다 — JS 짝인
+`kstWeekStart` 바로 옆에 둔다(둘이 같은 "KST 월요일"을 가리켜야 집계가 성립한다).
+Prisma 의 `DateTime` 은 Postgres
+`timestamp without time zone` 으로 매핑돼 값이 **UTC 벽시계**로 저장된다. 여기에
+`col AT TIME ZONE 'Asia/Seoul'` 을 **한 번만** 걸면 Postgres 가 그 값을 KST 로 **오해**해
+−9시간 시프트하고, **월요일 00:00~09:00 KST 이벤트가 전주 버킷으로 밀린다**.
+
+이게 조용한 데이터 손실인 이유: 창 경계는 JS `kstWeekStart`(진짜 KST 월요일)가 잡는데 버킷만
+한 주 앞으로 밀리면 그 버킷이 dense 배열에 없어 **시리즈에서 통째로 빠진다**. 2026-08 에
+`/order-type-trend` 를 붙이면서 실측으로 발견했고(최초 결제 1건이 창 밖 버킷으로 새어 합계가
+모자랐다), `/export-trend`·`/subscription-trend` 도 같은 버그였어서 함께 고쳤다.
+올바른 형태는 **먼저 UTC 로 태그한 뒤 KST 로 변환**하는 것이다:
+
+```sql
+date_trunc('week', "col" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+```
 
 ### `/brand-activity`
 
