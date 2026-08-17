@@ -4,7 +4,8 @@
 - **주 클라이언트**: `klow_admin` **배송비 청구** 탭(`/efs-billing`, **슈퍼관리자 전용**) +
   `klow_brand` 정산 **물류비 청구** 탭(전달받은 확정본 열람·다운로드).
 - **데이터 모델**: `Shipment.{efsChargeKrw,efsChargeSource,efsChargeUpdatedAt}`(송장별 EFS 실비),
-  `EfsBillingStatement`(브랜드×월 **동결** 청구서 스냅샷 + R2 xlsx), `ShippingCountry.efsBillingFeeKrw`(국가별 청구 수수료).
+  `EfsBillingStatement`(브랜드×월 **동결** 청구서 스냅샷 + R2 xlsx), `ShippingCountry.efsBillingFeeKrw`(국가별 청구 수수료),
+  **`EfsManualBillingRow`**(KLOW 밖에서 발급된 EFS 송장의 수기 청구 행 — 아래 별도 절).
 
 ## 무엇을 하는 모듈인가
 
@@ -94,8 +95,62 @@ publish 시점에 동결된다. 자릿수·부호가 맞는지만 대조할 것.
 
 | 목록 | 뜻 | 처리 |
 |---|---|---|
-| `extraInFile` | 파일엔 있고 DB 엔 없음 — 수기 발급분 | **회색 정보 배너.** `importApply` 는 DB 행의 `shipmentId` 로만 쓰므로 아무 데도 안 닿는다 |
+| `extraInFile` | 파일엔 있고 DB 엔 없음 — 수기 발급분 | **회색 정보 배너.** `importApply` 는 DB 행의 `shipmentId` 로만 쓰므로 아무 데도 안 닿는다. **수기 청구 행으로 등록하면 이 목록에서 빠진다**(아래 절) |
 | `missingInFile` | DB 엔 있고 파일엔 없음 — 월 경계·미청구분 | **노란 경고 배너.** 그 송장만 값이 안 채워질 뿐 |
+
+⚠️ `missingInFile`·`rows`·`monthCount` 는 **실제 송장 행만** 센다(`shipmentId != null`). 수기 행은
+`importApply` 대상이 아니라 넣으면 "월 N건 vs 파일 M건"이 영원히 안 맞는다. 반대로 `monthHawbs`
+(= `extraInFile` 판정 기준)에는 **수기 행도 포함**한다 — 그래야 등록한 HAWB 가 경고에서 사라진다.
+
+## 수기 청구 행 (`EfsManualBillingRow`, 2026-08-17)
+
+**KLOW 시스템 밖에서 발급된 EFS 송장**을 월별 청구서에 태운다. 위 `extraInFile` 로 경고만 뜨고
+버려지던 건들이 대상이고, 어드민 **배송비 청구** 탭의 `수기 추가` 버튼 → 모달에서 입력한다
+(브랜드·HAWB·픽업일자·구분·목적국·EFS 실비·수수료·메모).
+
+**가짜 `Shipment` 를 만들지 않는 이유**: Shipment 는 `orderId`/`brandId` FK·`carrier`·
+`efsServiceType`·`requestPayload` 가 전부 필수이고, 청구 파이프라인이 `efsTrackingNumber` + 픽업
+이벤트(코드 `03`)에 의존해 **가짜 주문과 가짜 tracking 이벤트까지** 지어내야 한다.
+
+**합류 지점은 두 곳뿐**이고 둘 다 `mergeBillingRows` → `buildStatement` 를 탄다. 청구가 단일
+출처를 유지하므로 **엑셀·publish 동결본·대시보드 KPI 가 자동으로 따라온다**:
+- `monthlyReport` — `chargedAt` 이 그 KST 월인 행 (정렬·`perBrand`·합계가 전부 병합 뒤에 있어
+  수기 행만 있는 브랜드도 셀렉트·필터·엑셀·publish 에 그대로 잡힌다)
+- `rangeChargeTotal` — `chargedAt ∈ [start, endExclusive)`
+
+> **⚠️ `manualToBillingRow` 의 두 상수가 금액을 조용히 바꾼다.**
+> `efsChargeSource: 'manual'` 이 아니면 `buildStatement` 가 청구 근거로 안 쓰고(금액 0),
+> `prepaidKrw: 0` 이 아니라 null 이면 `kind='general'` 수기 행이 **"고객 선결제액 미상 — 청구 보류"
+> 분기에 걸려 전부 사라진다**(에러 없이 `missingCharge` 만 증가). 수기 행은 KLOW 주문이 없어
+> 고객 선결제라는 개념 자체가 없으므로 0 이 정답이다. 회귀 잠금: `__tests__/build-statement.spec.ts`.
+
+> **⚠️ 수수료는 행별 override 가 국가 기본값을 이긴다.** `buildStatement` 는
+> `r.feeOverrideKrw ?? feeOf(r.country)` 를 쓴다 — **`??` 이지 `||` 가 아니다**(수수료 0원 지정이
+> 국가 기본값 ₩1,000 으로 튄다). 기존 `EfsBillingRow.feeKrw` 는 `SeedingLink.feeKrw`(참고용)라
+> **청구에 쓰이지 않는다** — 거기에 override 를 실으면 기존 시딩 청구액이 전부 바뀐다.
+
+> **⚠️ HAWB 중복 = 이중청구. 3중 방어다.**
+> ① `normalizeHawb`(trim+upper) — `efs1005…` 와 `EFS1005… ` 는 Postgres `@unique` 를 그대로
+> 통과한다. 저장·조회·병합이 **모두** 이걸 지난다. ② `EfsManualBillingRow.hawb @unique`(수기 vs
+> 수기) + `assertHawbFree` 의 `Shipment.efsTrackingNumber` 조회(수기 vs 실제 송장 — DB 제약이
+> 테이블을 가로질러 못 건다). ③ **`mergeBillingRows` dedupe(같은 HAWB 는 송장 행이 이긴다)** —
+> ②는 TOCTOU 라 이게 유일한 구조적 보장이다. 수기로 넣은 뒤 그 송장이 뒤늦게 KLOW 로 들어와도
+> 청구서에 두 번 실리지 않는다.
+
+> **⚠️ 기준일이 두 종류로 섞인다.** 월별 청구서에서 실제 송장은 **EFS 픽업 이벤트 월**,
+> 수기 행은 **입력받은 `chargedAt`** 이다. 대시보드 KPI(`rangeChargeTotal`)에서는 실제 송장이
+> `submittedAt`(발급일), 수기 행이 `chargedAt`(픽업일)이라 기간 경계에서 소폭 어긋난다.
+> 수기 행에 발급일을 따로 받는 건 입력 부담만 늘고 정확도 이득이 없어 이대로 둔다.
+
+> `chargedAt` 은 그 KST 달력일 00:00 의 UTC 인스턴트다. DTO 로 내릴 땐 반드시 `kstDateStr` 를
+> 쓸 것 — `toISOString().slice(0,10)` 은 **하루 전 날짜**를 준다(KST 00:00 = UTC 전날 15:00).
+
+엑셀은 코드 변경 없이 포함된다 — `EfsStatementRow` 를 그대로 렌더하므로 `비고` 열에
+`수기 입력 · <메모>` 가 찍히고 요약 시트 소계·총계에 자동 합산된다. `수취인` 은 빈칸이다.
+
+**알려진 갭**: 정산표 업로드로 **수기 행의 실비를 갱신하지는 않는다**(`importApply` 가
+`Shipment.id` 로만 저장). 수기 행 금액이 정산표와 달라도 자동 대사되지 않으니 모달에서 고친다.
+publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동작과 동일 — 재전달로만 갱신).
 
 값이 **HAWB 키**로 들어가므로 다른 달 파일을 올려도 매칭된 송장에 채워지는 금액은 그 송장의 실비다.
 그래서 남은 유일한 차단 사유는 "이 파일에 그 달 송장이 하나도 없다"(= 명백한 오파일)뿐이다.
@@ -124,7 +179,7 @@ publish 시점에 동결된다. 자릿수·부호가 맞는지만 대조할 것.
 
 ## 관련 파일
 
-`efs-billing.service.ts`(`monthlyReport`·**`rangeChargeTotal`**(대시보드 KPI)·`buildBillingRows`·`saveCharge`·`extractFromSettlement`·`importPreview/Apply`·
+`efs-billing.service.ts`(`monthlyReport`·**`rangeChargeTotal`**(대시보드 KPI)·`buildBillingRows`·`saveCharge`·**수기 행 CRUD**(`createManualRow`/`updateManualRow`/`deleteManualRow`/`assertHawbFree`)·**순수 헬퍼**(`normalizeHawb`/`kstPickupLabel`/`manualToBillingRow`/`mergeBillingRows`)·`extractFromSettlement`·`importPreview/Apply`·
 `feeResolver`·**`buildStatement`**·`renderXlsx`+시트 빌더·`exportExcel`·`publish`·`markPaid`·브랜드 열람),
 `admin-efs-billing.controller.ts`. 선결제 share 는 `pricing/chargeable-brands.ts` `perBrandShareUsd`,
 EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settlement/brand-settlement.controller.ts`.
@@ -137,6 +192,9 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 |--------|-----------------------------------------|-----------------------------------------------------------|
 | GET    | `/admin/efs-billing/report`             | `yearMonth`(+`brandId?`) 월별 리포트 — 시딩·일반 모두      |
 | PATCH  | `/admin/efs-billing/charge`             | 송장 1건 EFS 실비 수기 저장/초기화(`null`=초기화)          |
+| POST   | `/admin/efs-billing/manual`             | **수기 청구 행 등록**(KLOW 밖 발급 송장)                   |
+| PATCH  | `/admin/efs-billing/manual`             | 수기 청구 행 수정                                          |
+| DELETE | `/admin/efs-billing/manual`             | 수기 청구 행 삭제 — ⚠️ **body 로 `id`**(감사 로그가 `req.body` 만 남긴다) |
 | POST   | `/admin/efs-billing/import/preview`     | 정산표 .xlsx 파싱 → 현재값 대비 diff (저장 안 함)          |
 | POST   | `/admin/efs-billing/import/apply`       | 선택 행 저장(`efsChargeSource='excel'`, 최대 2000건)       |
 | POST   | `/admin/efs-billing/publish`            | 브랜드×월 청구서 동결(스냅샷 + R2 xlsx) → 브랜드 전달      |

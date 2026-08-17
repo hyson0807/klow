@@ -20,6 +20,7 @@
   - **배송비** = `요율표500g/fxRate × **청구 대상** 브랜드수` — 한 브랜드 = 한 송장. 브랜드 단위로 반올림한 뒤 곱해 `Order.shippingFeeByBrand` 스냅샷 합과 정확히 일치시킨다. 산식 단일 출처는 `pricing/formulas.ts perBrandShippingFeeUsdCents`.
   - **무료배송**: **국가별** `ProductCountryPrice.freeShipping`(목적국 행이 true 일 때만 — 행이 없으면 유료. 판정은 `resolveFreeShipping(row, iso2)`). 그 브랜드 라인이 **전부** 무료일 때만 그 브랜드 몫이 빠진다(`pricing/chargeable-brands.ts` `chargeableBrandIds(lines, iso2)`) — 한 라인이라도 유료면 박스는 어차피 나가므로 1회 청구. 같은 주문이라도 배송지 국가가 다르면 배송비가 달라진다.
   - **입고 실측과의 차액은 브랜드 후청구 대상**(무료배송이면 실측 전액) — [efs-billing](./efs-billing.md) 참고.
+  - ⚠️ `efsBillingFeeKrw`(국가별 청구 수수료)는 **수기 청구 행에서는 기본값 제공 역할만** 한다 — 어드민이 모달에서 행별로 고칠 수 있고, `buildStatement` 가 `feeOverrideKrw ?? feeOf(country)` 로 **행별 값을 우선** 적용한다(2026-08-17). 실제 송장 행은 종전대로 국가 값만 쓴다.
   - ⚠️ 요율/캐리어 미설정국·배송지원 제외국·EFS 제외구역 차단은 **요금 게이트가 아니라 배송 가능 여부 게이트**라, 무료배송이어도 그대로 막는다.
 - **편집/시드**: 어드민 **배송비용** 탭(`/seeding-cost`)에서 국가×무게 요율(`PUT /admin/seeding-rates`)과 캐리어(`PUT /admin/shipping-countries/:iso2` → `productCarrier` — 목록 select 의 `—`/`EFS`/`EMS`/`EMS-PREMIUM`, 국가 상세에서 `seedingCarrierSplitWeightG`)를 관리한다. 초기 적재 시드: `prisma/data/seeding_rates.json` → `npm run seed:seeding-rates`. (구 **물류비용** 탭 `/product-logistics-cost` + `seed:product-logistics-cost` 는 2026-07-29 제거 — 캐리어 편집은 배송비용 탭으로 이관.)
 - **국가 설정**: 어드민 **국가 설정** 탭(`/shipping-countries`)에서 `enabled`(배송지원 화이트리스트)·EFS 제외구역(`ShippingExclusion`)·**시딩 통관 신고가**를 관리한다. `enabled` 는 **일반 주문 전용** 게이트(`loadEnabledCountry`) — 시딩 발급국은 요율표 기준(`supportedCountries`)이라 무관하다. 캐리어는 배송비용 탭에서 관리하므로 여기서 토글하지 않는다.

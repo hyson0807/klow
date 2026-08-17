@@ -119,6 +119,12 @@ WHERE s."submittedAt" IS NOT NULL
 > 재발 방지로 단가 정본을 `src/pricing/subscription-price.ts` 하나로 뽑았고(청구 경로와 공유),
 > 회귀 잠금은 `pricing/__tests__/subscription-price.spec.ts`.
 
+> **⚠️ 수출 매출액에는 수기 청구 행이 섞인다 (2026-08-17).** 어드민 배송비 청구 탭에서 수기로
+> 등록한 행(KLOW 밖에서 발급된 EFS 송장)이 `rangeChargeTotal` 에 함께 잡힌다. **그 행만 기준일이
+> `chargedAt`(입력받은 픽업일)** 이고 실제 송장은 `submittedAt`(발급일)이라, 한 숫자 안에 두 기준이
+> 공존해 기간 경계에서 소폭 어긋난다. 파급: `shippingBilledKrw` → `exportMarginKrw`(×10%) →
+> `totalRevenueKrw` 가 함께 움직인다. 자세히는 [efs-billing.md](./efs-billing.md) 수기 청구 행 절.
+
 > **⚠️ 배송 청구액은 확정 금액이 아니다.** `buildStatement` 가 `efsChargeSource ∈ ('excel','manual')`
 > 인 송장만 청구 근거로 삼으므로(API 폴백값은 안 씀) **EFS 정산표 업로드 전 송장은 금액에서 빠진다**.
 > 그만큼 과소집계이고, 정산표를 나중에 올리면 과거 기간 수치가 올라간다. `pendingChargeCount` 를
