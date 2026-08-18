@@ -33,8 +33,18 @@
 | GET    | `/admin/admins`               | 어드민 목록 (createdAt asc)                           |
 | POST   | `/admin/admins/invite`        | `{email, role}` 로 초대 → `{invitationId}`. `ADMIN_FRONTEND_URL/accept-invite/{token}` 링크 메일 발송 |
 | PATCH  | `/admin/admins/:id/role`      | role 변경 (`super` ↔ `operator`)                      |
-| PATCH  | `/admin/admins/:id/profile`   | 표시 이름(`displayName`) · 프로필 이미지(`profileImage`) 수정 (둘 다 nullable optional) |
+| PATCH  | `/admin/admins/:id/profile`   | 표시 이름(`displayName`) · 프로필 이미지(`profileImage`) · **휴대폰(`phone`)** 수정 (전부 nullable optional) |
 | DELETE | `/admin/admins/:id`           | 어드민 삭제 → `{ok:true}`                             |
+
+### `Admin.phone` — 운영 알림 수신번호 (2026-08-18)
+
+- **용도는 하나다**: EFS **송장 자동발급 실패 SMS** 의 수신번호(→ [shipments](./shipments.md) 발급 실패 알림). 로그인·인증에는 일절 쓰이지 않는다(어드민 인증은 여전히 비밀번호 + TOTP).
+- 검증은 `common/validation/shared.ts` 의 **`KrPhone`**(digits 추출 → `^010\d{8}$`) — 원래 `brand-auth.ts` 의 비공개 const 였던 것을 shared 로 올려 브랜드 전화 OTP 와 **공유**한다. 두 도메인이 각자 복사본을 가지면 한쪽만 규칙이 바뀌어 "가입은 되는데 알림은 안 가는" 형태로 어긋난다. 저장 정본은 **digits-only**.
+- ⚠️ zod 에 **`.default()` 를 붙이지 않는다** — PATCH 마다 주입되어 이 필드를 안 보낸 저장이 남의 번호를 지운다(`onsiteDiscountPct`·promotion `prices` 선례).
+- ⚠️ `updateProfile()` 의 **명시적 허용목록**에 넣어야 실제로 저장된다 — 빠뜨리면 zod 를 통과한 PATCH 가 **조용히 무시**되고 typecheck 도 통과한다(`ShippingService.update()` 와 같은 함정).
+- ⚠️ 이 라우트는 `SuperAdminGuard` 라 **operator 는 자기 번호를 스스로 못 넣는다** — 슈퍼관리자가 대신 채운다. 반면 "누가 알림을 받을지" 토글은 출고관리 탭(`AdminGuard`)이라 operator 도 할 수 있다. 번호 등록과 수신 지정의 권한을 일부러 다르게 뒀다.
+- 마이그레이션 `20260818093419_add_admin_phone_and_shipment_retry` 는 nullable ADD COLUMN + DEFAULT 있는 boolean ADD COLUMN 이라 **롤링 배포 안전 · 백필 없음**. 같은 행의 `shipmentAlertEnabled`(수신 대상 플래그)는 shipments 모듈이 소유한다.
+- 초대(`AdminInvitation`) 흐름은 **손대지 않았다** — 초대 시점엔 번호를 받지 않고, 계정이 생긴 뒤 프로필 수정에서 채운다.
 
 ### 가드 규칙 (service 예외)
 
