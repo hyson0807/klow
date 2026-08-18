@@ -50,7 +50,7 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `yearMonth`(`YYYY-MM`) / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal, revenue }` — `pendingTotal` 은 **status/type/brand 필터와 무관한 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다). ⚠️ 단 **`yearMonth` 창은 따라간다** — 배너가 "클릭하면 보이는 건수"를 약속하는데 클릭이 설정하는 건 `paymentStatus` 뿐이고 월 창은 그대로 남으므로, 무시하면 "12건 숨겨져 있음"을 눌러 3건만 보이는 상태가 된다. `revenue` 는 `yearMonth` 를 보냈을 때만 채워지는 **월 매출액**(아래 항목) |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `yearMonth`(`YYYY-MM`) / `withRevenue`(bool) / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal, revenue }` — `pendingTotal` 은 **status/type/brand 필터와 무관한 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다). ⚠️ 단 **`yearMonth` 창은 따라간다** — 배너가 "클릭하면 보이는 건수"를 약속하는데 클릭이 설정하는 건 `paymentStatus` 뿐이고 월 창은 그대로 남으므로, 무시하면 "12건 숨겨져 있음"을 눌러 3건만 보이는 상태가 된다. `revenue` 는 `yearMonth` 또는 `withRevenue` 를 보냈을 때만 채워지는 **매출액**(아래 항목) |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 
 > ⚠️ 위 두 조회만 `ADMIN_ORDER_INCLUDE`(= `items` + `seedingClaim`)를 쓴다. `seedingClaim` 은 **고객 선택 시딩의 표시 제품명**용이다 — `OrderItem.productName` 이 실제 제품명이 아니라 발급 시 동결된 영문 통관 품명이라, 어드민 화면이 바이어가 고른 제품으로 갈아끼우려면 필요하다(→ [seeding](./seeding.md), 클라 미러는 `klow_admin/src/lib/seeding-display.ts`). 공용 `ORDER_INCLUDE` 를 넓히지 않은 이유는 그게 create/quote/고객 조회까지 공유해 결제 경로에 불필요한 조인이 얹히기 때문이다.
@@ -84,17 +84,25 @@
   `KstYearMonth`(`common/validation/shared.ts`)가 `parseKstYearMonth` 로 달력 유효성까지 본다.
   ⚠️ **`.default()` 를 주지 않는다** — 기본값을 주면 `yearMonth` 를 안 보내는 환불 페이지가 조용히
   한 달로 잘린다(`excludePaymentStatus`·`take` 와 같은 함정). 미전달 = 전체 기간 = 종전 동작.
+- **`withRevenue`** (bool) — `yearMonth` 없이도 `revenue` 를 계산한다. 어드민 주문 목록의
+  **`전체 기간` 토글** 전용이다(월을 해제해도 매출 카드가 `—` 로 비지 않게).
+  ⚠️ 마찬가지로 **`.default(true)` 금지** — 매출 카드가 없는 환불 페이지에 `groupBy` + fx 조회
+  왕복이 조용히 얹힌다. ⚠️ zod 가 `z.coerce.boolean()` 이라 **`withRevenue=false` 도 `true`** 로
+  읽힌다(문자열 `'false'` 가 truthy). 끄려면 파라미터를 **보내지 않는다** — klow_admin 클라이언트가
+  그렇게 한다.
 
-### 월 매출액 (`revenue`)
+### 매출액 (`revenue`)
 
-`yearMonth` 를 보내면 응답에 `revenue: { krw, paidCount, fxFallbackRate }` 가 실린다(미전달 시
-`null` — 집계 쿼리도 fx 조회도 하지 않으므로 환불 페이지는 추가 비용이 0 이다). 어드민 주문
-목록 상단의 매출 카드 3개(월 매출액 / 결제 건수 / 평균 주문액)가 이걸 쓴다.
+`yearMonth` **또는** `withRevenue` 를 보내면 응답에 `revenue: { krw, paidCount, fxFallbackRate }`
+가 실린다(둘 다 미전달 시 `null` — 집계 쿼리도 fx 조회도 하지 않으므로 환불 페이지는 추가 비용이
+0 이다). 어드민 주문 목록 상단의 매출 카드 3개(매출액 / 결제 건수 / 평균 주문액)가 이걸 쓴다.
+집계 창은 목록 창을 그대로 따라간다 — `yearMonth` 면 그 달, `withRevenue` 단독이면 **전체 기간**
+(`where` 에 `createdAt` 이 안 붙는 것 말고는 경로가 같아서 표로 검산하는 관계가 유지된다).
 
 ⚠️ **용어 주의 — 이 숫자는 `stats.service.gmvKrw`(대시보드 라벨 `거래액`)를 월·필터 범위로 좁힌
 값이다.** 같은 저장소에서 `매출`은 이미 세 가지를 가리킨다(`subscriptionRevenueKrw` 구독매출 /
 `shippingBilledKrw` 수출 매출액 / `totalRevenueKrw` 총매출 = 앞 둘의 합). 주문 화면 라벨이
-`월 매출액` 인 것은 UI 결정이고, 그래서 카드에 `결제완료 주문 총액(배송비 포함) · 환불 제외` 를
+`{YYYY-MM} 매출액` / `전체 기간 매출액` 인 것은 UI 결정이고, 그래서 카드에 `결제완료 주문 총액(배송비 포함) · 환불 제외` 를
 병기한다 — 안 적으면 같은 공식이 대시보드에서는 `거래액`, 여기서는 `매출`로 보여 버그로 신고된다.
 배송비 포함 · 시딩(₩0)·현장 결제 포함이고, **환불이 나면 `paymentStatus` 가 `refunded` 로 바뀌어
 그 달 숫자가 소급 감소한다**(`gmvKrw` 와 같은 정책).
