@@ -58,7 +58,7 @@
 | PATCH  | `/admin/orders/:id/status`    | 주문 상태 변경 — `{ status: 'pending'\|'processing'\|'shipped'\|'completed' }`. 역행·`cancelled` 주문 변경은 400 |
 | PATCH  | `/admin/orders/:id/reconcile-payment` | **결제 재확인** — 미결제로 남은 주문을 Eximbay 에 직접 조회(`/v1/payments/retrieve`, `key_field='order_id'`)해 실제 승인(`SALE`/`AUTH`)이면 `markPaid` 로 확정. 응답 `{ result: 'paid'\|'not_paid'\|'not_found'\|'mismatch', order }` (확정 성공 시에만 `order` 동봉 — 어드민이 재조회하지 않게, `refund` 와 같은 관례). 15분 주기 `payment-reconcile` 크론과 **같은 경로**이고 운영자가 즉시 처리하기 위한 수동 트리거다. ⚠️ **임의로 `paid` 를 찍는 엔드포인트가 아니다** — 반드시 PG 재조회를 거치고 금액이 어긋나면(`mismatch`) 전이하지 않는다. 손으로 결제완료를 찍게 하면 미결제 주문이 정산에 섞인다 |
 | PATCH  | `/admin/orders/:id/refund`    | 환불/취소 처리 — `{ reason: 1~500자 }`. `paid` 면 Eximbay cancel 호출 후 `refunded`, `pending` 이면 결제 없이 `cancelled`. 이미 취소·환불·실패 주문은 400 |
-| PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN→신분증)는 주문의 기존 `countryCode` 로 강제. 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
+| PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN·MX→세금식별코드)는 주문의 기존 `countryCode` 로 `assertEfsCountryFields` 가 강제(세금식별코드는 형식까지 검사). 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
 
 ### 목록 쿼리 (`OrderAdminListQueryInput`)
 
@@ -153,8 +153,29 @@
 
 ### `POST /v1/orders` 국가별 필수 필드 (`CreateOrderInput` refine)
 
-- `countryCode`(ISO alpha-2) 필수. `CN` → `recipientTaxId`(18자리 거민신분증), `US` → `state`,
-  `JP` → `recipientNameEn` + `addressLine1En`.
+- `countryCode`(ISO alpha-2) 필수. `US` → `state`, `JP` → `recipientNameEn` + `addressLine1En`,
+  `CN`/`MX` → `recipientTaxId`(EFS 31번 세금식별코드 — 아래 참고).
+- **세금식별코드(EFS 31번)는 배송국별 규칙 테이블 `TAX_ID_RULES`(`common/validation/shared.ts`)가
+  단일 출처**다: `CN` = 거민신분증 18자리(숫자 17 + 마지막 숫자 또는 X), `MX` = RFC 12~13자
+  (`^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$`. RFC 없는 개인은 제네릭 `XAXX010101000` / 외국인 `XEXX010101000`).
+  ⚠️ **zod 필드에 정규식을 걸지 않는다** — 국가마다 형식이 달라 필드 레벨 정규식은 배송국이 바뀌는
+  순간 오탐이 된다(실제로 CN 정규식이 박혀 있어 멕시코 RFC 가 무조건 400 이었다). 값은
+  `recipientAddressFields` 가 `.trim().toUpperCase()` 정규화만 해서 받고, 판정은 배송국을 아는 두
+  소비자가 같은 테이블로 한다 — `CreateOrderInput.superRefine`(body 에 `countryCode` 가 있는 흐름)과
+  `assertEfsCountryFields`(시딩 claim/checkout·어드민 수화인 수정처럼 국가가 body 에 없는 흐름.
+  ⚠️ 이쪽은 존재 여부뿐 아니라 **형식까지** 봐야 그 세 경로만 검증 없이 새지 않는다).
+  국가를 늘릴 땐 테이블에만 추가하고, klow_web `src/lib/tax-id.ts` · klow_admin `src/lib/constants.ts`
+  미러를 함께 맞춘다(어긋나면 클라가 통과시킨 값을 서버가 400 으로 막는다).
+  `required` 는 "값이 아예 없을 때 막느냐"만 가른다(false 여도 값이 오면 형식은 검사). 현재 CN·MX 둘 다 true.
+  klow_web 미러는 이 플래그를 갖지 않는다 — 입력 화면은 규칙이 있으면 언제나 필수로 걷는다.
+
+  ⚠️ **배포 순서: klow_server → klow_web → klow_admin, 연달아.** 구 프론트는 RFC 를 보내지 않으므로
+  서버가 먼저 올라간 창 동안 멕시코 건이 400 이 된다. 실제 노출은 **시딩 claim 하나**뿐이다 —
+  일반 체크아웃은 `ShippingCountry.enabled` 화이트리스트(현재 13개국)에 MX 가 없어 애초에 차단돼
+  있고, 시딩은 `enabled` 를 안 보고 요율표(MX 71티어)로만 판정하기 때문이다. 그래서 **MX 를 어드민
+  '국가 설정' 탭에서 켜는 건 세 배포가 끝난 뒤**에 한다 — 그러면 체크아웃 경로는 창을 아예 겪지 않는다.
+  ⚠️ 서버 배포 직후 klow_admin 배포 전까지는 **기존 MX 주문의 수화인 정보 수정도 400** 이다
+  (구 어드민이 `recipientTaxId` 를 안 보내는데 서버는 필수로 본다). 고객 대면 경로는 아니다.
 - `email` 은 게스트 필수(회원은 생략 시 세션 이메일 폴백, 입력값 우선). 둘 다 없으면 400.
 - `shippingCarrier` 는 구버전 클라 호환용으로만 받고 **서버가 무시**한다(캐리어는 목적국·무게로 서버 결정).
 - `promotion`(≤16자)은 서버가 목적국 기준으로 재검증해 **그 링크에 세일가가 정해진 제품만** 그 가격으로
