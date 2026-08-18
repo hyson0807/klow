@@ -247,13 +247,13 @@ date_trunc('week', "col" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
 | `instagram_reply` | `InstagramReply._max(createdAt)` |
 | `instagram_template` | `InstagramTemplate._max(updatedAt)` |
 | `manual_seeding` | `ManualSeedingRecord._max(updatedAt)` |
-| `campaign` | `Campaign._max(createdAt)` |
+| `promotion` | `Promotion._max(createdAt)` |
 
 **의도적으로 제외한 것 — 넣으면 브랜드가 아무것도 안 했는데 "활성"으로 뒤집힌다:**
 
 | 제외 | 이유 |
 |---|---|
-| `Campaign.updatedAt` | 공개 어필리에이트 링크의 **방문자 클릭**이 `clickCount` 를 올리며 `@updatedAt` 을 bump 한다 (`campaigns.service.ts` `trackByCode`/`trackBySlug`) |
+| `Promotion.updatedAt` | 공개 어필리에이트 링크의 **방문자 클릭**이 `clickCount` 를 올리며 `@updatedAt` 을 bump 한다 (`promotions.service.ts` `trackByCode`/`trackBySlug`) |
 | `Product.updatedAt` | 어드민 제품 편집이 bump. 게다가 `backfill:product-tags-english` 가 **전 제품의 updatedAt 을 의도적으로 올린** 전례가 있어, 백필 한 번에 전 브랜드가 활성이 되고 관리필요 목록이 통째로 비어버린다 |
 | `Brand.updatedAt` | 어드민 승인/편집이 bump |
 | `SeedingClaim.*` | 브랜드가 아니라 **바이어** 행동. 브랜드 행동은 `SeedingLink.createdAt` 이 이미 잡는다 |

@@ -2,7 +2,7 @@
 
 > **📦 보관 문서 (스크래치):** 캠페인 탭 와이어프레임 생성용 일회성 프롬프트. 캠페인 기능은 이후
 > 실제로 구현되었다(`klow_server/src/modules/campaigns/`, klow_brand `(authed)/campaigns/`) —
-> 현행 스펙은 [`../server/modules/campaigns.md`](../server/modules/campaigns.md) 참고.
+> 현행 스펙은 [`../server/modules/promotions.md`](../server/modules/promotions.md) 참고.
 
 > klow_brand "캠페인" 기능의 와이어프레임 생성용. Claude Design의 **Wireframe 템플릿**에 아래 코드블록을 그대로 붙여넣으세요.
 

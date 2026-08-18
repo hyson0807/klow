@@ -50,7 +50,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [brand-scraper](./modules/brand-scraper.md)                           | 자사몰 URL → AI 자동 데이터 추출                         |
 | **고객**   | [customers](./modules/customers.md)                                   | 어드민이 보는 유저 목록/상세                             |
 |            | [contact](./modules/contact.md)                                       | 랜딩 "상담 문의" 폼 → 운영팀 문의함 메일 (저장 없음)     |
-| **마케팅** | [campaigns](./modules/campaigns.md)                                  | 인플루언서 캠페인 단축링크(`/r/{code}`) + 유입 추적      |
+| **마케팅** | [promotions](./modules/promotions.md)                                  | 인플루언서 할인가 브랜드관 링크(제품×국가 세일가) + 유입 추적 |
 |            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |

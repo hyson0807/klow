@@ -64,7 +64,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **손님 결제가(USD 센트) 파생**:
   - 핀 국가: `customerPriceUsd = round(priceLocal / currencyUsdRate × 100)` (currencyUsdRate = 1 USD 당 현지통화, `CurrencyFxRate.usdRate`).
   - 미핀 국가: 위 default 판매가(신모델=국가별 파생, legacy=basePriceUsd).
-  - 국가별/캠페인 할인은 이 위에 `× (1 − pct/100)`.
+  - 국가별/프로모션 할인은 이 위에 `× (1 − pct/100)`.
   - **⚠️ 과청구 가드(주문·견적)**: 핀(`priceLocal`)이 있는데 목적국 통화의 유효 환율(`CurrencyFxRate.usdRate>0`)이
     없으면 `currencyUsdRate`가 미해결(strict null)이라, 1로 폴백하면 현지가를 USD로 오인해 과청구(¥1500→$1500)한다.
     `OrdersService.billingRate`가 이 경우 주문/견적을 **차단**한다(핀 없는 상품은 영향 없음). 표시 경로는 1로 폴백 + 경고 로깅.
@@ -129,7 +129,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - **국가별 할인(`discountPct`)은 고정 판매가를 낮춘다.** 취소선 = 고정가(핀/기본), 결제가 = `× (1−pct/100)`.
   할인가에서 정산가를 역산하므로 **할인할수록 브랜드 정산도 줄어든다**(브랜드가 할인 부담). 마이너스면 편집기가 경고.
 - **글로벌 `Product.discount`(legacy)** 는 마케팅 앵커 — 국가별 할인 없을 때만 폴백으로 취소선을 부풀린다(결제가 불변).
-- 국가별 할인 우선, 없으면 글로벌. 스택 안 함. 캠페인 할인은 `max(국가별, 캠페인)`.
+- 국가별 할인 우선, 없으면 글로벌. 스택 안 함. 프로모션 할인은 `max(국가별, 프로모션)`.
 
 ## 마진 / 환율 리스크
 
@@ -145,9 +145,9 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - `customerPriceUsdCents(settlementKrw, fxRate)` / `customerUsdCentsFromLocal(priceLocal, currencyUsdRate)` /
   `settlementKrwFromCustomerUsd(customerUsdCents, fxRate)` / `applyDiscountUsdCents(cents, pct)` /
   `shippingFeeUsdCents(rateKrw, fxRate, brandCount)`(브랜드 단위 반올림 × n) — `klow_server/src/pricing/formulas.ts`
-- `priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` — `pricing/price-line.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
+- `priceLine(row, cp, fxRate, currencyUsdRate, promotionPct)` — `pricing/price-line.ts`. **고정 판매가 → USD 청구 → 정산가 역산 + belowCost**
   의 1라인 단일 출처. 표시(`attachCustomerPricing`)·주문 생성·견적(`quote`)이 모두 이 함수를 거쳐 "표시가 == 청구가"를 보장한다.
-- `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ **currencyUsdRate** + campaign. 물류비는 없다) /
+- `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ **currencyUsdRate** + promotion. 물류비는 없다) /
   `writeProductCountryPrices(tx, productId, rows)` — `pricing/country-price.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice`/`brandRef` strip(`StrippedPricingKeys`).
 - 물류비·캐리어: `resolveProductShipping(iso2, address, brandWeights)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
   요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`), 브랜드별 박스 무게는 `orders/brand-weights.ts` `brandChargeableWeights`.

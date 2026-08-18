@@ -49,7 +49,7 @@ KLOW is a K-beauty cross-border commerce platform. The stack is split across **f
 | `klow_server`        | NestJS 10 + Prisma 6 + zod                                            | Backend API; owns DB + R2; the only repo with Prisma. Port 4000.           |
 | `klow_web`           | Next.js 14 + Tailwind + **TanStack Query** + Zustand + Framer Motion  | Public mobile webapp (production). Reads/writes `/v1/*`. Port 3001.         |
 | `klow_admin`         | Next.js 14 + Tailwind + react-hook-form                              | Internal admin dashboard, pure UI client. Reads/writes `/admin/*`. Port 3000. |
-| `klow_brand`         | Next.js 14 + Tailwind                                                | Brand self-service portal (signup, product studio, campaigns, seeding). Posts `/v1/brand/*`. Port 3002. |
+| `klow_brand`         | Next.js 14 + Tailwind                                                | Brand self-service portal (signup, product studio, promotions, seeding). Posts `/v1/brand/*`. Port 3002. |
 | `klow_search_server` | NestJS + Prisma (separate Neon DB + R2 bucket `search`)             | Influencer search/scraping backend. Port 4100. Frontend = admin 인플루언서 tab. |
 
 Each subdirectory under `/Users/hyson/welkit/klow/` is its own git repo with its own commit history. They share no source code (a future improvement is a shared workspace package for types/constants — today `klow_web/src/lib/types.ts` is a hand-copied mirror of server response shapes). The legacy `KLOW/` mock-based prototype has been **removed** — `klow_web` is the sole public client.
@@ -98,7 +98,7 @@ The **26 feature modules** under `src/modules/`:
 | User auth           | `auth`                                                                              |
 | Admin auth          | `admin-auth`, `audit-logs`                                                          |
 | Brand               | `brand-auth`, `brand-applications`, `brand-scraper`, `subscription`                |
-| Growth / catalog-in | `campaigns`, `curated-influencers`, `customers`, `translation`                     |
+| Growth / catalog-in | `promotions`, `curated-influencers`, `customers`, `translation`                     |
 | Infra               | `upload`                                                                            |
 
 ### The Module Pattern (load-bearing convention)
@@ -137,11 +137,11 @@ A barrel in the same style as `common/validation/`:
 | `formulas.ts` | the 5 arithmetic primitives (PG fee, KRW↔USD, discount, per-brand shipping) |
 | `fx.ts` | `resolveFxRate` (settlement KRW) + `resolveCurrencyUsdRate{,Strict}` (display/billing local currency) |
 | `country-price.ts` | `ProductCountryPrice` select/lookup/write, `resolveFreeShipping` |
-| `campaign.ts` | campaign discount context + `campaignPctFor` |
+| `promotion.ts` | promotion discount context + `promotionPctFor` |
 | `price-line.ts` | `priceLine` / `onsitePriceLine` / `attachCustomerPricing` |
 | `chargeable-brands.ts` | which brands get charged shipping, and each one's share |
 
-`priceLine(row, cp, fxRate, currencyUsdRate, campaignPct)` is the one function that turns a product
+`priceLine(row, cp, fxRate, currencyUsdRate, promotionPct)` is the one function that turns a product
 row + optional `ProductCountryPrice` + FX into the customer price line, so **display price ==
 charged price** across cards, order creation, and quotes. See the Pricing section.
 
@@ -175,7 +175,7 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 
 - **`Product`** — 판매 제품 마스터. **가격 정본은 고정 판매가**(마진/정산가는 역산): 정산가 저장값 `salePrice`(≈원가+마진 KRW, ⚠️이름과 달리 판매가가 아님)+저장 fx 스냅샷 `basePriceFxRate`(有=이 둘로 국가별 default 판매가를 파생·프리즈하는 신모델), `costKrw`(원가, 원가 밑 경고 기준), `basePriceUsd`(legacy/어드민 단일 판매가 USD 센트 + 정렬·게이트 대표값), `discount`(글로벌 취소선), 공개·판매 게이트 `status`/`hidden`(완성도는 `hasSellablePrice`), `hsCode`/`customsCategoryEn`(**dormant** — 통관 분류는 `Brand.category` 가 정본), FOMO/머천다이징 태그 + **자유 텍스트 태그**(`concerns`=주요 고민, `recommendedFor`=추천 피부 타입 — 고정 enum 이 아닌 영문 원문이고 `ProductTranslation` 이 로케일별로 번역) + 상세 콘텐츠. `brand` 는 `Brand.name` 의 denormalized 캐시(권위는 `brandId` FK). `rating`/`reviewCount` 는 `Review` 에서 서버가 파생.
 - **`ProductCountryPrice`** — 제품×국가 설정 핀(`iso2`, `priceLocal?`(현지통화 고정 판매가), `discountPct`, `freeShipping`; `marginKrw?` 는 dormant). 핀 있으면 그 국가는 현지통화 고정, 없으면 전국가 기본 `basePriceUsd` 상속. `freeShipping` 은 그 국가만 고객 배송비 면제(행 없음 = 유료). 셋 다 기본값이면 행을 만들지 않고, 저장은 **replace-all**(전체 배열 전송 필수). `@@unique([productId, iso2])`, Product cascade.
-- **`Brand`** — 브랜드 storefront + 정산/발송/입점상태/구독 마스터. `slug`, `status`(BrandStatus), 로고 레이아웃, `category`(취급 품목 — **EFS 통관 분류/HS 코드의 단일 출처**, 아래 Shipment 섹션 참고), 송화인/계좌 정산 정보, `pgCustomerKey`(결제 준비 게이트). Product·Shipment·Campaign·SeedingLink·BrandUser·BrandSubscription·BillingKey·BrandTranslation 소유.
+- **`Brand`** — 브랜드 storefront + 정산/발송/입점상태/구독 마스터. `slug`, `status`(BrandStatus), 로고 레이아웃, `category`(취급 품목 — **EFS 통관 분류/HS 코드의 단일 출처**, 아래 Shipment 섹션 참고), 송화인/계좌 정산 정보, `pgCustomerKey`(결제 준비 게이트). Product·Shipment·Promotion·SeedingLink·BrandUser·BrandSubscription·BillingKey·BrandTranslation 소유.
 - **`Review`** — 제품 리뷰(한국어 원문). mutation 이 같은 트랜잭션에서 `Product.rating`/`reviewCount` 재계산. Product(cascade)·User(nullable)·ReviewTranslation[].
 - **`ShopSettings`** — 전역 상점 설정 싱글턴(`id="default"`). `dhlFuelSurchargeRate`. (`usdKrwRate` 는 정산 정본이 `CurrencyFxRate['KRW']` 로 이관돼 **dormant**. 어드민 편집 엔드포인트·`todaysPickConcern` 은 2026-07-30 제거.)
 - **`CurrencyFxRate`** — 통화 환율 단일 테이블. `['KRW']` 행 = 브랜드 정산 정본 환율(수동 고정, cron 제외, `resolveFxRate`), 그 외 = USD→현지통화 표시 환율(cron 자동 + 수동 오버라이드). `manualOverride`/`autoRate`/`source`.
@@ -221,11 +221,11 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 - **`SeedingServiceAgreement`** — 시딩 서비스 이용계약 전자서명(BrandUser 1:1). `version`, `signerName`, `signatureImageUrl`, `acceptedAt`.
 - **`ManualSeedingRecord`** — KLOW 도입 전 브랜드 자체 시딩 기록 수기 적재(중복 수령자 cross-check). `data`(JSON), `reviewCompleted`. Brand·BrandUser(createdBy).
 
-### 캠페인 (Campaigns)
+### 프로모션 (Promotions)
 
-- **`Campaign`** — 브랜드 인플루언서 캠페인. `name`, `description?`, 표시용 `startDate`/`endDate`(자유 텍스트), `status`(active/ended). Brand cascade, CampaignLink[].
-- **`CampaignLink`** — 인플루언서별 공개 단축링크(`/r/{code}`). `influencerName`, `platform`(IG/YT/TT), `handle`, `code @unique`, `clickCount`, `enabled`(off 면 폴백+미집계), denormalized `brandId`. Campaign cascade, CampaignLinkDailyStat[].
-- **`CampaignLinkDailyStat`** — 링크×일자 클릭 버킷(KST `YYYY-MM-DD`). `clicks`. `@@unique([linkId, date])`. CampaignLink cascade.
+- **`Promotion`** — 브랜드 인플루언서 프로모션. `name`, `description?`, 표시용 `startDate`/`endDate`(자유 텍스트), `status`(active/ended). Brand cascade, PromotionLink[].
+- **`PromotionLink`** — 인플루언서별 공개 단축링크(`/r/{code}`). `influencerName`, `platform`(IG/YT/TT), `handle`, `code @unique`, `clickCount`, `enabled`(off 면 폴백+미집계), denormalized `brandId`. Promotion cascade, PromotionLinkDailyStat[].
+- **`PromotionLinkDailyStat`** — 링크×일자 클릭 버킷(KST `YYYY-MM-DD`). `clicks`. `@@unique([linkId, date])`. PromotionLink cascade.
 
 ### 번역 (Translation — MT 캐시)
 
@@ -243,7 +243,7 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 
 ### Enums (Postgres-native, 18개)
 
-`ProductCategoryKey`(cleanser/toner/serum/cream/mist/suncream/mask) · `ProductStatus`(pending/approved/rejected) · `BrandStatus`(pending/approved/rejected/draft/withdrawal_pending/withdrawn) · `BrandLogoLayout`(circle/wide/tall/rounded) · `OrderStatus`(pending/processing/shipped/completed/cancelled) · `PaymentStatus`(pending/paid/failed/cancelled/refunded) · `AdminRole`(operator/super) · `ShippingCarrier`(EFS/EMS/DHL) · `ShipmentStatus`(pending/submitted/failed/cancelled) · `ShippingExclusionKind`(zip/city/state) · `SeedingLinkStatus`(pending/claimed/cancelled) · `SeedingPaymentBy`(brand/customer) · `SeedingSelectionMode`(brand/customer) · `BrandSubscriptionStatus`(active/past_due/canceled) · `SubscriptionInvoiceStatus`(pending/paid/failed/refunded) · `CampaignStatus`(active/ended) · `CampaignPlatform`(IG/YT/TT). The string-based `CONCERNS` constant lives in `src/common/constants.ts`.
+`ProductCategoryKey`(cleanser/toner/serum/cream/mist/suncream/mask) · `ProductStatus`(pending/approved/rejected) · `BrandStatus`(pending/approved/rejected/draft/withdrawal_pending/withdrawn) · `BrandLogoLayout`(circle/wide/tall/rounded) · `OrderStatus`(pending/processing/shipped/completed/cancelled) · `PaymentStatus`(pending/paid/failed/cancelled/refunded) · `AdminRole`(operator/super) · `ShippingCarrier`(EFS/EMS/DHL) · `ShipmentStatus`(pending/submitted/failed/cancelled) · `ShippingExclusionKind`(zip/city/state) · `SeedingLinkStatus`(pending/claimed/cancelled) · `SeedingPaymentBy`(brand/customer) · `SeedingSelectionMode`(brand/customer) · `BrandSubscriptionStatus`(active/past_due/canceled) · `SubscriptionInvoiceStatus`(pending/paid/failed/refunded) · `PromotionStatus`(active/ended) · `PromotionPlatform`(IG/YT/TT). The string-based `CONCERNS` constant lives in `src/common/constants.ts`.
 
 ---
 
@@ -271,9 +271,9 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 
 크리에이터 시딩 배송비는 **`SeedingRate(iso2, weightG, costKrw)`** 표(운영팀이 원가·캐리어·할증·마진 선반영, 98국×71무게티어)에서 **무게 올림 조회한 값을 그대로** 쓴다 — 캐리어 비교·할증 가산 없음. **2026-07-29 부터 일반 주문도 같은 표를 쓴다**(일반 주문은 500g 티어가 곧 고객 배송비). 어드민 **배송비용** 탭(`/seeding-cost`)에서 수기 편집 + 엑셀 업로드, 초기 시드 `npm run seed:seeding-rates`. 무가 시딩 주문은 `SeedingLink` 공개 링크 클레임으로 생성 — `Order.isSeeding=true`, `totalUsd=0`, `paymentStatus=paid`. 캐리어는 `shipping.service.resolveCarrier`(EFS 제외구역이면 차단). 상세: [`server/modules/seeding.md`](./server/modules/seeding.md).
 
-### Campaigns → [`server/modules/campaigns.md`](./server/modules/campaigns.md)
+### Promotions → [`server/modules/promotions.md`](./server/modules/promotions.md)
 
-브랜드가 인플루언서별 공개 단축링크(`/r/{code}`)를 발급해 유입을 추적한다. `Campaign` → `CampaignLink`(플랫폼·핸들·`code`·`enabled`·`clickCount`) → `CampaignLinkDailyStat`(KST 일자 버킷). 리다이렉트마다 `clickCount` +1 + 일자 stat upsert, 링크가 `enabled=false` 면 홈으로 폴백 + 미집계. 프론트는 브랜드 포털 `(authed)/campaigns` (생성·토글·클릭 통계) + 어드민 campaigns 탭(관찰).
+브랜드가 인플루언서별 공개 단축링크(`/r/{code}`)를 발급해 유입을 추적한다. `Promotion` → `PromotionLink`(플랫폼·핸들·`code`·`enabled`·`clickCount`) → `PromotionLinkDailyStat`(KST 일자 버킷). 리다이렉트마다 `clickCount` +1 + 일자 stat upsert, 링크가 `enabled=false` 면 홈으로 폴백 + 미집계. 프론트는 브랜드 포털 `(authed)/promotions` (생성·토글·클릭 통계) + 어드민 promotions 탭(관찰).
 
 ### Translation / i18n
 
@@ -438,8 +438,8 @@ Always `npx prisma migrate dev --name <이름>` — never `migrate deploy`, manu
 ## Frontend Surfaces (route map)
 
 - **klow_web** (`src/app/`): `[brandSlug]`, `brand`, `cart`, `checkout`, `customer-center`, `faq`, `legal`, `login`, `my`, `orders`, `product`, `seed`, `shop`, `signup`, `track`.
-- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `campaigns`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `tracking`. Public: `login`, `accept-invite/[token]`.
-- **klow_brand** (`src/app/`): landing `/`, `signup`, `legal`, and `(authed)/{campaigns, creators, seeding, settings, studio}` — product management lives under **studio** (the old onboarding/dashboard structure is gone).
+- **klow_admin** (`src/app/(authed)/`): `admins`, `audit-logs`, `brand-subscriptions`, `brand-withdrawals`, `brands`, `promotions`, `customers`, `influencers`, `orders`, `products`, `refunds`, `returns`, `reviews`, `sales-report`, `seeding-cost`, `settlement`, `shipments`, `shipping-countries`, `shipping-rates`, `tracking`. Public: `login`, `accept-invite/[token]`.
+- **klow_brand** (`src/app/`): landing `/`, `signup`, `legal`, and `(authed)/{promotions, creators, seeding, settings, studio}` — product management lives under **studio** (the old onboarding/dashboard structure is gone).
 
 ---
 

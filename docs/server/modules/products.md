@@ -67,16 +67,16 @@
 
 | Method | Path                       | 기능                                                                                |
 |--------|----------------------------|-------------------------------------------------------------------------------------|
-| GET    | `/v1/products`             | 상품 목록 — `q`(name/brand), `categoryKey`, **`minDiscount`**(정수, `Product.discount >= n`), `sort`=`discount_desc`\|`popular`, `take`(1~200, 기본 200), `brandId`, `lang`, `country`, `campaign`, `mode` |
-| GET    | `/v1/products/:id`         | 상품 상세 — `lang`, `country`, `campaign`, `mode`. 게이트 미통과 제품은 404          |
+| GET    | `/v1/products`             | 상품 목록 — `q`(name/brand), `categoryKey`, **`minDiscount`**(정수, `Product.discount >= n`), `sort`=`discount_desc`\|`popular`, `take`(1~200, 기본 200), `brandId`, `lang`, `country`, `promotion`, `mode` |
+| GET    | `/v1/products/:id`         | 상품 상세 — `lang`, `country`, `promotion`, `mode`. 게이트 미통과 제품은 404          |
 
 - **`sort`**: `discount_desc`(=`discount` desc) / `popular`(=`rating` desc → `reviewCount` desc — 삭제된 discover 모듈의 bestsellers 정렬을 승계한 "추천/인기" 단일 출처). 미지정 시 `brandId` 필터가 있으면 어드민 수동 정렬(`order` asc → `createdAt` desc), 그 외 `updatedAt` desc.
 - **`country`**: ISO2 목적국. 위 "공개 응답의 가격 필드" 참고(미지정 US).
-- **`campaign`**: 인플루언서 캠페인 링크 유입 시의 캠페인 code. 서버가 재검증해 **그 링크에 세일가가 정해진 제품만** 그 가격으로 내려준다(안 정한 제품은 정상가). 세일가는 국가 핀·국가 할인을 outright 이긴다(max 병합 아님) — [campaigns](./campaigns.md).
+- **`promotion`**: 인플루언서 프로모션 링크 유입 시의 프로모션 code. 서버가 재검증해 **그 링크에 세일가가 정해진 제품만** 그 가격으로 내려준다(안 정한 제품은 정상가). 세일가는 국가 핀·국가 할인을 outright 이긴다(max 병합 아님) — [promotions](./promotions.md).
 - **`mode=onsite`**: 현장(박람회 부스) QR 모드. **`brandId` 와 함께일 때만 유효** — 목록에서 `onsiteExcluded=true` 제품을 숨기고, 표시가를 `onsitePriceLine()` 이 산출한 단일가로 덮는다. 현장주문 생성(`orders.createOnsite`)이 **같은 함수**로 청구액을 산출하므로 표시가==청구가. raw `onsitePriceUsd`/`onsiteExcluded` 필드는 응답에서 제거된다. (상세 라우트는 `brandId` 없이 `mode=onsite` 만으로 표시가를 덮는다.)
   - **가격 우선순위**: `?country=` 목적국의 `ProductOnsiteCountryPrice.priceLocal`(현지통화 → `customerUsdCentsFromLocal` 로 USD 센트 환산) > `Product.onsitePriceUsd`(브랜드가 정한 기준 현장가) > `defaultListUsd(row)`(일반 default 판매가 = 신모델은 `salePrice`+`basePriceFxRate` 파생, legacy 는 `basePriceUsd`).
   - ⚠️ 마지막 폴백이 **`basePriceUsd ?? 0` 이 아니라 `defaultListUsd`** 인 게 중요하다 — 이전 구현은 `basePriceUsd` 가 null 인 브랜드 신모델 제품을 현장모드에서 **$0 으로 표시·청구**했다(공짜 판매). 회귀 가드는 `__tests__/onsite-pricing.spec.ts`.
-  - 국가별 **할인·캠페인·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없다). 현장 응답의 `freeShipping` 은 항상 `false` 다 — 소매 국가 행의 값을 흘리면 부스 화면에 엉뚱한 "무료배송" 배지가 뜬다.
+  - 국가별 **할인·프로모션·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없다). 현장 응답의 `freeShipping` 은 항상 `false` 다 — 소매 국가 행의 값을 흘리면 부스 화면에 엉뚱한 "무료배송" 배지가 뜬다.
   - **표시용 할인율 `Product.onsiteDiscountPct`** (2026-08-13): 브랜드가 현장 탭에서 세팅한 가격(기준가 파생 + 국가 핀)이 **이미 할인이 적용된 최종 판매가**라는 전제로, 그 위에 취소선만 역산해 보여준다 — `listPriceUsd = listPriceUsdCents(청구가, pct)`(소매 글로벌 `Product.discount` 취소선과 같은 헬퍼), `customerDiscountPercent = pct`. **`customerPriceUsd` 와 정산가는 pct 와 무관하게 불변**이고, `onsitePriceLine()` 은 이 값을 **인자로 받지도 않으며** 청구 경로(`orders.createOnsite`)의 select 에도 **없다** — "할인이 청구가를 못 건드린다"가 리뷰가 아니라 쿼리로 강제된다. 핀이 있는 국가는 취소선도 **핀 통화에서 직접** 파생해(`listPriceLocal = 핀 × 100 / (100 − pct)`) 내려보낸다 — USD 센트로 왕복하면 판매가는 정확한데 취소선만 최소단위 1 어긋난다(A$30 핀 20% → A$37.50 대신 A$37.51). ⚠️ 통화 소수자리 반올림은 서버가 하지 않는다(`PricingCtx` 에 통화코드가 없다) — klow_web 의 Intl 이 처리한다. pct 0·100↑·음수는 취소선을 만들지 않는다. 회귀 잠금은 `__tests__/onsite-pricing.spec.ts` 의 `onsiteDiscountPct` 블록.
   - **분기 위치**: 현장/일반은 `PricingCtx.onsite` 로 갈리고 판정은 `attachCustomerPricing()` **안**에서 끝난다. 호출부가 DTO 를 사후에 덮어쓰지 않는다 — 예전엔 목록·단건이 각자 `delete bag.onsitePriceUsd` 로 원본을 지웠고, 그 손으로 관리하던 목록에 새 컬럼(`onsiteSettleKrw`)이 누락돼 공개 응답으로 샜다. 지금은 현장 원본 5종(`onsitePriceUsd`/`onsiteSettleKrw`/`onsiteExcluded`/`onsiteDiscountPct`/`onsiteCountryPrices`)이 전부 선언적 `StrippedPricingKeys` 로 벗겨진다. ⚠️ 목록 select 는 명시적이라 `onsiteDiscountPct: true` 를 빠뜨리면 취소선이 PDP(include 경로)에만 뜨고 브랜드관 그리드에는 안 뜬다.
 
