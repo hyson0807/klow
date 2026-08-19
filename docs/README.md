@@ -17,6 +17,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [brand-subscription.md](./brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
 | [mcf/README.md](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고. SP-API 조사·구현 계획·플로우 (📄 문서 단계) |
 | [custom-domain/README.md](./custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) 연결 — 왜 same-origin 프록시가 필요한지, 쿠키·CSRF·결제 리턴 처리, 단계별 구현 계획 (📄 문서 단계) |
+| [storefront-sales-analytics.md](./storefront-sales-analytics.md) | 브랜드 `/stats` 에 **국가·제품 수요 분석 + 현장 채널**을 어떻게 붙이나? 두 모집단(퍼널 vs 주문 원장)이 왜 다른 숫자를 내는지, 채널 탭 정의, 서버/브랜드 작업 목록 (✅ 구현 완료 · 배포 대기) |
 | [preview-pages.md](./preview-pages.md) | klow_web 디자인 프리뷰 화면은 어디에 있나? 결제 완료(`/checkout/preview`)·배송추적(`/track/preview`)·시딩(`/seed/preview*`) |
 | [archive/](./archive/README.md) | 완료된 마이그레이션/정리 노트, 스크래치 — **현행 시스템 설명 아님** |
 

@@ -1,13 +1,37 @@
-# storefront-stats — 브랜드관 방문 통계 · 장바구니 · 결제 전환
+# storefront-stats — 브랜드관 방문 통계 · 장바구니 · 결제 전환 · 판매 분석
 
 - **모듈 경로**: `src/modules/storefront-stats/`
-- **주 클라이언트**: klow_web(수집) + klow_brand 스튜디오 홈 '통계' 탭(브랜드 조회) + klow_admin 대시보드 홈(운영 조회)
-- **관련 파일**: `storefront-stats.service.ts`, 컨트롤러 3개(public·brand·admin), `storefront-stats-retention.cron.ts`, `common/validation/storefront-stats.ts`
-- **회귀 잠금**: `src/modules/storefront-stats/__tests__/storefront-stats.spec.ts`
+- **주 클라이언트**: klow_web(수집) + klow_brand `/stats`(브랜드 조회) + klow_admin 대시보드 홈(운영 조회)
+- **관련 파일**: `storefront-stats.service.ts`(퍼널), `storefront-sales.service.ts`(판매 분석), `stats-window.ts`(창 규칙 공용), 컨트롤러 3개(public·brand·admin), `storefront-stats-retention.cron.ts`, `common/validation/storefront-stats.ts`
+- **회귀 잠금**: `__tests__/storefront-stats.spec.ts`(퍼널) · `__tests__/storefront-sales.spec.ts`(판매 분석)
 
 ## 이 모듈이 답하는 질문
 
 "내 브랜드관에 손님이 몇 명 들어왔고, 그 중 몇 명이 담고, 몇 명이 **샀는가**" — **유입 경로별로**.
+그리고 (2026-08-19 추가) "**어느 나라에서 수요가 많고 어떤 제품이 팔리는가**" — **채널별로**.
+
+### ⚠️ 한 화면에 모집단이 둘이다
+
+퍼널(`storefront-stats.service.ts`)과 판매 분석(`storefront-sales.service.ts`)은 **다른 것을 센다.**
+klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정상이라는 걸 알고 있어야 한다.
+
+| | 퍼널 | 판매 분석 |
+|---|---|---|
+| 출처 | `BrandDailyStat`(읽기 모델) | `Order`/`OrderItem`(원장) |
+| 모집단 | **그날 브랜드관을 거친 방문자**의 결제만 | **결제 완료된 전 주문** |
+| `/shop`·검색·자사몰 임베드 유입 | 제외 | 포함 |
+| 현장(부스 QR) | **제외**(수집 안 함) | 포함 |
+| 환불 주문 | 차감 안 함 | **제외**(`paymentStatus='paid'`) |
+| 날짜 버킷 | 원장 행의 날짜(방문일) | **`paidAt`**(결제일) |
+| 소급 | 불가(집계 시작일부터) | 가능(전 기간) |
+| 단위 | 명(순 인원) | 건 / 개 |
+
+⇒ 같은 탭의 "결제 48명"과 "국가 합계 63건"은 **서로 다른 숫자이며 그게 정상**이다.
+
+> ⚠️ **화면에는 이 설명이 없다.** 처음엔 두 섹션에 모집단을 한 줄씩 깔았는데 각주가 길어
+> 걷어냈다(2026-08-19). 즉 숫자가 왜 다른지는 **이 문서와 코드 주석에만** 남아 있으니,
+> "결제 수가 안 맞는다"는 문의가 오면 위 표로 답한다. 되살릴 자리는
+> klow_brand `StorefrontStatsBoard.tsx` 의 요약 카드 아래와 랭킹 섹션 아래다.
 
 이전에는 유입을 세는 곳이 `PromotionDailyStat` 하나뿐이었고 그건 **할인 링크로 들어온 트래픽만**
 잡았다. 브랜드관 루트로 직접 들어온 손님(SNS 프로필 링크·QR·검색·자사몰 경유)은 어디에도
@@ -294,7 +318,8 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 
 | Method | Path | 기능 |
 |---|---|---|
-| GET | `/v1/brand/storefront-stats?days=1~90(기본 30)` | 일자별 시계열 + 전기간 합계 |
+| GET | `/v1/brand/storefront-stats?days=1~90\|all(기본 30)` | 유입 퍼널 — 일자별 시계열 + 창 합계 |
+| GET | `/v1/brand/storefront-stats/sales?days=1~90\|all(기본 30)` | 판매 분석 — 채널×국가/제품/일자 집계 |
 
 ```
 { days, trackingSince,                        // 집계 시작일(최초 행). null = 아직 데이터 없음
@@ -314,6 +339,73 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 - `cartConversionPct` 는 `uniqueVisits === 0` 이면 0 이다(0 나눗셈 NaN 이 응답에 실리면 차트가 죽는다).
 - `purchaseConversionPct` 의 분모도 **`uniqueVisits`** 다(`uniqueCartAdds` 아님) — 두 전환율이 분모를
   공유해야 "들어온 사람 중 몇 %"로 나란히 읽힌다.
+
+#### `days=all` 과 창 규칙 (`stats-window.ts`)
+
+`'all'` = **첫 데이터부터 오늘까지, 365일 클램프**(`STATS_ALL_MAX_DAYS`). 두 조회가 같은 헬퍼
+(`resolveStatsWindow`)를 쓴다 — 창 규칙이 갈리면 토글은 하나인데 두 섹션이 다른 기간을 가리킨다.
+
+> ⚠️ **클램프의 이유는 성능이 아니라 정합성이다.** 창이 무한히 길어지면 dense 시리즈도 같이
+> 길어지는데, `totals` 를 창과 다른 범위에서 뽑는 순간 "합계는 100인데 그래프를 다 더하면 80"이
+> 된다. 창을 자르고 **`totals` 도 같은 창에서** 뽑으면 `totals == Σseries` 가 늘 성립한다.
+
+> ⚠️ **집계 하한(`statsWindowStart`)도 같은 상한만큼 거슬러 간다.** 하한 없이 전부 뽑고 창만
+> 나중에 자르면 국가·제품 합계에는 창 밖 주문이 섞여 일별 합과 갈라진다. 두 함수는 **같은
+> `now`** 를 받아야 한다 — 요청이 KST 자정을 걸치면 집계 경계와 창 경계가 하루 어긋난다.
+
+> ⚠️ 퍼널 조회는 `'all'` 일 때만 두 쿼리를 직렬화한다(그때만 창이 `earliest` 에 달려 있다).
+> 숫자 창은 종전대로 `Promise.all` 이다 — 늘 직렬로 두면 기본 경로가 옵션 하나 때문에
+> Neon(싱가포르) 왕복을 한 번 더 문다.
+
+> ⚠️ 어드민 라우트는 **`'all'` 을 일부러 안 받는다**(`StorefrontAdminStatsQuery` 별도).
+> `trafficForAdmin` 이 전 브랜드를 훑는 쿼리라 창 확장을 검토한 적이 없고, 브랜드 스키마를
+> 그대로 쓰면 `'all'` 이 문법상 통과하면서 **조용히 오늘 하루만** 집계된다.
+
+#### `GET /sales` — 판매 분석 (2026-08-19 추가)
+
+```
+{ range: { from, to },                                // 창의 실제 경계('all' 은 서버가 정한다)
+  summary:   { direct, promotion, onsite, all },      // 각각 {orders, quantity, productCount}
+  countries: [{ channel, iso2, nameKo, orders, quantity }],
+  products:  [{ channel, productId, name, image, orders, quantity }],
+  onsiteDaily: [{ date, orders }] }                   // 현장만, 창 전체 dense 제로필
+```
+
+- **채널 = 주문의 성질**: `onsite`(현장) > `promotionId≠null`(할인링크) > `direct`(그 외).
+  ⚠️ 퍼널의 `source`(그 방문자의 **그날 첫 진입 경로**)와 **정의가 다르다** — 할인 링크로 들어왔지만
+  체크아웃까지 code 가 안 따라간 주문은 퍼널에선 `promotion`, 여기선 `direct` 다. 같은 사실의 두
+  측정이지 버그가 아니다(화면이 각주로 명시). 억지로 맞추려면 방문 원장과 주문을 조인해야 하는데,
+  그 순간 랭킹이 퍼널 모집단으로 쪼그라들어 이 기능의 목적(전 주문 수요 파악)이 사라진다.
+- **`onsiteDaily` 는 현장만** 담는다 — 일반·할인링크의 추이는 퍼널 응답(명 단위)이 그리므로,
+  세 채널을 다 제로필하면 `days='all'` 에서 **아무도 안 읽는 730행**이 따라간다.
+- **채널별 raw 행을 한 번에 내려보낸다** — 화면의 채널 탭 전환에 **재요청이 없고**, `전체` 탭은
+  클라가 채널을 합산한다(서버가 `전체` 를 따로 계산하면 부분합과 전체가 갈릴 여지가 생긴다).
+  합산이 정확한 이유: 한 주문은 정확히 **하나의 (채널, 국가)** 에 속한다.
+- ⚠️⚠️ **`summary` 를 서버가 내는 건 편의가 아니라 오집계 방지다.** 한 주문에 그 브랜드 제품이
+  2종이면 `products` 행에 2번 나타나므로, 화면이 제품 행을 더해 "결제 건수"를 만들면 부풀려진다.
+  건수는 `countries`(또는 `daily`)에서만 나올 수 있고, 그 규칙을 주석이 아니라 **응답 모양으로
+  강제**한다 — 화면엔 더할 것이 남아 있지 않다. `all.productCount` 도 채널별 종수의 합이 아니라
+  distinct 집합이다(온라인·현장 양쪽에서 팔린 제품이 두 번 세어진다).
+- **국가명은 서버가 붙인다**(`ShippingCountry.nameKo` 상관 서브쿼리). 클라의 국가 목록
+  (`useOrderableCountries`)은 `enabled=true` 만 담아서 **배송지원을 끈 국가**(현장 판매국 상당수)의
+  이름이 빈칸이 된다. `countryCode` 가 null 인 legacy 주문은 `iso2:null` 로 내려가고 화면이 `미상` 표기.
+- ⚠️ 일자 버킷 SQL 은 **`AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'` 이중 캐스트**다. 한 번만 걸면
+  Postgres 가 값을 KST 로 오해해 −9h 시프트하고 **00:00~09:00 KST 결제가 전날 버킷으로 밀린다**
+  (`kstWeekBucketSql` 과 같은 함정 — 2026-08 추이 3종이 전부 이 버그였다).
+- **국가의 의미가 채널마다 다르다** — 온라인은 배송국, 현장은 손님이 고른 **가격 기준국**(≈국적).
+  전체 탭에서 섞이므로 화면이 각주로 명시한다.
+- 브랜드 귀속은 `OrderItem.productId → Product.brandId` JOIN 하나(`resolveItemBrands` 와 같은 규칙).
+  ⚠️ **하드 삭제된 제품의 과거 판매는 랭킹에서 사라진다** — `OrderItem` 에 Product relation 이 없어
+  dangling productId 는 어느 브랜드 것인지 알 방법이 없다(퍼널 결제 집계도 똑같이 동작한다).
+- 세 쿼리 모두 `GROUP BY` 결과라 행 수가 **구조적으로 유계**다(국가 ≤ 234×3 · 제품 ≤ 제품수×3 ·
+  일자 ≤ 365×3). `take` 로 자르지 않는다 — 절단은 조용한 왜곡이다.
+- ⚠️ **알려진 확장 한계 2가지**(지금 규모에선 문제가 아니지만 커지면 여기부터 본다):
+  ① 같은 조인을 세 번 훑는다 → `GROUPING SETS` 한 방으로 합칠 수 있다(그때 `iso2=NULL` 은
+  실제 값이므로 롤업 구분에 `GROUPING()` 을 쓸 것). ② **`Order` 에 `paidAt` 인덱스가 없어**
+  기간이 좁아도 비용이 줄지 않는다(브랜드 제품의 전 기간 `OrderItem` 을 훑고 `paidAt` 은 사후
+  필터). 필요해지면 `@@index([paymentStatus, paidAt])` 를 추가한다 — 이 기능은 마이그레이션
+  없이 배포하려고 일부러 미뤘다.
+- 시딩(`isSeeding`)·미결제·환불 주문은 제외.
 
 ### admin-storefront-stats.controller.ts (`@Controller('admin/stats')`)
 
