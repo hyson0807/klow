@@ -25,6 +25,16 @@
   치환은 `localize()` **overlay** 에서 한다 — ⚠️ `translateAndCache()` 에서 하면 스테일 판정에 걸린 행만 고쳐져
   이미 캐시된 로케일 행이 오번역을 계속 서빙한다(overlay 라 캐시 무효화·백필 없이 소급된다).
   저장 정본·컬럼·검증(`EnglishTagList(6)`)은 그대로이고 `concerns` 는 순수 자유 텍스트로 남는다.
+- **태그·성분 배열의 순서 = 고객 화면 순서 (2026-08-19)**: `concerns` / `recommendedFor` / `keyIngredients` 는
+  **저장 순서 그대로가 노출 순서**다. klow_web PDP(`ProductAccordionCard`)가 서버 배열을 변형 없이 렌더하고,
+  핵심 성분은 그 위치로 `01 / 02 / 03` 번호까지 매긴다. 브랜드가 klow_brand 스튜디오에서 **드래그로 직접 정렬**한다
+  (칩은 `TagChipInput`, 성분 행은 `KeyIngredientRows` — 둘 다 `@dnd-kit`).
+  ⚠️ **서버·클라 어디서도 이 배열을 정렬·중복제거하지 말 것** — 지금 zod·저장·`localize()` 어디에도 정렬이 없고,
+  넣는 순간 브랜드가 정한 순서가 조용히 뭉개진다.
+  ⚠️ `recommendedFor` 프리셋 overlay 는 `Product.recommendedFor[idx]` ↔ `ProductTranslation.recommendedFor[idx]` 를
+  **인덱스로 짝짓는다**. 순서만 바꿔도 안전한 건 재정렬이 `prisma.product.update` 를 타 `@updatedAt` 이 올라가
+  캐시가 스테일로 판정돼 재번역되기 때문이다 — **raw SQL·`updateMany` 로 순서만 바꾸면 로케일 라벨이 한 칸씩 밀린다.**
+  스키마·API 계약·마이그레이션 무변경(배열 컬럼이 원래 순서를 보존한다).
 - **카테고리 표시명 번역 (2026-08-14)**: `Product.category`(자유 문자열 1~60자)도 `?lang=` 에서 로케일화된다.
   종전엔 번역 대상이 아니어서 klow_web PDP 가 영문 원문을 그대로 렌더했다. **하이브리드**다 —
   고정 7종(`categoryKey != null`)은 `category-presets.ts` 큐레이션 사전, 브랜드 "직접 입력" 카테고리
