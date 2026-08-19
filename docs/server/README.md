@@ -54,6 +54,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
+|            | [storefront-stats](./modules/storefront-stats.md)                     | 브랜드관 방문(일반/할인링크/현장) → 장바구니 담기 전환 퍼널 |
 |            | [settlement](./modules/settlement.md)                                 | 브랜드 매출 정산 (delivered 송장 + 현장결제 주문 집계)   |
 |            | [efs-billing](./modules/efs-billing.md)                               | EFS 배송비 브랜드 후청구 (시딩+일반, 정산표 업로드·청구서) |
 |            | [upload](./modules/upload.md)                                         | R2 presigned URL 발급 (admin / brand scope)              |
