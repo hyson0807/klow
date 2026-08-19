@@ -20,7 +20,7 @@
 | `BrandDailyStat(brandId, date, source)` @unique | **읽기 모델**. 브랜드 × 날(KST) × 유입경로 1행에 `visits`/`uniqueVisits`/`cartAdds`/`uniqueCartAdds`. **차트는 이것만 읽는다** |
 | `BrandVisitorDay(brandId, date, visitorId)` @unique | **판정 원장**. "그날 처음인가?"를 유니크 제약으로 원자적으로 답하는 게 유일한 일. `source`(그날 첫 진입 경로) + `carted` 보유 |
 
-`enum StorefrontVisitSource = direct | promotion | onsite`.
+`enum StorefrontVisitSource = direct | promotion | onsite` — ⚠️ **`onsite` 는 묘비다**(수집·보고 모두 안 함, 아래 절).
 
 마이그레이션 `20260819025346_add_brand_storefront_stats` 는 `CREATE TYPE` + `CREATE TABLE` 2개뿐
 (기존 테이블 ALTER 0) → **롤링 배포 안전 · 백필 없음**(과거 방문 기록은 존재하지 않는다).
@@ -34,23 +34,38 @@
 
 ## 진입 경로 (`source`)
 
-`BrandStorefront` 를 렌더하는 라우트는 **정확히 3개**, 읽는 쿼리 파라미터는 `mode=onsite` 하나뿐.
+`BrandStorefront` 를 렌더하는 라우트는 **정확히 3개**, 읽는 쿼리 파라미터는 `mode=onsite` 하나뿐
+(그 쿼리는 이제 "집계하지 않는다"는 신호로만 쓰인다).
 
 | klow_web 라우트 | URL | source |
 |---|---|---|
 | `app/[brandSlug]/page.tsx` | `/{slug}` | `direct` |
 | `app/[brandSlug]/[influencer]/page.tsx` | `/{slug}/{promotionSlug}` | `promotion` |
 | `app/brand/[id]/page.tsx` | `/brand/{id}` | `direct` — 레거시. slug 가 있으면 `/{slug}` 로 replace |
-| (1번 + 쿼리) | `/{slug}?mode=onsite` | `onsite` — 부스 QR(`klow_brand onsiteStoreUrl()`) |
+| (1번 + 쿼리) | `/{slug}?mode=onsite` | **집계 안 함** — 아래 절 참고 |
 
 `source` 는 **라우트가 prop 으로 내려준다** — 클라가 pathname 세그먼트로 넘겨짚으면 예약 슬러그
 ·리다이렉트가 끼는 순간 조용히 틀린다. `useAppStore.promotionCode` 도 보지 않는다(localStorage
 영속이라 한 번 할인 링크로 왔던 사람이 나중에 직접 들어와도 영원히 promotion 으로 잡힌다).
 
-> ⚠️ **`onsite` 가 `promotion` 을 이긴다.** `/{slug}/{promo}?mode=onsite` 는 정상 발급 경로가
-> 만들지 않지만 손으로는 만들 수 있고, 그때 promotion 으로 세면 거짓이다 — 현장 모드에서는
-> 서버가 **프로모션 세일가를 아예 적용하지 않는다**(`resolvePricingCtx` 가 `onsite:true` 면
-> 프로모션 쿼리를 쏘지도 않는다). 가격이 안 걸린 유입을 할인 링크 성과로 셀 수 없다.
+### ⚠️ 현장(부스 QR)은 집계 대상이 아니다
+
+`?mode=onsite` 진입은 방문·담기 비콘을 **아예 쏘지 않는다**(klow_web `BrandStorefront` /
+`useCartStore`). 이유:
+
+- 부스 QR 은 손님이 **이미 눈앞에 있는 POS 흐름**이지 온라인 유입이 아니다. 같은 칸에 넣으면
+  "브랜드관에 얼마나 오나"의 답이 오프라인 행사 유무로 출렁인다.
+- 부스 **공용 태블릿은 브라우저가 하나**라 손님 여럿이 순방문 1로 눌린다 — 합계를 통해
+  일반·할인 링크 지표까지 오염시킨다.
+- 부스 실적은 `Order.channel='onsite'` 로 **정산·주문 화면에 이미 잡힌다.** 빼도 잃는 게 없다.
+
+⚠️ **조회에서도 `source: { in: ['direct','promotion'] }` 로 거른다.** 과거 행과 배포 창의 구
+프론트가 `onsite` 행을 남길 수 있는데, 안 거르면 **화면 어느 칸에도 없는 값이 합계에만 섞여**
+`일반 + 할인 링크 ≠ 합계` 가 된다(브랜드가 설명을 들을 방법이 없다).
+⚠️ 서비스에 **2차 방어**(`reportedSource()` 로 모르는 source 는 skip)도 있다 — where 가 빠지면
+`bucket[source]` 가 undefined 라 읽기 경로가 통째로 죽는다.
+⚠️ prisma enum 의 `onsite` 값은 **묘비로 남긴다**(Postgres enum 값 제거는 타입 재생성이 필요하고
+과거 행이 그 값을 참조한다).
 
 **브랜드관이 아닌 것**: 자사몰 카페24 임베드 버튼은 `/product/{id}?brand={slug}` = **PDP** 로 간다
 (브랜드관 방문 아님. 단 거기서 "바로구매"를 누르면 `/{slug}` 로 push 되어 그때 `direct` 로 잡힌다).
@@ -84,8 +99,8 @@
 
 ⚠️ `promotionCode` 는 **라우트가 이번 진입분만** 내려줘야 한다. klow_web `useAppStore.promotionCode`
 는 **localStorage 영속**이라 그 값을 쓰면 예전에 링크로 왔던 사람의 클릭이 그 링크에 영원히 붙는다.
-⚠️ 클릭은 `source` 로 게이트하지 **않는다** — `/{slug}/{promo}?mode=onsite` 는 source 가 `onsite`
-지만 링크는 실제로 눌린 것이다(이 지표는 "링크가 몇 번 눌렸나"다).
+⚠️ 클릭은 `source` 로 게이트하지 **않는다** — 판정 키는 `promotionCode` 하나다(이 지표는
+"링크가 몇 번 눌렸나"다). 단 현장 진입은 비콘 자체를 안 쏘므로 클릭도 잡히지 않는다.
 ⚠️ 클라 dedupe 키에 code 가 들어간다 — 같은 탭에서 링크 A → B 로 들어오면 둘 다 실제 클릭이라
 B 가 묻히면 안 된다.
 
@@ -118,8 +133,8 @@ B 가 묻히면 안 된다.
 애드블록은 방문 자체가 안 잡혀 **전체 과소**. 추세 지표로는 충분하나 **정산·투자자 감사 지표로
 쓰지 말 것**. 개인정보 측면에서는 IP·UA·계정을 저장하지 않고 난수 토큰만 쓰며 cron 이 파기한다.
 
-⚠️ 현장 부스 공용 태블릿은 브라우저가 하나라 손님 여럿이 순방문 1로 눌린다 — `onsite` 로
-격리돼 **일반/할인링크 순방문을 오염시키지 않는다**(경로를 나눈 실질적 이득이 여기 있다).
+⚠️ 부스 공용 태블릿이 순방문을 누르는 문제는 **현장을 집계에서 통째로 뺐기 때문에** 더는
+해당되지 않는다(위 절 참고).
 
 ## ⚠️ 담기 게이트 — 퍼널 정의
 
@@ -176,8 +191,8 @@ B 가 묻히면 안 된다.
 
 ```
 { days, trackingSince,                        // 집계 시작일(최초 행). null = 아직 데이터 없음
-  totals: { direct, promotion, onsite, all }, // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct}
-  series: [{ date, direct:{…}, promotion:{…}, onsite:{…}, all:{…} }] }   // dense 제로필
+  totals: { direct, promotion, all },        // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct}
+  series: [{ date, direct:{…}, promotion:{…}, all:{…} }] }   // dense 제로필 (onsite 키는 없다)
 ```
 
 - **dense 제로필** — 데이터 없는 날이 배열에서 빠지면 차트가 그 구간을 이어 그려 추이를 왜곡한다
@@ -247,7 +262,6 @@ B 가 묻히면 안 된다.
   고쳐야 한다. ⚠️ **새 최상위 보호 라우트는 `src/middleware.ts` matcher 에 반드시 넣을 것** —
   빠뜨리면 미인증 접근이 랜딩으로 튕기지 않고 빈 화면을 한 번 그린 뒤 클라 가드가 뒤늦게
   처리한다(`/onsite`·`/settlement`·`/promotions` 가 지금도 그 상태다).
-- 통계 화면은 **현장 데이터가 0 이면 그 칸·선을 숨긴다**(부스를 안 하는 브랜드가 대부분).
 
 ## 배포 순서
 
