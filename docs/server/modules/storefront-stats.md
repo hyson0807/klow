@@ -1,4 +1,4 @@
-# storefront-stats — 브랜드관 방문 통계 · 장바구니 전환
+# storefront-stats — 브랜드관 방문 통계 · 장바구니 · 결제 전환
 
 - **모듈 경로**: `src/modules/storefront-stats/`
 - **주 클라이언트**: klow_web(수집) + klow_brand 스튜디오 홈 '통계' 탭(브랜드 조회) + klow_admin 대시보드 홈(운영 조회)
@@ -7,7 +7,7 @@
 
 ## 이 모듈이 답하는 질문
 
-"내 브랜드관에 손님이 몇 명 들어왔고, 그 중 몇 명이 장바구니에 담았는가" — **유입 경로별로**.
+"내 브랜드관에 손님이 몇 명 들어왔고, 그 중 몇 명이 담고, 몇 명이 **샀는가**" — **유입 경로별로**.
 
 이전에는 유입을 세는 곳이 `PromotionDailyStat` 하나뿐이었고 그건 **할인 링크로 들어온 트래픽만**
 잡았다. 브랜드관 루트로 직접 들어온 손님(SNS 프로필 링크·QR·검색·자사몰 경유)은 어디에도
@@ -17,8 +17,9 @@
 
 | 모델 | 역할 |
 |---|---|
-| `BrandDailyStat(brandId, date, source)` @unique | **읽기 모델**. 브랜드 × 날(KST) × 유입경로 1행에 `visits`/`uniqueVisits`/`cartAdds`/`uniqueCartAdds`. **차트는 이것만 읽는다** |
-| `BrandVisitorDay(brandId, date, visitorId)` @unique | **판정 원장**. "그날 처음인가?"를 유니크 제약으로 원자적으로 답하는 게 유일한 일. `source`(그날 첫 진입 경로) + `carted` 보유 |
+| `BrandDailyStat(brandId, date, source)` @unique | **읽기 모델**. 브랜드 × 날(KST) × 유입경로 1행에 `visits`/`uniqueVisits`/`cartAdds`/`uniqueCartAdds`/`purchases`/`uniquePurchases`. **차트는 이것만 읽는다** |
+| `BrandVisitorDay(brandId, date, visitorId)` @unique | **판정 원장**. "그날 처음인가?"를 유니크 제약으로 원자적으로 답하는 게 유일한 일. `source`(그날 첫 진입 경로) + `carted` + `purchased` 보유 |
+| `Order.visitorId` (VarChar 64, nullable) | 결제 단계의 **귀속 키**. 주문 생성 시 klow_web 이 실어 보내고, 결제 확정 때 원장 조회에 쓴다 |
 
 `enum StorefrontVisitSource = direct | promotion | onsite` — ⚠️ **`onsite` 는 묘비다**(수집·보고 모두 안 함, 아래 절).
 
@@ -156,6 +157,85 @@ B 가 묻히면 안 된다.
 않았고, `CartLine` 에 필드를 더하는 대안도 기각했다(`persist`+`migrate` 를 가진 **영속 스키마**라
 분석 부수효과 하나 때문에 결제 경로를 건드릴 이유가 없다).
 
+
+## 결제 단계 (2026-08-19 추가)
+
+퍼널이 `방문자 → 장바구니 → **결제**` 로 늘었다. 정의는 담기와 같은 모집단이다 — **그날(±1일)
+그 브랜드관을 거친 방문자의 결제 완료 주문만** 센다.
+
+### ⚠️ 집계 지점이 클라가 아니라 서버(`markPaid`)인 이유
+
+방문·담기는 klow_web 클라이언트가 비콘으로 보내지만 **결제는 서버가 센다.** 결제 성공 화면
+(`/checkout/redirect`)에서 비콘을 쏘는 방식은 이 코드베이스가 이미 크게 데인 패턴이다 —
+결제 확정 자체가 거기의 fire-and-forget 클라 호출이었다가 QR·인앱 브라우저 왕복에서 유실돼
+**카드는 승인됐는데 주문이 `pending` 에 남는** 사고를 냈다([payment](./payment.md) "3중 방어선").
+
+`payment.service.markPaid` 의 `count === 1` 분기는 `updateMany` 로 `pending → paid` 를 DB 레벨에서
+한 번만 성립시키는 자리이고, **클라 verify · 웹훅 · `payment-reconcile` 크론 세 경로가 모두 여기로
+모인다.** 그래서 `recordPurchase` 는 그 블록의 **맨 앞**에 있다 — 뒤(송장 발급 EFS 왕복·알림톡)에
+두면 그쪽이 느려지거나 죽었을 때 결제 집계만 조용히 사라진다.
+
+`markPaid` 가 유일한 전이 지점인 것도 확인했다. `paymentStatus='paid'` 를 쓰는 다른 곳은 전부
+`where` 절이거나, 시딩 주문을 처음부터 paid 로 만드는 `seeding.service`(→ `isSeeding` 으로 제외)다.
+어드민 "수동 결제완료 처리" 엔드포인트는 **일부러 없다**(`orders.service` 주석).
+
+### ⚠️ 원장 조회는 주문일과 그 전날, **2일**을 본다
+
+같은 날만 보면 두 부류가 통째로 빠진다:
+
+- **KST 자정(= 11:00 ET)이 미국 손님의 쇼핑 시간 한복판**이라 방문과 결제가 날짜를 넘긴다.
+- 카트가 localStorage 영속이라 **어제 담아둔 손님은 오늘 `/{slug}` 를 다시 거치지 않는다.**
+
+버킷은 **주문일이 아니라 원장 행의 날짜**로 잡는다 — 그래야 "그날 방문한 사람 중 몇 명이 샀나"
+라는 코호트 의미가 유지되고 `uniquePurchases <= uniqueVisits` 가 안 깨진다(주문일로 잡으면 방문이
+0 인 날에 결제가 찍혀 클램프가 필요해진다). 조회는 기존 유니크 인덱스 위 point read 2회라
+**새 인덱스가 필요 없다**. 한계: **직전 방문이 이틀 이상 지난 결제는 집계되지 않는다.**
+
+### ⚠️ 결제는 담기를 **함의한다**
+
+`carted=false` 인 방문자가 결제하면 담기 카운터(`cartAdds`/`uniqueCartAdds`)도 함께 올린다.
+
+klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가 `useCartStore.addToCart` 하나를
+지나므로, **`carted=false` 인 결제자는 "안 담은 사람"이 아니라 담기 비콘이 유실됐거나(애드블록·
+저장소 차단) 전날 담은 사람**이다. 이 캐리포워드 덕에 클램프 없이 성립한다:
+
+`uniquePurchases <= uniqueCartAdds <= uniqueVisits` 그리고 `uniqueCartAdds <= cartAdds`
+
+⚠️ 반대로 `led.carted` 를 결제의 **조건**으로 걸면 안 된다 — 서버가 아는 사실(실제 결제)을
+클라 비콘의 도달 여부에 종속시키는 것이라, **실제로 산 사람이 화면에서 사라진다.**
+⚠️ `cartAdds`(회)도 같이 올린다. `uniqueCartAdds` 만 올리면 어드민이 나란히 보여주는
+`uniqueCartAdds <= cartAdds` 가 깨진다.
+
+### 안 세는 것
+
+| 대상 | 이유 |
+|---|---|
+| 현장(`channel='onsite'`) | 방문·담기와 같은 원칙(부스는 POS 흐름). klow_web 이 `/checkout/onsite` 에서 `visitorId` 를 아예 안 보내고, 서버도 채널로 한 번 더 막는다 |
+| 시딩(`isSeeding`) | 무가 주문 |
+| `visitorId` 없는 주문 | `/shop`·검색 유입, 저장소 차단 브라우저, 배포 창의 구 klow_web |
+| **환불·취소** | **차감하지 않는다.** `uniquePurchases` 는 불리언 플래그라 "그날 다른 결제가 또 있었나"를 답할 수 없어 정확한 차감이 불가능하고, 차감하면 과거 버킷이 사후에 움직여 브랜드가 어제 본 숫자와 오늘 본 숫자가 달라진다. 매출 정본은 정산 화면이다 |
+
+⚠️ **부스에서 만난 손님은 사라질 수 있다** — 그날 첫 진입이 `?mode=onsite` 였으면 원장 행의
+`source` 가 `onsite` 라, 나중에 온라인 결제해도 `REPORTED_SOURCES` 필터에 걸려 어느 칸에도 안 뜬다.
+방문·담기가 이미 그렇게 동작하므로 일관되지만, 알고는 있어야 한다.
+
+⚠️ **자사몰(카페24) 임베드는 완전히 밖은 아니다** — 임베드 PDP 에서 "바로구매"를 누르면
+`/{slug}` 로 push 돼 그때 `direct` 방문이 찍히므로, 그 경로의 구매는 `direct` 로 잡힌다.
+
+### ⚠️ `Order.visitorId` 도 원장과 함께 파기한다
+
+`pruneVisitorDays()` 가 원장 100일 경과분을 지울 때 **같은 커트라인의 `Order.visitorId` 도 null 로
+지운다.** 주문 행은 영구 보존인데다 이름·이메일·주소를 들고 있어서, 그대로 두면 익명 토큰이
+**영구적으로 실명과 연결**된다 — "IP·UA·계정과 연결하지 않고 cron 이 파기한다"는 이 모듈의 약속을
+조용히 뒤집는 셈이다. 원장이 사라지면 조인 대상도 없어 분석 가치가 0 이고, `recordPurchase` 는
+늘 이 시점보다 한참 전에 끝난다.
+
+### 신뢰성 한계 (브랜드 안내용)
+
+**이 숫자는 브랜드의 실제 주문 건수보다 적다.** `/shop`·검색·자사몰 임베드 PDP 직행으로 산 주문은
+방문 모집단 밖이고, 이틀 이상 지난 방문의 결제도 빠진다. **정산·주문 화면의 숫자와 다른 게 정상**
+이며, 그쪽이 매출의 정본이다.
+
 ## 라우트
 
 ### public-storefront-stats.controller.ts (`@Controller('v1/storefront-stats')`)
@@ -191,7 +271,8 @@ B 가 묻히면 안 된다.
 
 ```
 { days, trackingSince,                        // 집계 시작일(최초 행). null = 아직 데이터 없음
-  totals: { direct, promotion, all },        // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct}
+  totals: { direct, promotion, all },        // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct,
+                                             //        purchases, uniquePurchases, purchaseConversionPct}
   series: [{ date, direct:{…}, promotion:{…}, all:{…} }] }   // dense 제로필 (onsite 키는 없다)
 ```
 
@@ -199,6 +280,8 @@ B 가 묻히면 안 된다.
   (2026-08 추이 3종에서 실제로 났던 버그 클래스).
 - 데이터가 없어도 경로 4칸을 **항상** 채운다(빈 경로가 빠지면 프론트가 옵셔널 체이닝 범벅이 된다).
 - `cartConversionPct` 는 `uniqueVisits === 0` 이면 0 이다(0 나눗셈 NaN 이 응답에 실리면 차트가 죽는다).
+- `purchaseConversionPct` 의 분모도 **`uniqueVisits`** 다(`uniqueCartAdds` 아님) — 두 전환율이 분모를
+  공유해야 "들어온 사람 중 몇 %"로 나란히 읽힌다.
 
 ### admin-storefront-stats.controller.ts (`@Controller('admin/stats')`)
 
@@ -227,10 +310,15 @@ B 가 묻히면 안 된다.
 | 화면 라벨 | 필드 | 위치 |
 |---|---|---|
 | 방문자 | `uniqueVisits` | 큰 숫자 |
-| 담은 사람 | `uniqueCartAdds` | 큰 숫자 |
-| 전환율 | `cartConversionPct` | 큰 숫자 |
-| 총 N회 방문 | `visits` | 방문자 아래 보조줄 |
-| 총 N번 담음 | `cartAdds` | 담은 사람 아래 보조줄 |
+| 장바구니 | `uniqueCartAdds` | 큰 숫자 |
+| 결제 | `uniquePurchases` | 큰 숫자 |
+| (장바구니 아래) N% | `cartConversionPct` | 보조줄 |
+| (결제 아래) N% | `purchaseConversionPct` | 보조줄 |
+
+⚠️ 라벨은 **"담은 사람"이 아니라 "장바구니"** 다(2026-08-19 통일 — klow_brand·klow_admin 양쪽).
+⚠️ 보조줄에 들어가는 건 **전환율(%)** 이지 `visits`/`cartAdds`(회)가 아니다 — 회 지표를 큰 숫자
+옆에 두면 단위가 섞여 "방문은 뭐고 순방문은 뭐지"가 되돌아온다(그래서 한 번 지웠던 자리다).
+어드민 합계 카드만 방문자 아래에 `총 N회 방문` 을 남긴다.
 
 ⚠️ **"순방문" 이라는 말을 UI 에 쓰지 않는다** — 업계 용어라 브랜드가 바로 못 읽는다. 단위를
 드러낸 "방문자(명) / 방문 횟수(회)" 가 설명 없이 읽힌다.
@@ -275,6 +363,23 @@ B 가 묻히면 안 된다.
 
 - 데이터는 klow_web 배포부터 쌓인다. **백필 불가**이므로 `trackingSince` 이전은 0 이 아니라 데이터 없음이다.
 - 브랜드/어드민 화면은 마지막 — 먼저 내보내면 텅 빈 차트를 보고 "통계가 안 나와요" 문의가 온다.
+
+### 결제 단계 배포 (2026-08-19) — 이번엔 **서버가 먼저**
+
+**klow_server(마이그레이션 포함) → klow_web → klow_brand / klow_admin.** 위 최초 배포에서
+klow_web 이 먼저였던 건 할인 링크 클릭 유실 때문이고 여기엔 해당 사항이 없다.
+
+| 순서 | 그 창에서 벌어지는 일 |
+|---|---|
+| klow_server 먼저 ✅ | 컬럼과 훅이 준비된다. 아직 아무도 `visitorId` 를 안 보내므로 `recordPurchase` 가 첫 줄에서 return — 쓰기 0, 위험 0. 구 klow_web 은 그대로 동작한다(필드 optional). |
+| klow_web 다음 | 여기부터 결제가 쌓인다. **이전 주문은 복구 불가**(`Order.visitorId` 가 영원히 null, 백필 없음). |
+| 프론트 2개 마지막 ⚠️ | **klow_server 보다 먼저 내보내면 안 된다** — `formatNumberKo`/`formatCountKo` 가 `undefined.toLocaleString()` 로 **throw** 한다. klow_brand 는 `/stats` 가 죽고, klow_admin `StorefrontVisitSection` 은 **서버 컴포넌트**라 대시보드 홈 전체가 죽는다(NaN 이 아니라 하드 크래시). |
+
+⚠️ **klow_web 배포 후 최소 2일(KST) 지나서 프론트를 내보낼 것.** 첫날엔 방문자·장바구니가 몇 주치
+이력을 보여주는데 결제만 0 이라, 브랜드의 첫인상이 "이 숫자 틀렸다"가 된다. 같은 이유로 **결제
+추이 차트는 `trackingSince` 이전 구간 전체를 0 으로 그린다**(`trackingSince` 는 방문 최초 행에서
+파생되므로 결제 추적 시작보다 몇 주 앞선다) — 신경 쓰이면 별도 `purchaseTrackingSince` 를 내려
+선을 거기서 시작시키면 된다.
 
 ## 교차링크
 

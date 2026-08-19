@@ -111,6 +111,7 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 
 `markPaid()` 의 진짜 전이(`count === 1`) 분기에서만, 멱등하게 순차 실행 — 모두 실패 격리(에러가 결제 전이를 롤백하지 않음):
 
+0. `storefrontStats.recordPurchase` — 브랜드관 방문 퍼널의 **'결제' 단계** 기록([storefront-stats](./storefront-stats.md)). ⚠️ **일부러 이 목록의 맨 앞**이다 — 뒤(EFS 송장 왕복·알림톡)에 두면 그쪽이 느려지거나 프로세스가 죽었을 때 결제 집계만 조용히 사라진다. 현장·시딩·`visitorId` 없음 제외와 예외 흡수는 전부 그쪽이 소유한다(절대 throw 하지 않음).
 1. `clearCartItemsForOrder` — 주문에 포함된 카트 항목 서버측 삭제.
 2. `sendOrderConfirmationSafe` — 구매자에게 주문 확인 이메일(Resend).
 3. `claimSeedingLinkSafe` — 유료 시딩 링크 pending→claimed.
