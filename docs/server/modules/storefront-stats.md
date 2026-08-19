@@ -56,17 +56,38 @@
 (브랜드관 방문 아님. 단 거기서 "바로구매"를 누르면 `/{slug}` 로 push 되어 그때 `direct` 로 잡힌다).
 시딩 `/seed/{token}` 도 별도 페이지다.
 
-## ⚠️ `PromotionDailyStat.clicks` 와 빼면 안 된다
+## 할인 링크 클릭도 이 파이프라인으로 통일했다 (2026-08-19)
 
-| | `PromotionDailyStat.clicks` | 이 모듈의 방문수 |
+원래 `PromotionDailyStat.clicks` 는 klow_web **서버 컴포넌트**가 셌다. 그래서 두 측정이 갈렸다:
+
+| | 구 `PromotionDailyStat.clicks` | 이 모듈의 방문수 |
 |---|---|---|
-| 집계 위치 | 서버 컴포넌트(`trackPromotionVisit`) | 클라이언트 effect |
+| 집계 위치 | 서버 컴포넌트 | 클라이언트 effect |
 | 봇/OG 크롤러 | **포함됨** | 대부분 제외 |
-| 순방문 | 개념 없음 | 있음 |
+| 새로고침 | 매번 +1 | 탭당 1회 |
 
-측정 방식이 달라 **"총 방문 − 프로모션 클릭 = 일반 유입"이 성립하지 않는다.** 그래서 이 모듈이
-같은 잣대로 세 경로를 각각 다시 잰다. 두 화면(할인 링크 추이 탭 / 통계 탭)의 숫자가 다른 것은
-정상이며, 양쪽 UI 캡션이 그 사실을 밝힌다.
+⚠️ **봇 포함 집계는 중립적으로 틀리지 않는다 — 할인 링크 성과를 실제보다 부풀린다.** 브랜드가
+"이 링크에 할인을 계속 줄까"를 판단하는 숫자가 과대계상돼 있었다. 그래서 클릭 집계를 방문
+비콘과 **같은 요청**으로 옮겼다:
+
+- klow_web 이 방문 비콘에 `promotionCode` 를 실어 보낸다(할인 링크 진입일 때만).
+- `StorefrontStatsService.recordVisit` 이 `PromotionsService.recordClickByCode()` 를 부른다.
+  **카운터 소유권은 promotions 모듈에 남긴다** — Off/중지 게이트가 그 도메인 규칙이라
+  두 벌이 되면 갈린다.
+- 구 경로 `GET /v1/promotions/track/:brandSlug/:influencerSlug` 는 **세일가 code 해석 전용**이
+  됐다(`resolveBySlug`). 렌더 전에 code 가 필요해 서버 호출 자체는 남는다. **경로 이름의
+  `track` 은 klow_web 과의 계약이라 남긴 legacy 다.**
+
+⚠️ **전환 시 기존 클릭 시계열이 한 번 계단처럼 내려간다**(봇 + 새로고침이 빠진다). 버그가 아니다.
+⚠️ **애드블록·JS 차단 방문자는 이제 아예 안 잡힌다**(전엔 서버에서 세어 잡혔다) — 정확도를 얻고
+커버리지를 잃는 교환이다.
+
+⚠️ `promotionCode` 는 **라우트가 이번 진입분만** 내려줘야 한다. klow_web `useAppStore.promotionCode`
+는 **localStorage 영속**이라 그 값을 쓰면 예전에 링크로 왔던 사람의 클릭이 그 링크에 영원히 붙는다.
+⚠️ 클릭은 `source` 로 게이트하지 **않는다** — `/{slug}/{promo}?mode=onsite` 는 source 가 `onsite`
+지만 링크는 실제로 눌린 것이다(이 지표는 "링크가 몇 번 눌렸나"다).
+⚠️ 클라 dedupe 키에 code 가 들어간다 — 같은 탭에서 링크 A → B 로 들어오면 둘 다 실제 클릭이라
+B 가 묻히면 안 된다.
 
 ## 집계 지점이 klow_web **클라이언트**인 이유
 
@@ -186,7 +207,7 @@
 
 | 앱 | 파일 |
 |---|---|
-| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드) · `components/brand/BrandStorefront.tsx`(방문 effect) · `store/useCartStore.ts`(담기 1줄) |
+| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
 | klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
 | klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
 
@@ -209,13 +230,17 @@
 
 ## 배포 순서
 
-**klow_server(마이그레이션 포함) → klow_web → klow_brand / klow_admin.**
+⚠️ **klow_web → klow_server(마이그레이션 포함) → klow_brand / klow_admin.**
+**할인 링크 클릭 통일 때문에 klow_web 이 먼저다** — 흔한 "서버 먼저"의 반대다.
 
-- 서버가 먼저여야 트래킹 POST 가 404 로 유실되지 않는다(반대로 서버만 먼저 나가면 아무도 안 부르는
-  엔드포인트가 있을 뿐이라 리스크 0 — 비대칭이다).
-- klow_web 부터 데이터가 쌓인다. **백필 불가**이므로 `trackingSince` 이전은 0 이 아니라 데이터 없음이다.
+| 순서 | 그 창에서 벌어지는 일 |
+|---|---|
+| **klow_web 먼저** ✅ | 신규 트래킹 POST 가 404 로 조용히 버려진다(아직 아무도 안 보는 신규 지표). 할인 링크 클릭은 **구 서버가 종전대로 계속 센다** — 유실 없음. 새 `promotionCode` 필드는 구 서버 zod 가 unknown key 로 흘려보낸다(strip). |
+| klow_server 먼저 ❌ | `resolveBySlug` 가 집계를 멈췄는데 구 klow_web 은 `promotionCode` 를 아직 안 보낸다 → **이미 운영 중인 할인 링크 클릭이 통째로 유실**된다. |
+
+- 데이터는 klow_web 배포부터 쌓인다. **백필 불가**이므로 `trackingSince` 이전은 0 이 아니라 데이터 없음이다.
 - 브랜드/어드민 화면은 마지막 — 먼저 내보내면 텅 빈 차트를 보고 "통계가 안 나와요" 문의가 온다.
 
 ## 교차링크
 
-[brands](./brands.md) · [promotions](./promotions.md)(별개 축인 클릭 집계) · [stats](./stats.md)(brandActivity 오염 금지 원칙) · [products](./products.md)(`StrippedPricingKeys`)
+[brands](./brands.md) · [promotions](./promotions.md)(클릭 카운터 소유권) · [stats](./stats.md)(brandActivity 오염 금지 원칙) · [products](./products.md)(`StrippedPricingKeys`)
