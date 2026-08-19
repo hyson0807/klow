@@ -187,7 +187,7 @@
 | 앱 | 파일 |
 |---|---|
 | klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드) · `components/brand/BrandStorefront.tsx`(방문 effect) · `store/useCartStore.ts`(담기 1줄) |
-| klow_brand | `app/(authed)/studio/_components/tabs/StatsTab.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/TrendChart.tsx`(공유) |
+| klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
 | klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
 
 - ⚠️ 방문 중복 가드는 **모듈 레벨 `Set`** 이다 — 컴포넌트 `useRef` 로는 StrictMode dev 이중 effect 는
@@ -199,10 +199,13 @@
 - klow_brand `TrendChart` 는 `promotions/_components/` 에서 `components/charts/` 로 옮기며
   `lines` prop 으로 일반화했다(할인 링크 1선 / 통계 3선 공용). **복사본을 만들지 말 것** — 예전에
   mini 변형으로 갈라졌다가 죽은 이력이 있다.
-- klow_brand 통계 탭은 `IdlePanel` 의 `StudioTab` 에 `'stats'` 로 들어간다. ⚠️ `showAutoSaveStatus`
-  에는 넣지 않는다(읽기 전용 — `orders` 와 같은 취급). ⚠️ `studio/page.tsx` 의 `?tab=` 화이트리스트
-  에도 넣어야 딥링크가 산다.
-- klow_brand 통계 탭은 **현장 데이터가 0 이면 그 칸·선을 숨긴다**(부스를 안 하는 브랜드가 대부분).
+- klow_brand 통계는 **헤더 필의 독립 페이지 `/stats`** 다(`StudioShell active="stats"`). 스튜디오
+  탭 스트립에 넣지 않은 이유: 그쪽은 브랜드관을 *편집*하는 자리라 자동저장 상태 표시와 섞이고,
+  탭을 하나 늘릴 때마다 `StudioTab` union·`TABS`·렌더 분기·`?tab=` 화이트리스트 4곳을 함께
+  고쳐야 한다. ⚠️ **새 최상위 보호 라우트는 `src/middleware.ts` matcher 에 반드시 넣을 것** —
+  빠뜨리면 미인증 접근이 랜딩으로 튕기지 않고 빈 화면을 한 번 그린 뒤 클라 가드가 뒤늦게
+  처리한다(`/onsite`·`/settlement`·`/promotions` 가 지금도 그 상태다).
+- 통계 화면은 **현장 데이터가 0 이면 그 칸·선을 숨긴다**(부스를 안 하는 브랜드가 대부분).
 
 ## 배포 순서
 
