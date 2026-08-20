@@ -132,8 +132,9 @@ GET https://shop.brandA.com/
 | `/` | **rewrite** → `/{slug}` | 브랜드관이 홈이어야 한다 |
 | `/{자기 slug}` | **308** → `/` | 같은 콘텐츠가 두 URL 에 뜨는 것 방지 |
 | `/product/…` `/cart` … (예약어 최상위 세그먼트) | **pass-through** | 둘러보기·담기는 이 도메인에서 끝난다 |
-| **쿠키·세션이 필요한 경로** — `/checkout` `/login` `/signup` `/my` `/orders` **`/seed/*`** `/handoff` | pass-through 되지만 **화면이 klow.kr 로 보낸다** | 세션이 필요한 흐름은 klow.kr 소관(§1-3). 미들웨어가 아니라 **화면이** 처리한다 — 미들웨어에서 302 하면 카트·국가·프로모션이 안 실려 넘어간다. ⚠️ **경로를 외우지 말고 "쿠키가 필요한가"로 판정할 것** — `/seed/*` 는 `klow_order` 게스트 쿠키에 의존해 특히 놓치기 쉽다 |
+| **쿠키·세션이 필요한 경로** — `/checkout` `/login` `/signup` `/my` `/orders` **`/seed/*`** | pass-through 되지만 **화면이 klow.kr 로 보낸다** | 세션이 필요한 흐름은 klow.kr 소관(§1-3). 미들웨어가 아니라 **화면이** 처리한다 — 미들웨어에서 302 하면 카트·국가·프로모션이 안 실려 넘어간다. ⚠️ **경로를 외우지 말고 "쿠키가 필요한가"로 판정할 것** — `/seed/*` 는 `klow_order` 게스트 쿠키에 의존해 특히 놓치기 쉽다 |
 | `/track/{id}?t=` | **pass-through, 그대로 동작** | 쿠키가 아니라 **URL 서명 토큰**으로 여는 화면이라 cross-site 여도 무관하다(위 규칙의 유일한 예외 — 근거가 있어서 예외다) |
+| `/handoff` | pass-through 되지만 **화면이 `/cart` 로 보낸다**(klow.kr 이 아니다) | 여기서 복원하면 손님이 **브랜드 도메인에 남은 채 결제까지** 간다 — 이 설계의 전제가 깨진다(plan F16) |
 | `?mode=onsite` | **대상 아님** | 현장 QR 은 klow_brand 가 **klow.kr 로 생성**하고 방문 집계도 onsite 를 제외한다. 커스텀 도메인에서 이 모드를 지원하지 않는다 |
 | `.` 포함 세그먼트(`/robots.txt`, `/naver….html`) | pass-through (`/sitemap.xml` 만 404) | `SLUG_REGEX` 가 `.` 을 허용하지 않아 안전한 판별자 |
 | `/{seg}` (예약어 아닌 단일 세그먼트) | **rewrite** → `/{slug}/{seg}` | 프로모션 할인 링크가 커스텀 도메인에서도 동작 |

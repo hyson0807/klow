@@ -335,21 +335,32 @@ localStorage, `country`·`promotionCode` 는 URL·모달, `visitorId` 는 클라
    헬퍼**를 재사용한다(사본을 만들면 두 경로가 각자 캐시 없이 같은 자원을 읽는다).
    조회 실패한 라인은 **버리고 나머지를 살린다** — 그쪽과 같은 판단이다(정본은 `/v1/orders/quote`).
 
-   ⚠️⚠️ **쓰는 방법이 로그인 여부로 갈린다. 이건 취향이 아니라 경합 때문이다.**
+   ⚠️⚠️ **쓰는 방법이 로그인 여부로 갈린다. 취향이 아니라 `useSessionSync` 와의 경합 때문이다.**
+   **`useSession().ready` 를 기다린 뒤** 시작한다.
 
    | 상태 | 반영 방법 |
    |---|---|
-   | 비로그인 | `replaceCart(merged, null)` |
-   | 로그인 | **`api.cart.merge(lines, removedIds)`** → 그 응답으로 `replaceCart(res, user.id)` |
+   | 비로그인 | `replaceCart(merged, null)` 하나로 끝 |
+   | 로그인 | **① `api.auth.updateProfile({ country })` → ② `api.cart.merge(lines, removedIds)` → ③ `replaceCart(res, user.id)` → ④ `repriceCartForCountry(country, qc)`** |
 
-   `replaceCart` 는 **서버에 복제하지 않는다**(스토어의 `set()` 하나다). 그런데 `SessionSyncMount` 는
-   **fresh mount 마다** 로컬 카트를 읽어 `api.cart.merge()` 한 뒤 그 결과로 다시 `replaceCart` 한다 —
-   그리고 핸드오프는 **cross-origin 이동이라 klow.kr 레이아웃이 언제나 fresh mount** 다. 순서에 따라
-   **복원한 카트가 서버 카트로 덮이거나**(sync 가 나중), **복원분이 서버에 영영 안 올라간다**(sync 가
-   먼저 읽고 `syncedUserIdRef` 로 재실행을 막는다). 결제 직전에 카트가 흔들리는 건 이 기능에서 가장
-   비싼 실패다.
-   → **`useSession().ready` 를 기다린 뒤** 복원하고, 로그인 상태면 **로그인 머지와 같은 경로**로 태운다.
-   그러면 2단계의 폐기도 `removedIds` 로 서버까지 전파된다.
+   **왜 그냥 `replaceCart` 로 끝내면 안 되나** — 그건 **서버에 복제하지 않는다**(스토어의 `set()` 하나다).
+   그런데 `SessionSyncMount` 는 **fresh mount 마다** 로컬 카트를 읽어 `api.cart.merge()` 한 뒤 그 결과로
+   다시 `replaceCart` 하고, 핸드오프는 **cross-origin 이동이라 klow.kr 레이아웃이 언제나 fresh mount** 다.
+   순서에 따라 **복원한 카트가 서버 카트로 덮이거나**(sync 가 나중), **복원분이 서버에 영영 안
+   올라간다**(sync 가 먼저 읽고 `syncedUserIdRef` 로 재실행을 막는다).
+
+   **왜 ①이 먼저인가** — `useSessionSync` 의 `syncServerProfileToStore` 는 **프로필 국가로 앱 스토어를
+   덮는다**(`user.country !== store.country` 면 `syncCountry(user.country)`). 프로필이 US 인 손님이
+   브랜드 도메인에서 JP 로 골라 넘어오면 **핸드오프 국가가 프로필 국가로 되돌아간다** — F7 이 지키려던
+   것이 그대로 깨진다. ⚠️ 그쪽의 자동 업로드는 `!user.country` **일 때만** 돌아서 이 경우를 못 메운다.
+
+   **왜 ④가 필요한가** — `merge` 응답은 서버 카트(`cart.service.list`)이고 그건 **`User.country` 로
+   가격을 매기며 프로모션 code 를 아예 받지 않는다**(CLAUDE.md 가 이미 적어 둔 알려진 갭). 응답을 그대로
+   화면에 넣으면 **할인 링크로 들어온 손님의 카트가 결제 직전에 정상가로 보인다** — F6 이 막으려던 그
+   실패가 이 경로로 되돌아온다. `repriceCartForCountry` 는 `useAppStore.promotionCode`(3단계에서 세팅)를
+   읽어 **국가·프로모션을 함께** 반영하고, 서버에만 있던 라인(다른 기기에서 담은 것)까지 같이 고친다.
+   ℹ️ `merge` 는 `items` 에 있는 id 를 `removed` 에서 **알아서 뺀다**(보존 우선) — 국가 폐기 목록과 새
+   라인에 같은 상품이 겹쳐도 안전하다.
 6. **복귀 주소 검증** — `o` 가 있으면 **`GET /v1/storefront/resolve?host={o}`**(P1 에 이미 있는
    엔드포인트, 새로 만들지 않는다)로 확인해 `slug` 가 non-null 일 때만
    `setBrandReturn("https://" + o + "/")`. ⚠️ **스킴은 클라가 `https://` 로 직접 조립**하고 `o` 는
@@ -357,15 +368,18 @@ localStorage, `country`·`promotionCode` 는 URL·모달, `visitorId` 는 클라
    성공 화면이 기존 폴백(마지막 방문 브랜드관 / 버튼 숨김)으로 떨어진다.
    ⚠️ **검증은 여기서 한 번만** 한다 — raw 값을 sessionStorage 에 **절대 넣지 않기 위해서**다.
    저장되는 것은 언제나 검증을 통과한 URL 뿐이다.
-7. `router.replace('/checkout')` — **`?h` 를 히스토리에서 지운다.** 뒤로가기로 재복원되면 2번의 "국가가
-   다르면 카트 폐기"가 다시 돌아 손님 카트를 두 번 날린다.
+7. **5·6 이 끝난 뒤에** `router.replace('/checkout')` — **`?h` 를 히스토리에서 지운다.** 뒤로가기로
+   재복원되면 2번의 "국가가 다르면 카트 폐기"가 다시 돌아 손님 카트를 두 번 날린다.
+   ⚠️⚠️ **먼저 보내면 안 된다.** 복원은 제품 재조회·merge 로 **비동기**인데 `/checkout` 은
+   `cart.length === 0` 이면 **`/cart` 로 튕긴다**(`checkout/page.tsx:295`). 카트가 채워지기 전에
+   보내면 손님이 결제가 아니라 장바구니 화면에 떨어진다 — 그동안 이 페이지는 **로딩 상태**를 보여준다.
 
 **⚠️ 트랩**
 
 - ⚠️⚠️ **`addToCart` 로 복원하지 말 것.** 그 함수는 `trackStorefrontCartAdd` 비콘을 쏜다
   (`useCartStore.ts:7`). 복원은 **커스텀 도메인에서 이미 센 담기를 klow.kr 에서 한 번 더 세는 것**이라
   `cartAdds` 가 두 배가 된다(순담기자는 flip-once 라 안 늘어 **비율만 조용히 망가진다**).
-  → `replaceCart(merged, syncedUserId)` 로 직접 쓴다.
+  → 위 5단계 표의 경로(비로그인 `replaceCart` / 로그인 merge)로만 쓴다.
 - ⚠️ 로그인 사용자면 `syncedUserId` 가 이미 붙어 있다 → **그 값을 보존**해 넘긴다. `null` 로 덮으면
   서버 카트와 끊긴 채로 결제에 들어간다.
 - ⚠️ `/handoff` 는 **예약 슬러그**여야 한다(P0-1). 빠뜨리면 `handoff` 슬러그를 가진 브랜드가 브랜드관을 잃는다.
@@ -477,15 +491,22 @@ shop.brandA.com    ?purchased= 읽고 removeProducts(ids) → router.replace 로
 **fetch 실패 시 stale 값 우선** — fail-closed 로 하면 API 가 3초 흔들릴 때 전 브랜드 도메인이 동시에
 죽는다. 다만 **stale 도 없을 때의 폴백은 경로마다 다르다:**
 
-| 경로 | stale 없음 + resolve 실패 |
-|---|---|
-| `/` (루트) | **pass-through**(fail-open). 최악이 "브랜드 도메인 루트에 KLOW 홈이 잠깐 뜬다"이고 되돌릴 수 있다 |
-| 그 외 전부 | **중립 오류(503)**. pass-through 금지 |
+기준은 **"이 경로를 처리하는 데 slug 가 필요한가"** 다. 예약어 판정은 klow_web 안의 정적 목록이라
+resolve 없이도 되므로, 대부분의 경로는 폴백이 필요 없다:
 
-⚠️⚠️ **`/{seg}` 를 fail-open 하면 F11 이 통째로 무력화된다.** pass-through 된 `shop.brandA.com/brandB`
-는 `[brandSlug]` 라우트에 **그대로 걸려 브랜드 B 의 브랜드관을 브랜드 A 도메인에 렌더**한다 — rewrite
-규칙이 유일한 방어인데 그 방어를 건너뛰는 경로가 폴백이 되는 것이다. "잠깐 KLOW 홈이 뜬다"는 루트에만
-해당하는 이야기다.
+| 경로 | slug 필요? | stale 없음 + resolve 실패 |
+|---|---|---|
+| `/` (루트) | 필요(rewrite 대상) | **pass-through**(fail-open). 최악이 "브랜드 도메인 루트에 KLOW 홈이 잠깐 뜬다"이고 되돌릴 수 있다 |
+| 예약어 경로(`/product/…` `/cart` …) | **불필요** | **pass-through — 완전 정상 동작.** 여기까지 막으면 API 가 3초 흔들릴 때 멀쩡한 PDP·장바구니가 같이 죽는다 |
+| `.` 포함 세그먼트 | 불필요 | pass-through |
+| **`/{seg}`** (예약어 아닌 단일 세그먼트) | 필요(rewrite 대상) | ⚠️ **중립 오류(503). pass-through 금지** |
+| `/{seg}/…` (2세그먼트 이상) | 불필요 | pass-through → 404 (원래도 404) |
+
+⚠️⚠️ **`/{seg}` 만은 fail-open 하면 F11 이 통째로 무력화된다.** pass-through 된
+`shop.brandA.com/brandB` 는 `[brandSlug]` 라우트에 **그대로 걸려 브랜드 B 의 브랜드관을 브랜드 A
+도메인에 렌더**한다 — rewrite 규칙이 유일한 방어인데 그 방어를 건너뛰는 경로가 폴백이 되는 것이다.
+"잠깐 KLOW 홈이 뜬다"는 **루트에만** 해당하는 이야기다.
+ℹ️ `X-Robots-Tag: noindex` 는 **폴백 경로에서도 그대로 붙인다**(본 도메인이 아니면 무조건).
 
 ```ts
 export const config = {
@@ -521,6 +542,11 @@ export const config = {
 결제 이탈 후 예약 재사용 `resumeOrderId` 를 그 쿠키에서 복원하고, `payment/prepare` 의 게스트
 ownership 검증도 같은 쿠키다). `credentials:'omit'` + cross-site 라 **그 쿠키는 절대 붙지 않는다** →
 예약이 조용히 새로 잡히거나 결제가 막힌다.
+⚠️ 더 나쁜 건 **시딩 페이지가 자체 결제 흐름을 돈다**는 점이다 — `seed/[token]/page.tsx:457` 의
+`requestEximbayPay` 가 **그 페이지에서 바로** 같은 탭을 Eximbay 로 보낸다. 커스텀 도메인에 두면
+**결제창 호출 도메인이 브랜드 도메인이 되어**(핸드오프로 피하려던 바로 그것) PG 전제가 깨지고,
+리턴은 klow.kr `/checkout/redirect` 로 떨어지는데 시딩 복귀 breadcrumb 은 브랜드 도메인
+`sessionStorage` 에 있어 **복귀도 실패**한다.
 
 ℹ️ **`/track/{id}?t=` 는 예외로 남겨도 된다** — 쿠키가 아니라 **URL 서명 토큰**으로 여는 화면이기
 때문이다(부록 V7). 이 근거를 규칙 옆에 적어 둘 것. 안 적으면 다음 사람이 "세션 비슷하니까" 하고 통째로
@@ -531,8 +557,14 @@ ownership 검증도 같은 쿠키다). `credentials:'omit'` + cross-site 라 **�
 
 ### 4-3. 핸드오프 송신부
 
-- **위치는 카트 화면의 결제 버튼**(+ 바로구매가 있다면 그것). ⚠️ **PDP 담기는 넘기지 않는다** —
-  담기까지 커스텀 도메인에서 끝내는 것이 이 설계의 전부다
+- **진입점은 정확히 둘이다**(확인 완료): 카트 화면의 결제 버튼(`cart/page.tsx:244`)과 **PDP 바로구매**
+  (`product/[id]/page.tsx:181` `handleBuyNow`). ⚠️ **둘 다 바꿔야 한다** — 하나만 바꾸면 나머지 하나가
+  커스텀 도메인의 `/checkout` 으로 들어가 **세션 없는 결제**를 시도한다.
+  ℹ️ `handleBuyNow` 는 `addToCart` 먼저 하고 이동하므로, 그 뒤 스토어에서 payload 를 만들면 **그 상품이
+  이미 들어 있다**(zustand `set` 은 동기다). 담기 비콘도 정상적으로 한 번만 나간다.
+  ⚠️ **PDP 담기 자체는 넘기지 않는다** — 담기까지 커스텀 도메인에서 끝내는 것이 이 설계의 전부다.
+  ⚠️ 두 곳 다 `onsiteMode` 분기(`/checkout/onsite`)를 갖고 있는데 **현장 모드는 커스텀 도메인 대상이
+  아니다**(§4-1) — 핸드오프는 일반 결제 분기에만 건다
 - `location.assign(...)` 로 **top-level 이동**.
   ⚠️ **새 탭·`window.open` 금지** — 모바일 인앱 브라우저에서 컨텍스트가 끊긴다.
   결제 확정이 정확히 그 문제로 한 번 크게 데였다(CLAUDE.md 「결제 확정 3중 방어선」)
@@ -569,9 +601,11 @@ vid 로 들어가면 `recordPurchase` 가 행을 못 찾아 **그 브랜드의 �
 1. `useCartStore.removeProducts(ids)` — **klow.kr `/checkout/redirect` 가 쓰는 것과 같은 함수**
 2. `router.replace` 로 **파라미터 제거** (F15 와 같은 이유 — 주소창·히스토리에 남기지 않는다)
 
-⚠️ **비동기화(게스트) 상태의 `removeProducts` 는 묘비(tombstone)를 남긴다** — 그 손님이 나중에
-klow.kr 에서 로그인하면 머지가 **서버 카트에서도** 그 상품을 지운다. 여기서는 **원하는 동작**이지만
-(이미 산 상품이니까), 그 부수효과를 모른 채 이 함수를 다른 데 재사용하지 말 것.
+ℹ️ `removeProducts` 는 비동기화 상태에서 묘비(tombstone)를 남기지만, **커스텀 도메인에서는 그게
+아무 일도 하지 않는다** — 묘비는 그 오리진의 `localStorage` 에 있고 그 오리진은 **세션이 없어 서버
+머지를 영원히 하지 않는다**(F8). 무해하게 쌓일 뿐이다.
+⚠️ 반대로 말하면 **이 정리는 그 브라우저의 그 도메인에만 반영된다** — 같은 사람의 klow.kr 카트나 서버
+카트에는 영향이 없다(그쪽은 `/checkout/redirect` 가 이미 정리했다).
 
 ⚠️ **`?purchased=` 는 검증하지 않는다.** 하는 일이 "그 손님 자기 브라우저 카트에서 그 id 를 뺀다"뿐이라
 조작해도 **남에게 영향이 없다**(최악은 자기 카트를 자기가 비우는 것). 반면 `o` 는 **링크 href 로
@@ -727,43 +761,62 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 3. `npm run start` — env 가드 + 라우트 매핑(288 → **+4~5**)
 
 ⚠️⚠️ **핸드오프 로직은 전부 klow_web 에 있고 klow_web 에는 테스트 인프라가 없다**
-(`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F24 를 잠글 자동
+(`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F25 를 잠글 자동
 테스트가 없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
 (`encodeHandoff`/`decodeHandoff` 는 순수 함수라, 나중에 klow_web 에 테스트 러너를 들이면 **가장 먼저
 잠글 대상**이다.)
 
 ### 8-2. 수동 E2E (스테이징)
 
+⚠️ **핸드오프 불변식은 자동 잠금이 없다**(§8-1) — 이 목록이 유일한 방어선이다. 대충 하면 안 된다.
+
+**A. 도메인 연결·라우팅**
+
 1. 테스트 서브도메인 연결 → DNS 설정 → `pending → verifying → active` 전이
 2. `https://<도메인>/` 이 브랜드관 렌더 (rewrite, **주소창 유지**)
-3. 네트워크 탭 — API 가 **`api.klow.kr` 로 직접** 나가고 `Origin` 이 커스텀 도메인이며,
-   **트래킹 비콘 2개가 200**(403 이면 P1 Origin 술어가 안 걸린 것)
-4. 같은 탭 — **요청에 `Cookie` 헤더가 실리지 않는지**(`credentials:'omit'`). **Chrome·Safari 둘 다**
-5. klow.kr 에 로그인한 채로 커스텀 도메인 방문 → **양쪽 브라우저에서 똑같이 비로그인**으로 보이는지
-   (한쪽만 로그인으로 보이면 F8 위반)
-6. **핸드오프** — 담기 → 결제 → `klow.kr/handoff?h=…` → `/checkout` 에 **카트·국가·가격이 그대로**이고
-   주소창에 **`?h` 가 남지 않는지**(뒤로가기도 확인)
-7. **할인 링크 회귀(F6)** — `shop.brandA.com/{promotionSlug}` 로 진입해 세일가 확인 → 핸드오프 →
-   klow.kr 결제 금액이 **세일가 그대로**인지
-8. **국가 상이(F7)** — klow.kr 카트를 US 로 채워둔 뒤 JP 기준 커스텀 도메인에서 핸드오프 →
-   **기존 카트 폐기 + 안내**가 뜨고 남은 라인이 전부 JP 가격인지
-9. **퍼널(F5)** — 커스텀 도메인 방문·담기 → klow.kr 결제 완주 → 브랜드 `/stats` 에서
-   **방문·담기·결제 3단계가 모두** 오르는지. **결제만 0 이면 `visitorId` 이관 실패다**
-10. **담기 이중집계 없음(F1)** — 위 시나리오에서 `총 N번 담음` 이 **1 만** 오르는지
-11. 결제 완주 후 **결제한 상품만** 카트에서 빠지고 나머지는 남는지(시딩 결제면 시딩 링크로 복귀하는지)
-11-1. **브랜드 도메인 카트 정리(§3-4)** — 결제 완주 → 성공 화면의 "계속 쇼핑" 이 **커스텀 도메인**을
-    가리키는지 → 눌러서 돌아갔을 때 **결제한 상품만** 그 도메인 카트에서 빠지고 주소창에
-    `?purchased=` 가 남지 않는지
-11-2. **F21 회귀** — `?h` 의 `o` 를 임의 도메인(예: `example.com`)으로 바꿔 진입 → 성공 화면의
-    "계속 쇼핑" 이 **그 도메인을 가리키지 않는지**(폴백 또는 버튼 숨김)
-12. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
-12-1. **F11 폴백 회귀** — resolve 를 강제로 실패시킨 채(서버 중단·네트워크 차단) `shop.brandA.com/{다른브랜드}`
-    진입 → **브랜드 B 브랜드관이 뜨지 않는지**(503 이어야 한다). 루트만 KLOW 홈 폴백
-12-2. **F23** — klow.kr 에 **로그인한 상태**로 핸드오프 → `/checkout` 카트가 그대로이고, **새로고침
-    후에도** 유지되는지(서버 카트에 올라갔다는 뜻). 국가가 달라 폐기된 상품이 **되살아나지 않는지**
-12-3. **F24** — `shop.brandA.com/seed/{token}` 진입 시 **klow.kr 로 보내지는지**
-13. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
-14. **klow.kr 회귀 없음** — 로그인·담기·결제 완주 + `www.klow.kr` 정상
+3. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
+4. **F11 폴백** — resolve 를 강제로 실패시킨 채(서버 중단·네트워크 차단)
+   `/{다른브랜드}` → **503**(브랜드 B 브랜드관이 뜨면 실패) · **`/` 는 KLOW 홈 폴백** ·
+   **`/product/{id}` 는 정상 렌더**(여기까지 막으면 과잉이다)
+5. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
+
+**B. 커스텀 도메인의 네트워크·세션 (비로그인 전제)**
+
+6. 네트워크 탭 — API 가 **`api.klow.kr` 로 직접** 나가고 `Origin` 이 커스텀 도메인이며,
+   **브랜드관 제품이 정상 로드**되고 **트래킹 비콘 2개가 200**(CORS 실패면 화면이 비고, 403 이면 집계만 유실)
+7. **요청에 `Cookie` 헤더가 실리지 않는지**(`credentials:'omit'`) — **Chrome·Safari 둘 다**
+8. **F8** — klow.kr 에 로그인한 채로 커스텀 도메인 방문 → **양쪽 브라우저에서 똑같이 비로그인**
+9. **F24** — `shop.brandA.com/seed/{token}` 진입 시 **klow.kr 로 보내지는지**
+
+**C. 핸드오프**
+
+10. 기본 — 담기 → 결제 → `klow.kr/handoff?h=…` → `/checkout` 에 **카트·국가·가격이 그대로**이고
+    주소창에 **`?h` 가 남지 않는지**(뒤로가기도 확인). **PDP 바로구매**로도 같은지
+11. **F25** — 느린 회선(네트워크 스로틀)에서 → **`/cart` 로 튕기지 않고** 로딩 후 `/checkout`
+12. **F6** — `shop.brandA.com/{promotionSlug}` 진입해 세일가 확인 → 핸드오프 → 결제 금액이 **세일가 그대로**
+13. **F7** — klow.kr 카트를 US 로 채워둔 뒤 JP 기준 커스텀 도메인에서 핸드오프 →
+    **기존 카트 폐기 + 안내**가 뜨고 남은 라인이 전부 JP 가격인지
+14. **F23 (로그인)** — 로그인 상태로 핸드오프 → `/checkout` 카트가 그대로이고 **새로고침 후에도**
+    유지되는지(= 서버 카트에 올라갔다). 13 의 폐기분이 **되살아나지 않는지**
+15. **F23 (프로필 국가)** — 프로필 국가가 **다른** 계정으로 커스텀 도메인에서 다른 국가를 골라 핸드오프
+    → 국가·가격이 **핸드오프 국가로 유지**되는지(프로필 국가로 되돌아가면 실패)
+16. **F23 (프로모션)** — 로그인 + 할인 링크 → 핸드오프 → 카트가 **세일가**인지
+    (정상가면 서버 카트 응답을 그대로 쓴 것)
+17. **F21** — `?h` 의 `o` 를 임의 도메인(`example.com`)으로 바꿔 진입 → 성공 화면의 "계속 쇼핑" 이
+    **그 도메인을 가리키지 않는지**(폴백 또는 버튼 숨김)
+
+**D. 결제 완주 후**
+
+18. **결제한 상품만** klow.kr 카트에서 빠지고 나머지는 남는지(시딩 결제면 시딩 링크로 복귀하는지)
+19. **§3-4** — 성공 화면의 "계속 쇼핑" 이 **커스텀 도메인**을 가리키고, 눌러 돌아갔을 때
+    **결제한 상품만** 그 도메인 카트에서 빠지며 주소창에 `?purchased=` 가 남지 않는지
+20. **F5** — 브랜드 `/stats` 에서 **방문·담기·결제 3단계가 모두** 오르는지.
+    **결제만 0 이면 `visitorId` 이관 실패다**
+21. **F1** — 같은 시나리오에서 `총 N번 담음` 이 **1 만** 오르는지
+
+**E. 회귀**
+
+22. **klow.kr 회귀 없음** — 로그인·담기·결제 완주 + `www.klow.kr` 정상
 
 ### 8-3. 문서
 
@@ -779,7 +832,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 ## 9. 불변식 체크리스트 (착수 전 필독)
 
 아래는 전부 **틀려도 컴파일과 테스트가 통과**한다. 각 PR 착수 전 해당 항목을 확인한다.
-⚠️ F1·F4~F9·F15·F16·F21~F24 는 **klow_web 이라 자동 테스트가 없다**(§8-1).
+⚠️ F1·F4~F9·F15·F16·F21~F25 는 **klow_web 이라 자동 테스트가 없다**(§8-1).
 
 | # | 불변식 | 어기면 | PR |
 |---|---|---|---|
@@ -803,7 +856,8 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | **F18** | 배포는 **P2(수신) → P3(송신)** | 손님이 klow.kr 의 없는 `/handoff` 에서 **404** | — |
 | **F21** | 복귀 host(`o`)는 **`/v1/storefront/resolve` 로 재검증**한 뒤에만 저장하고, **스킴은 클라가 `https://` 로 조립** | 결제 성공 화면의 "계속 쇼핑" 이 **임의 사이트로 보내는 링크**가 된다(오픈 리다이렉트) | P2 |
 | **F22** | `setBrandReturn(…?purchased=)` 갱신을 `removeProducts` 와 **같은 블록**에 둔다 | 한쪽만 도는 조합이 생겨 **브랜드 도메인 카트가 정리되지 않는다** | P2 |
-| **F23** | 복원은 **`session.ready` 이후**에 하고, 로그인 상태면 **`api.cart.merge(lines, removedIds)`** 경로로 태운다 | `SessionSyncMount` 와 경합해 **복원한 카트가 덮이거나 서버에 영영 안 올라간다.** 국가 폐기분도 서버 카트에서 되살아난다 | P2 |
+| **F23** | 복원은 **`session.ready` 이후**. 로그인 상태면 **프로필 국가 업로드 → `api.cart.merge(lines, removedIds)` → `repriceCartForCountry`** 순서를 지킨다 | 순서가 어긋나면: sync 가 복원 카트를 덮거나 / **프로필 국가가 핸드오프 국가를 되돌리거나**(F7 무력화) / **서버 카트 가격에 프로모션이 없어 세일가가 정상가로 보인다**(F6 무력화) | P2 |
+| **F25** | 복원이 **끝난 뒤에만** `/checkout` 으로 보낸다(그동안 로딩) | `checkout/page.tsx:295` 의 빈 카트 가드가 손님을 **`/cart` 로 튕긴다** | P2 |
 | **F24** | **쿠키가 필요한 경로는 전부 klow.kr** — 특히 **`/seed/*`**(예약 슬러그라 pass-through 된다) | 시딩 claim 이 `klow_order` 게스트 쿠키를 못 받아 **예약 재사용·결제가 조용히 깨진다** | P3 |
 | **F19** | `origin-exempt.spec.ts` 가 **무변경으로 통과** | 통과하지 않으면 설계가 틀어진 것 | P1 |
 | **F20** | Vercel 추가 후 DB insert 실패 시 **보상 제거** + 해지 도메인 **정리 경로** | Vercel 쿼터 누수 · orphan 누적 | P1 |
