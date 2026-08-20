@@ -269,6 +269,7 @@ to_char(o."paidAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
 | 국가×제품 교차표 | 모바일 폭에서 못 읽고 데이터가 성기다 |
 | 어드민 대시보드 반영 | 이번엔 klow_brand 만. 어드민은 기존 '브랜드관 방문' 섹션 유지 |
 | 장바구니 담기의 국가·제품 분해 | 담기 이벤트에 국가가 없고 제품 단위 집계도 저장하지 않는다(신규 수집 설계 필요) |
+| ~~방문자(비결제)의 국가~~ | **2026-08-20 에 별도 작업으로 구현했다** — `BrandVisitorCountryDay` + `track/country` 비콘. 국가는 손님이 국가 선택 모달에서 **고른 값**이고 단위는 **명**이다. 그래서 `/stats` 에 국가 랭킹이 **둘**(방문=명 / 판매=건)이 됐다 — 모집단 비교는 [server/modules/storefront-stats.md](./server/modules/storefront-stats.md) "방문 국가" 절 |
 | 마이그레이션·백필 | 스키마 변경 0 |
 
 ---

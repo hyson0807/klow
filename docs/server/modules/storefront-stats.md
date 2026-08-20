@@ -25,6 +25,7 @@ klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정
 | 날짜 버킷 | 원장 행의 날짜(방문일) | **`paidAt`**(결제일) |
 | 소급 | 불가(집계 시작일부터) | 가능(전 기간) |
 | 단위 | 명(순 인원) | 건 / 개 |
+| 국가 축 | 손님이 **고른** 기준국(방문 국가 TOP) | `Order.countryCode`(국가 TOP) |
 
 ⇒ 같은 탭의 "결제 48명"과 "국가 합계 63건"은 **서로 다른 숫자이며 그게 정상**이다.
 
@@ -44,6 +45,8 @@ klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정
 | `BrandDailyStat(brandId, date, source)` @unique | **읽기 모델**. 브랜드 × 날(KST) × 유입경로 1행에 `visits`/`uniqueVisits`/`cartAdds`/`uniqueCartAdds`/`purchases`/`uniquePurchases`. **차트는 이것만 읽는다** |
 | `BrandVisitorDay(brandId, date, visitorId)` @unique | **판정 원장**. "그날 처음인가?"를 유니크 제약으로 원자적으로 답하는 게 유일한 일. `source`(그날 첫 진입 경로) + `carted` + `purchased` 보유 |
 | `Order.visitorId` (VarChar 64, nullable) | 결제 단계의 **귀속 키**. 주문 생성 시 klow_web 이 실어 보내고, 결제 확정 때 원장 조회에 쓴다 |
+| `BrandVisitorCountryDay(brandId, date, source, countryCode)` @unique | **읽기 모델**. 국가별 `visitors`(순방문, 명). 아래 "방문 국가" 절 |
+| `BrandVisitorDay.countryCode` (VarChar 2, nullable) | 국가 귀속 마커. `carted`/`purchased` 와 같은 역할 — null→값 전이 1회만 카운터를 올린다 |
 
 `enum StorefrontVisitSource = direct | promotion | onsite` — ⚠️ **`onsite` 는 묘비다**(수집·보고 모두 안 함, 아래 절).
 
@@ -279,6 +282,97 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 방문 모집단 밖이고, 이틀 이상 지난 방문의 결제도 빠진다. **정산·주문 화면의 숫자와 다른 게 정상**
 이며, 그쪽이 매출의 정본이다.
 
+## 방문 국가 (2026-08-20)
+
+"결제하지 않은 방문자는 **어느 나라에서 오는가**". 종전엔 국가 지표가 판매 분석의
+`Order.countryCode` 하나뿐이라 **산 사람의 나라만** 보였다.
+
+### 국가의 출처 = 손님이 **고른** 값
+
+`useAppStore.country` — klow_web 국가 선택 모달에서 손님이 직접 고른 배송/가격 기준국이다.
+브랜드관 진입 시 비로그인 + `country == null` 이면 모달이 자동으로 뜬다(`useGuestCountryPrompt`).
+
+⚠️ **GeoIP 를 쓰지 않는다.** 이 서버엔 `cf-ipcountry` 류를 읽는 코드가 아예 없고(IP·UA 를
+저장하지 않는다는 이 모듈의 약속), VPN·통신사 라우팅에서 틀린다. 무엇보다 **고른 값은 이미
+가격·언어·배송비를 좌우하는 정본**이라, 두 번째 추정 국가를 두면 같은 화면 안에서 국가가 두
+벌이 되고 판매 분석의 국가 랭킹과 비교가 불가능해진다.
+⚠️ **`navigator.language` 추정도 안 쓴다.** `OnboardingModal` 이 초기 하이라이트에만 쓰고
+저장하지 않는 값이며, en-US 기본 브라우저를 쓰는 베트남 손님이 미국으로 잡힌다.
+⚠️ **klow_web 에서 `?? DEFAULT_COUNTRY('US')` 폴백을 걸면 안 된다.** 가격 조회가 미선택을 US 로
+폴백하는 건 조회 편의지만, 지표에서 그 폴백은 **"모른다"를 "미국이다"로 바꾸는 조작**이다 —
+브랜드가 있지도 않은 미국 수요를 보고 마케팅비를 쓴다. 안 보내고 '미상'으로 남긴다.
+
+### 저장 2축 — 원장 마커 + 읽기 모델
+
+| | 역할 |
+|---|---|
+| `BrandVisitorDay.countryCode` | **판정**. null→값 전이가 곧 "이 방문자를 셌다" |
+| `BrandVisitorCountryDay` | **읽기 모델**. 차트/랭킹은 이것만 읽는다 |
+
+⚠️ **원장을 groupBy 해서 쓰지 않는 이유**: 원장은 `pruneVisitorDays()` 가 **100일**에 파기하는데
+조회 창은 `days='all'` 에서 **365일**까지 간다. 원장 집계로 만들면 `전체` 가 조용히 최근 100일만
+가리킨다 — "지금은 되고 100일 뒤에 조용히 틀려지는" 실패다. `BrandDailyStat`(안 지움) ↔
+`BrandVisitorDay`(지움)로 이미 갈라 둔 구조 그대로다.
+⚠️ **그래서 prune 에 이 테이블을 추가하면 안 된다.**
+⚠️ `BrandDailyStat` 에 국가를 안 붙인 이유: 유니크 키에 국가가 들어가면 기존 퍼널 카운터 6개가
+전부 국가별로 쪼개져 마이그레이션이 파괴적이 된다.
+⚠️ `countryCode` 에 **`ShippingCountry` FK 를 걸지 않는다** — 온보딩 국가 목록(115개)과
+`ShippingCountry`(234행)가 갈릴 수 있고, FK 면 그 순간 기록 경로가 throw 한다.
+
+### ⚠️ 첫-쓰기-승 — 감산이 없는 설계
+
+```ts
+if (led.countryCode) return;                    // 이미 귀속됨 → 끝(왕복도 아낀다)
+const flipped = await updateMany({
+  where: { brandId, date, visitorId, countryCode: null },   // ← 조건이 판정 그 자체
+  data: { countryCode },
+});
+if (flipped.count !== 1) return;                // 경합에서 졌다 → 저쪽이 이미 셌다
+await this.bumpCountry(brandId, date, led.source, countryCode);
+```
+
+**마지막-쓰기-승으로 바꾸지 말 것.** 국가를 바꾸면 옛 국가 −1 이 필요한데, 읽기 모델은
+트랜잭션 없는 increment upsert 라 lost update 에서 **음수 카운터**가 나오고 이 모듈엔 클램프가
+없다. 질문 자체도 "그날 이 방문자는 어느 나라 손님인가"라 첫 값 고정이 의미상 맞다
+(`source` 가 "그날 첫 진입 경로"인 것과 같은 규칙).
+⇒ **한계: 같은 날 국가를 바꾸면 그날 지표엔 반영되지 않는다**(다음 KST 날짜부터).
+
+판정을 읽은 값이 아니라 **조건부 `updateMany` 의 `count === 1`** 로 하는 이유는 담기·결제와
+같다 — 읽고→분기→쓰기면 같은 방문자의 국가 이벤트 2건(탭 2개·모달 재선택)이 동시에
+인플라이트일 때 둘 다 `null` 을 보고 `visitors` 를 2 올려 **Σ국가 > uniqueVisits** 가 된다.
+
+⚠️ **국가 이벤트는 `visits`/`uniqueVisits` 를 절대 건드리지 않는다**(`bumpDaily` 미호출).
+올리면 국가를 고른 손님만 방문이 2로 세어진다.
+⚠️ **방문 비콘을 재발사하는 방식이 아니다** — 그러면 `visits` 가 +1 된다. "이번엔 안 올려도
+된다"는 플래그를 주는 대안은 공개 비콘이 *얼마나 올릴지*를 클라가 주장하게 만드는 것이라,
+`unique` 필드를 API 에서 아예 뺀 이 모듈의 원칙과 어긋난다.
+
+### '미상' 은 서버가 뺄셈으로 파생한다
+
+`iso2: null` 행의 값 = `max(0, totals[source].uniqueVisits − Σ그 source 의 국가 visitors)`.
+
+- 클라가 빼게 두면 요약 카드의 방문자 수와 랭킹 합계가 화면에서 어긋나 보이는데 원인을 화면만
+  보고는 알 수 없다. 서버가 **같은 창·같은 `source` 필터**에서 파생하면
+  `랭킹 합계 == 요약 카드 방문자` 가 구조적으로 성립한다.
+- **0 이면 행을 만들지 않는다**(유령 "미상 0명" 금지).
+- source 별로 각각 낸다 — 그래야 탭별 합이 그 탭의 `uniqueVisits` 와 정확히 맞는다.
+
+⚠️ **초기에는 미상이 1위일 것이다.** 원인 3가지: ① 집계 시작 전 방문은 영원히 미상(백필 불가)
+② 모달을 닫은 게스트 ③ klow_web 배포 이후에야 채워지기 시작. "국가별로 안 나온다"는 문의가
+오면 이 셋이 답이다.
+
+### ⚠️ 한 화면에 국가 랭킹이 둘이다
+
+| | 방문 국가 TOP | 국가 TOP |
+|---|---|---|
+| 출처 | `BrandVisitorCountryDay` | `Order`/`OrderItem` |
+| 모집단 | 브랜드관을 거친 **방문자** | 결제 완료된 **전 주문** |
+| 단위 | **명** | **건** |
+| 국가의 의미 | 손님이 **고른** 기준국 | 온라인=배송국 / 현장=가격 기준국 |
+
+제목·단위가 갈라져 있어 구분은 되지만 **이 변경의 최대 혼동 위험**이다. 위 표는 이 문서
+§"한 화면에 모집단이 둘이다" 의 국가 축 버전이다.
+
 ## 라우트
 
 ### public-storefront-stats.controller.ts (`@Controller('v1/storefront-stats')`)
@@ -299,6 +393,10 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 |---|---|---|---|
 | POST | `/v1/storefront-stats/track/visit` | `{ brandId, visitorId, source }` | 120회/분 |
 | POST | `/v1/storefront-stats/track/cart-add` | `{ productId, visitorId }` | 60회/분 |
+| POST | `/v1/storefront-stats/track/country` | `{ brandId, visitorId, countryCode }` | 120회/분 |
+
+> `track/visit` 은 `countryCode?` 를 **함께** 받는다(마운트 시점에 이미 고른 손님 — 흔한 경로에
+> 요청을 더 만들지 않는다). `track/country` 는 **방문 뒤에 고른 경우** 전용이다.
 
 > ⚠️ **전역 60회/분보다 조인 게 아니라 푼다.** 이건 폼 제출이 아니라 페이지 진입 신호라,
 > 박람회 부스 와이파이·사무실·통신사 **NAT 뒤에서 한 IP가 장소 전체를 대표**한다. 60 이면 정상
@@ -325,7 +423,8 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 { days, trackingSince,                        // 집계 시작일(최초 행). null = 아직 데이터 없음
   totals: { direct, promotion, all },        // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct,
                                              //        purchases, uniquePurchases, purchaseConversionPct}
-  series: [{ date, direct:{…}, promotion:{…}, all:{…} }] }   // dense 제로필 (onsite 키는 없다)
+  series: [{ date, direct:{…}, promotion:{…}, all:{…} }],  // dense 제로필 (onsite 키는 없다)
+  countries: [{ source, iso2, nameKo, visitors }] }       // 방문 국가 — 아래 절
 ```
 
 - **dense 제로필** — 데이터 없는 날이 배열에서 빠지면 차트가 그 구간을 이어 그려 추이를 왜곡한다
@@ -455,7 +554,7 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 
 | 앱 | 파일 |
 |---|---|
-| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
+| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 — 방문/국가 **각각의 Set**) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
 | klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
 | klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
 
@@ -504,6 +603,20 @@ klow_web 이 먼저였던 건 할인 링크 클릭 유실 때문이고 여기엔
 추이 차트는 `trackingSince` 이전 구간 전체를 0 으로 그린다**(`trackingSince` 는 방문 최초 행에서
 파생되므로 결제 추적 시작보다 몇 주 앞선다) — 신경 쓰이면 별도 `purchaseTrackingSince` 를 내려
 선을 거기서 시작시키면 된다.
+
+### 방문 국가 배포 (2026-08-20) — **klow_server → klow_web → klow_brand**
+
+| 순서 | 그 창에서 벌어지는 일 |
+|---|---|
+| klow_server 먼저 ✅ | 새 라우트·컬럼이 준비된다. 아직 아무도 국가를 안 보내므로 쓰기 0. |
+| klow_web 다음 | 여기부터 국가가 쌓인다. **이전 방문은 복구 불가**(백필 없음). |
+| klow_brand 마지막 ⚠️ | `/stats` 가 `funnel.countries` 를 읽는다. 서버보다 먼저 내면 `undefined` 인데, 보드가 `?? []` 로 방어하므로 크래시 대신 **빈 랭킹**이 뜬다(결제 단계 배포의 하드 크래시와 다르다). 그래도 마지막이 낫다 — 첫날 화면이 100% 미상이라 "고장"으로 읽힌다. |
+
+⚠️ **klow_server 를 먼저 내는 게 중요한 이유**: `StorefrontVisitInput` 은 non-strict 라 구
+서버에 `countryCode` 를 보내면 **400 이 아니라 조용히 버려진다**. 반대 순서면 그 창의 국가가
+흔적 없이 사라진다.
+마이그레이션은 **nullable ADD COLUMN + CREATE TABLE = 추가 전용 → 롤링 안전 · 백필 없음**,
+**cron 개수 불변(8)**, 라우트 +1(294).
 
 ## 교차링크
 
