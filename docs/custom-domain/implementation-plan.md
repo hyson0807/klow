@@ -17,12 +17,18 @@
 |---|---|---|---|
 | **P0** | 정지 작업(예약 슬러그·하드코딩·집계 버그) | web, server, brand | 없음 (독립 배포 가능) |
 | **P1** | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 | server | 없음 (아직 서빙 안 함) |
-| **P2** | 쿠키 host-only 전환 | server | 없음 |
-| **P3** | klow_web 미들웨어 + API 프록시 + 결제 리턴 | web, server | **커스텀 도메인이 실제로 동작** |
+| **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web | 없음 (klow.kr 에서 불가시·무해) |
+| **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
 | **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
-| **P5** (선택) | 구글 핸드오프 · 링크 도메인화 · SEO index 개방 | 전부 | |
+| **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
 
-**순서: P0 → P1 → P2 → P3(web → server) → P4.**
+> ⚠️ **P2·P3·P5 는 2026-08-20 에 전면 재작성됐다.** 원래 계획은 커스텀 도메인 안에서 결제까지
+> 끝내는 **same-origin 프록시**였으나, **결제·로그인만 `klow.kr` 로 넘기는 핸드오프**로 바꿨다.
+> 근거는 [§4-0](#4-0-왜-프록시가-아니라-핸드오프인가). 프록시 설계 자체는 버리지 않고 **[§6-1 승격
+> 경로](#6-1-풀-프록시-승격--로그인결제까지-커스텀-도메인)** 에 그대로 보존한다 — 브랜드가 실제로
+> 요구하면 그때 올린다.
+
+**순서: P0 → P1 → P2 → P3 → P4.**
 ⚠️ **P4 를 P3 보다 먼저 내면 브랜드가 도메인을 연결했는데 사이트가 안 뜬다.**
 
 **롤백 지점**: P4 를 되돌리면 신규 등록만 막히고 기존 도메인은 계속 동작한다. P3 를 되돌리면 커스텀
@@ -36,7 +42,7 @@
 
 1. **예약 슬러그 누락 보강** — `klow_web/src/lib/reserved-slugs.ts` 와
    `klow_server/src/common/reserved-slugs.ts`(**미러 2파일**)에 실제 최상위 라우트인
-   `customer-center`·`track`·`seed` 와 신설 예정인 `api-proxy` 를 추가.
+   `customer-center`·`track`·`seed` 와 신설 예정인 `handoff`(P2 수신 라우트) 를 추가.
    P3 미들웨어가 이 목록으로 "브랜드 슬러그 경로인가"를 판정하므로 **선행 필수**다.
    ⚠️ 추가 전 `SELECT slug FROM "Brand" WHERE slug IN (...)` 로 **기존 보유 브랜드가 없는지 확인**.
    있으면 예약어에 넣지 말고 미들웨어 전용 상수로 분리한다(살아있는 브랜드관을 죽이면 안 된다).
@@ -174,8 +180,9 @@ trailing dot 제거, 253자·라벨 63자 상한, **`klow.kr`·`*.klow.kr`·`*.v
 
 ### 2-5. Origin 술어 (CSRF 가드 + CORS)
 
-프록시를 타도 **원본 `Origin` 이 그대로 전달**되므로 서버는 `Origin: https://shop.brandA.com` 을 본다
-→ 지금 코드면 403.
+커스텀 도메인에서 나가는 **POST 가 둘 남는다** — 방문·담기 트래킹 비콘
+(`/v1/storefront-stats/track/{visit,cart-add}`). 프록시가 없으므로 이건 **진짜 cross-origin** 요청이고
+브라우저가 `Origin: https://shop.brandA.com` 을 싣는다 → 지금 코드면 **403 + CORS 차단**.
 
 `main.ts` 의 `buildAllowedOrigins()` 정적 배열을 **술어**로 바꾸고 화이트리스트 미스 시 폴백:
 
@@ -190,8 +197,8 @@ const originAllowed = (o: string) =>
   ⚠️ **도메인 삭제·비활성 전이는 그 자리에서 스냅샷 갱신**(지연되면 안 된다)
 - `app.enableCors({ origin: (o, cb) => cb(null, !o || originAllowed(o)) })` 로 **함께** 교체 —
   두 판정이 갈리면 반드시 사고가 난다
-- ⚠️ **프록시가 Origin 을 위장하게 만들지 않는다.** 그러면 프록시 경로가 CSRF 가드의 **우회로**가 되고
-  감사도 불가능해진다. 서버가 검증된 origin 을 허용하는 쪽이 정답이다
+- ⚠️ **자격증명은 이 오리진에서 오가지 않는다** — 커스텀 도메인 클라는 `credentials:'omit'` 로 고정한다(§4-2 · F8).
+  `credentials:true` 설정 자체는 유지하되(klow.kr 용), **커스텀 도메인 요청에 쿠키가 실리면 설계가 어긋난 것**이다
 - `common/origin-exempt.ts` 는 **손대지 않는다** — 새 예외 경로가 없다.
   `common/__tests__/origin-exempt.spec.ts` 가 **그대로 통과해야 하고, 통과하지 않으면 설계가 틀어진 것**이다
 - ⚠️ `/embed/*` 의 수동 CORS(`res.setHeader`, `res.append` 금지, 영구 simple request)를 깨뜨리지 않는지 확인
@@ -225,8 +232,10 @@ const originAllowed = (o: string) =>
 VERCEL_TOKEN=          # 프로젝트 도메인 관리 권한
 VERCEL_PROJECT_ID=     # klow_web 프로젝트 (prj_xxx)
 VERCEL_TEAM_ID=        # 팀 소속이면 필수 (team_xxx)
-KLOW_PROXY_SECRET=     # P3 프록시 ↔ 서버 공유 비밀
 ```
+
+ℹ️ 프록시 공유 비밀(`KLOW_PROXY_SECRET`)은 **없다.** 핸드오프 방식에는 프록시가 없다(§4-0).
+승격 시에만 필요하다 → §6-1.
 
 ⚠️ **부팅 fail-closed 가드를 붙이지 않는다.** 기존 fail-closed 3종(Eximbay·`GUEST_ORDER_SECRET`·OTP)은
 "조용히 깨지고 돈이 사라지는" 경로다. 도메인은 미설정 시 브랜드가 즉시 에러를 보므로 부팅을 막을 성질이
@@ -243,40 +252,173 @@ KLOW_PROXY_SECRET=     # P3 프록시 ↔ 서버 공유 비밀
 
 ---
 
-## 3. P2 — 쿠키 host-only 전환
+## 3. P2 — 핸드오프 수신부 (klow.kr)
 
-`cookieOptions()` 는 전역 단일 함수라 5개 쿠키가 모두 `Domain=.klow.kr` 을 공유한다. 그 헤더가
-`shop.brandA.com` 응답에 실리면 브라우저가 쿠키를 **통째로 버린다**(도메인 불일치).
+커스텀 도메인은 **브라우징 + 담기까지**만 맡고, **로그인·결제·주문조회는 `klow.kr`** 이 맡는다.
+그 경계를 건너는 순간 **오리진이 바뀌어 `localStorage` 가 따라오지 않는다.** 이 PR 은 klow.kr 쪽
+**받는 쪽**만 먼저 만든다 — 아무도 아직 링크하지 않으므로 **klow.kr 사용자에게 보이지 않는다.**
 
-`cookieOptions(opts?: { hostOnly?: boolean })` + `makeCookieHelpers(name, ttl, opts)` 로 확장하고
-**klow_web 소유 쿠키만** 전환한다:
+### 3-1. 넘겨야 하는 것 — 상태 4개 + 복귀 주소 1개
 
-| 쿠키 | 파일 | 변경 |
+| 값 | 어디에 사는가 | 안 넘기면 |
 |---|---|---|
-| `klow_sid`, `klow_return_to`, `klow_google_state` | `modules/web-auth/session.ts` | **host-only** |
-| `klow_order` | `modules/orders/guest-order-token.ts` | **host-only** |
-| `klow_admin_sid` | `modules/admin-auth/admin-session.ts` | 무변경 |
-| `klow_brand_sid` 외 | `modules/brand-auth/brand-session.ts` | 무변경 |
-| `klow_ig_oauth_*` | `modules/instagram/instagram-oauth-cookies.ts` | 무변경 |
+| 카트 라인 `{productId, quantity}` | `klow-web-cart` (zustand persist) | 결제 화면에 **빈 카트** |
+| 가격 기준국 `country` | `klow-web-store` | 기준국이 **US 로 리셋** → 브랜드관에서 본 가격과 청구가가 갈린다 |
+| `promotionCode` | `klow-web-store` (localStorage 영속) | **세일가가 정상가로 조용히 되돌아간다** |
+| `visitorId` | `klow-vid` (localStorage) | **결제 단계 퍼널이 영구 0** (§4-3) |
+| **복귀 host** | `location.host` (상태가 아니라 **주소**) | 결제 후 브랜드 도메인 카트가 **정리되지 않는다** (§3-4) |
 
-⚠️ **`COOKIE_DOMAIN` 을 전역 제거하면 안 된다** — `klow_brand/src/middleware.ts` 가 `Domain=.klow.kr`
-공유에 의존해 **프론트 호스트에서 브랜드 세션 쿠키를 읽는다**(그 파일 주석이 명시). 어드민도 같다.
+⚠️ **상태는 이 4개가 전부다.** 다른 걸 더 싣고 싶어지면 먼저 "그 값의 정본이 서버에 있지 않은가"를
+의심할 것. 5번째 `o` 는 상태가 아니라 **돌아갈 주소**이고, 그래서 **다른 4개와 취급이 다르다** —
+쓰기 전에 **반드시 서버로 재검증**한다(§3-3).
 
-**klow.kr 사용자에게는 영향이 없다.** klow_web 쿠키는 어느 프론트 호스트에서 접속하든 `api.klow.kr` 이
-발급하고 직접 호출로만 오간다 — host-only 여도 여전히 `api.klow.kr` 쿠키이고 www/apex 가 갈리지 않는다.
+### 3-2. `src/lib/handoff.ts` — 송신(P3)·수신(P2) 공유 순수 함수
 
-⚠️⚠️ **`clear` 를 반드시 `set` 과 대칭으로 고친다.** `set` 은 발급 전 레거시 `.klow.kr` 쿠키를 지우는
-2줄(`cookies.ts:45-46`)이 있어 전환의 **자동 마이그레이션을 겸한다.** 그런데 `clear` 는
-`res.clearCookie(name, cookieOptions())` **하나뿐**이라, 그대로 두면 **로그아웃해도 레거시 `.klow.kr`
-세션 쿠키가 남는다.** `clear` 도 3줄(도메인 없음 / `.klow.kr` / 현재 옵션)로 만들 것.
+```ts
+export type HandoffPayload = {
+  v: 1;
+  c: string;                 // 가격 기준국 ISO2
+  p?: string;                // promotionCode
+  vid?: string;              // visitorId
+  o?: string;                // 복귀 host (검증 전 raw — §3-3 에서 재검증)
+  l: [string, number][];     // [productId, quantity]
+};
+export function encodeHandoff(p: HandoffPayload): string;        // base64url(JSON), 패딩 없음
+export function decodeHandoff(raw: string): HandoffPayload | null; // 어긋나면 throw 대신 null
+```
 
-`sameSite:'none'` 은 **유지**한다(admin/brand 는 여전히 cross-site).
-**Safari ITP 는 host-only + same-origin 프록시만으로 해소된다** — 1st-party 쿠키가 되어 3rd-party
-차단 대상이 아니고, `httpOnly` 라 script-writable 7일 캡에도 걸리지 않는다.
+⚠️⚠️ **서명하지 않는다.** 담기는 값은 **전부 이미 클라이언트가 소유·조작 가능한 값**이고(카트는
+localStorage, `country`·`promotionCode` 는 URL·모달, `visitorId` 는 클라 난수), **청구 금액의 정본은
+서버 견적/주문 생성**이다. 서명을 붙이면 엔드포인트·비밀키·만료·재생방지가 따라오는데 **지키는 것이 0** 이다.
+⚠️ **단 `o` 는 예외다** — 그건 나중에 **링크의 href 로 렌더**되므로 조작되면 결제 성공 화면이 임의
+사이트로 보내는 링크가 된다. 서명 대신 **서버 재검증**으로 막는다(§3-3 · F21).
+⚠️ 뒤집어 말하면 **가격을 payload 에 실으면 그 순간 서명이 필요해진다** → 싣지 않는다(F4).
+
+크기는 제품 30개 기준 base64 약 1.2KB 로 URL 길이 문제가 없다. 상한을 넘는 비정상 payload 는
+`decodeHandoff` 가 `null` 로 떨군다.
+
+### 3-3. `klow_web/src/app/handoff/page.tsx` (신규, `'use client'`)
+
+**복원 순서가 곧 정확성이다:**
+
+1. `decodeHandoff` 실패 → **아무것도 복원하지 않고** `/cart` 로. (조용히 실패해도 손님은 자기 klow.kr 카트를 본다)
+2. **국가 먼저** — `setCountry(c)`. ⚠️ 기존 klow.kr `country` 와 **다르면 기존 카트를 버린다.**
+   `OnboardingModal.select()` 의 기존 규칙과 **같은 이유**다(라인이 담을 때 `customerPriceUsd` 를
+   스냅샷하므로 두 국가가 섞이면 표시가 ≠ 청구가). 같으면 수량 max-merge.
+3. `setPromotion(p)`
+4. `visitorId` 이관 — §4-3 규칙
+5. **카트** — `l` 의 각 `productId` 를 **그 국가·프로모션 기준으로 다시 조회**해 `toCartItem()` 으로 라인을
+   만든다. `lib/cart-reprice.ts` 의 `repriceCartForCountry` 가 쓰는 **같은 `qk.productDetail` 캐시·같은
+   헬퍼**를 재사용한다(사본을 만들면 두 경로가 각자 캐시 없이 같은 자원을 읽는다).
+   조회 실패한 라인은 **버리고 나머지를 살린다** — 그쪽과 같은 판단이다(정본은 `/v1/orders/quote`).
+6. **복귀 주소 검증** — `o` 가 있으면 **`GET /v1/storefront/resolve?host={o}`**(P1 에 이미 있는
+   엔드포인트, 새로 만들지 않는다)로 확인해 `slug` 가 non-null 일 때만
+   `setBrandReturn("https://" + o + "/")`. ⚠️ **스킴은 클라가 `https://` 로 직접 조립**하고 `o` 는
+   host 만 쓴다(`//evil.com`·`javascript:` 차단). 검증 실패면 **아무것도 저장하지 않는다** →
+   성공 화면이 기존 폴백(마지막 방문 브랜드관 / 버튼 숨김)으로 떨어진다.
+   ⚠️ **검증은 여기서 한 번만** 한다 — raw 값을 sessionStorage 에 **절대 넣지 않기 위해서**다.
+   저장되는 것은 언제나 검증을 통과한 URL 뿐이다.
+7. `router.replace('/checkout')` — **`?h` 를 히스토리에서 지운다.** 뒤로가기로 재복원되면 2번의 "국가가
+   다르면 카트 폐기"가 다시 돌아 손님 카트를 두 번 날린다.
+
+**⚠️ 트랩**
+
+- ⚠️⚠️ **`addToCart` 로 복원하지 말 것.** 그 함수는 `trackStorefrontCartAdd` 비콘을 쏜다
+  (`useCartStore.ts:7`). 복원은 **커스텀 도메인에서 이미 센 담기를 klow.kr 에서 한 번 더 세는 것**이라
+  `cartAdds` 가 두 배가 된다(순담기자는 flip-once 라 안 늘어 **비율만 조용히 망가진다**).
+  → `replaceCart(merged, syncedUserId)` 로 직접 쓴다.
+- ⚠️ 로그인 사용자면 `syncedUserId` 가 이미 붙어 있다 → **그 값을 보존**해 넘긴다. `null` 로 덮으면
+  서버 카트와 끊긴 채로 결제에 들어간다.
+- ⚠️ `/handoff` 는 **예약 슬러그**여야 한다(P0-1). 빠뜨리면 `handoff` 슬러그를 가진 브랜드가 브랜드관을 잃는다.
+- 커스텀 도메인에서 이 경로가 열리면(예약어라 pass-through 된다) 아무것도 하지 않고 `/cart` 로 보낸다.
+  **여기서 복원하면 손님이 브랜드 도메인에 남아 결제까지 가버린다.**
+
+### 3-4. 결제 후 브랜드 도메인 카트 정리
+
+결제는 klow.kr 에서 끝나므로 `/checkout/redirect` 는 **klow.kr 카트만** 정리한다. 손님이 브랜드
+도메인에 두고 온 카트는 **다른 오리진**이라 손도 못 댄다 — 나중에 그 도메인에 다시 오면 **이미 산
+상품이 담겨 보인다.**
+
+**해법은 새 부품이 아니라 기존 3개를 잇는 것이다** (전부 이미 존재한다):
+
+| 기존 부품 | 지금 하는 일 | 여기서 |
+|---|---|---|
+| `lib/brandReturn.ts` (`setBrandReturn`) | 성공 화면의 "계속 쇼핑" 버튼 목적지(마지막 브랜드관) | **커스텀 도메인 URL** 을 넣는다 |
+| `lib/checkoutSelection.ts` (`readCheckoutSelection`) | 결제한 productId 목록 | 그대로 재사용 |
+| `useCartStore.removeProducts(ids)` | klow.kr 카트에서 결제분 제거 | **브랜드 도메인에서도** 같은 함수 |
+
+```
+/handoff        setBrandReturn("https://shop.brandA.com/")        ← 검증된 값만 (§3-3 6단계)
+/checkout/redirect
+      const purchased = readCheckoutSelection();
+      removeProducts(purchased)                                    ← klow.kr 카트 (오늘 그대로)
+      setBrandReturn(그 URL + "?purchased=" + ids.join(","))       ← ⚠️ 추가되는 유일한 줄
+/checkout/success  "계속 쇼핑" → https://shop.brandA.com/?purchased=…
+shop.brandA.com    ?purchased= 읽고 removeProducts(ids) → router.replace 로 파라미터 제거 (§4-5)
+```
+
+⚠️ `setBrandReturn` 갱신은 **`removeProducts` 와 같은 블록**에 둔다. 그 블록이 "결제가 성공했고 이
+상품들이 팔렸다"를 아는 **유일한 지점**이고, 둘이 갈라지면 한쪽만 도는 조합이 생긴다.
+⚠️ 저장된 값이 커스텀 도메인이 아니면(=평소 klow.kr 브랜드관) `?purchased=` 를 붙일 필요가 없다 —
+그쪽 카트는 이미 같은 오리진에서 정리됐다. **붙여도 무해**하지만(§4-5 가 멱등) 붙이지 않는 게 맞다.
+
+**⚠️ 이건 best-effort 다 — 명시적으로 감수한다**
+
+- 손님이 **"계속 쇼핑"을 안 누르면** 브랜드 도메인 카트는 남는다. 결과는 "이미 산 상품이 담겨 보인다"
+  이고 **재구매가 가능할 뿐 오청구가 아니다**(가격·재고·결제는 전부 서버 정본).
+- `setBrandReturn` 은 **마지막 writer 가 이긴다.** 핸드오프 후 손님이 klow.kr 에서 **다른 브랜드관**을
+  들렀다가 결제하면 복귀 링크가 그쪽으로 바뀌고 브랜드 도메인 카트는 정리되지 않는다. 그게 맞는
+  동작이다 — 그 손님이 마지막에 있던 곳이 거기다.
+- `brandReturn`·`checkoutSelection` 이 **sessionStorage** 라 **탭을 닫으면 사라진다.** 결제 후 바로
+  탭을 닫는 손님(현장 QR 선례)은 정리 기회가 없다. 이건 두 헬퍼가 **이미 가진 성질**이고 같은 한계를
+  공유하는 것이지 새로 만드는 결함이 아니다.
+
+**기각한 대안** (재논의 방지 — 되돌리려면 아래 근거가 먼저 무너져야 한다)
+
+| 안 | 왜 안 되는가 |
+|---|---|
+| **hidden iframe + postMessage 로 브랜드 도메인 localStorage 정리** | ❌ **동작하지 않는다.** 3rd-party storage partitioning 때문에 klow.kr 안의 `shop.brandA.com` iframe 이 보는 localStorage 는 **파티션된 별개 저장소**다(Safari·Chrome 둘 다). 1st-party 카트에 애초에 닿지 못한다 — 이 기능이 프록시를 버린 것과 **같은 뿌리** |
+| **`GET /v1/storefront/purchased?visitorId=` 로 다음 방문 때 서버에 묻기** | 새 공개 엔드포인트가 **분석용 토큰 하나로 구매 이력을 조회**하게 만든다(`visitorId` 는 비밀이 아니다). 브랜드관 방문마다 쿼리도 는다. 얻는 건 "버튼을 안 누른 손님의 카트 정리" 하나 |
+| **결제 성공 후 브랜드 도메인으로 자동 리다이렉트** | 성공 화면(주문번호·이메일)과 시딩 복귀 로직이 거기 있고, **결제 직후 추가 이동은 이 코드베이스가 이미 크게 데인 지점**이다(인앱 브라우저 컨텍스트 유실 → CLAUDE.md 「결제 확정 3중 방어선」) |
+| **핸드오프 시 커스텀 도메인 카트를 비운다** | **결제는 대부분 이탈한다.** 이탈 손님이 뒤로 갔을 때 카트가 비어 있으면 **정상 흐름에서 손해**가 나고, 정리하려던 건 예외 상황이다. 비용/편익이 뒤집혀 있다 |
+
+**P2 를 단독으로 먼저 내보내도 안전한 이유**: `/handoff` 를 가리키는 링크가 아직 없고, `?h` 없이 열면
+`/cart` 로 보낸다. klow.kr 의 기존 흐름은 **한 줄도 지나가지 않는다.**
 
 ---
 
-## 4. P3 — 라우팅 전환 (핵심)
+## 4. P3 — 커스텀 도메인 서빙 (핵심)
+
+### 4-0. 왜 프록시가 아니라 핸드오프인가
+
+프록시가 필요했던 이유는 [flow.md §1-2](./flow.md#1-2-shopbrandacom-에서-깨지는-것-4가지) 의 4가지다.
+**결제·로그인을 klow.kr 에서 하기로 정하면 그중 2개가 소멸한다:**
+
+| # | 깨지던 것 | 핸드오프에서 |
+|---|---|---|
+| 1 | 세션 쿠키 3rd-party (Safari ITP) | **소멸** — 커스텀 도메인에서 세션을 아예 쓰지 않는다 |
+| 2 | Origin CSRF 가드 | **남는다** (트래킹 비콘 2개) → P1 §2-5 술어로 해결. 프록시는 필요 없다 |
+| 3 | CORS | **남는다** → 같은 술어 |
+| 4 | 결제 리턴이 `FRONTEND_URL` 하드코딩 | **소멸** — 결제가 klow.kr 에서 시작하므로 리턴도 klow.kr 이 정답이다 |
+
+**그래서 없어지는 작업**: `/api-proxy` Route Handler · 쿠키 host-only 전환 + `clear` 대칭 수정 ·
+`clientIp()` 확장 + `X-Klow-Proxy-Secret` · `KlowThrottlerGuard` · `Order.storefrontHost` 마이그레이션 ·
+리턴 host 재검증(오픈 리다이렉트 표면이 **생기지 않는다**) · 구글 로그인 숨김/핸드오프 ·
+**[README #0 Eximbay 확인](./README.md#0--eximbay-도메인-제한-2026-08-20-조사--남은-질문-1개)**
+(결제창 호출 도메인이 오늘과 동일한 `klow.kr` 이라 PG 쪽에 바뀌는 게 0 이다).
+
+**대가 — 이건 절충이다:**
+
+- ⚠️ **결제 직전에 도메인이 바뀐다.** README 「확정된 요구사항」의 "사이트 전체"를 **좁힌 결정**이다.
+  되돌리는 경로는 §6-1 에 그대로 남겨 뒀다.
+- ⚠️ **커스텀 도메인은 항상 비로그인 화면**이다. 릴리즈 노트·CS 가이드 필수.
+
+**근거로 삼은 두 가지 사실:**
+
+- 같은 이음매가 **이미 운영 중**이다 — 카페24 임베드 버튼이 브랜드 자사몰에서
+  `klow.kr/product/{id}?brand={slug}` 로 **더 이른 지점에서** 손님을 넘긴다.
+- `useCheckoutGate`(`useAuthGate.ts:104`)가 **결제 진입 시점에 로그인/비회원을 다시 묻는다.**
+  즉 도메인이 바뀌는 지점과 로그인 화면이 원래 겹쳐 있어, 이음매를 놓기에 가장 덜 어색한 자리다.
 
 ### 4-1. `klow_web/src/middleware.ts` 신설
 
@@ -298,97 +440,81 @@ KLOW_PROXY_SECRET=     # P3 프록시 ↔ 서버 공유 비밀
 ```ts
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|api-proxy|api/|favicon\\.ico|icon.*\\.png|apple-icon\\.png).*)',
+    '/((?!_next/static|_next/image|api/|favicon\\.ico|icon.*\\.png|apple-icon\\.png).*)',
   ],
 };
 ```
 
-⚠️ **`api-proxy` 제외가 필수**다. 프록시 경로가 미들웨어를 타면 rewrite 규칙에 걸려 API 호출이
-브랜드관으로 튄다.
+ℹ️ 프록시가 없으므로 **`api-proxy` 제외 항목도 없다**(구 계획에는 있었다).
 ℹ️ `_next/data` 는 제외하지 **않는다** — App Router 의 RSC 요청은 같은 경로 + `?_rsc=` 로 오므로 rewrite
 가 일관되게 걸려야 한다.
 
-### 4-2. API 프록시 — Route Handler
+### 4-2. klow_web — "비로그인 전제" 배선
 
-`klow_web/src/app/api-proxy/[...path]/route.ts`
-(`export const runtime = 'nodejs'`, `export const dynamic = 'force-dynamic'`, 모든 메서드 동일 핸들러)
+`src/lib/host.ts` 신설(정본 호스트 Set + `isCustomDomain()`). 그 위에서:
 
-⚠️⚠️ **`next.config.js` rewrites 를 쓸 수 없는 결정적 이유**
-`main.ts:43-55` 는 `trust proxy = 1` 을 "Railway 엣지 정확히 1단" 전제로 고정하고,
-**"앞단에 프록시 등을 새로 붙이면 홉 수가 2가 되므로 이 값을 함께 올릴 것"이라고 이미 경고한다.**
-- rewrites 를 쓰면 `req.ip` 가 Vercel IP 가 되어 **`Order.agreementIp`(PG 분쟁 시 동의 증거)가 오염**된다
-- `trust proxy` 를 2로 올려 고치려 하면 **직접 호출 경로에서 XFF 위조**가 열려 그 주석이 지키려던
-  불변식이 깨진다. 두 경로의 홉 수가 다르므로 숫자 하나로는 못 맞춘다
-- **rewrites 는 요청 헤더를 추가할 수 없어** 실 IP 를 따로 전달할 방법도 없다
-
-**핵심 규칙 — 하나라도 틀리면 조용히 깨진다:**
-
-| 항목 | 처리 | 이유 |
+| 대상 | 커스텀 도메인에서 | 왜 |
 |---|---|---|
-| **응답 Set-Cookie** | `res.headers.getSetCookie()`(배열)로 읽어 하나씩 `append`. **`get('set-cookie')` 금지** | `get()` 은 여러 Set-Cookie 를 콤마로 합쳐 쿠키를 손상시킨다 |
-| **Domain 속성** | 남아 있으면 제거(방어적 2중화) | P2 가 정본이지만, 배포 순서가 어긋난 창에서 쿠키가 통째로 버려지는 것을 막는다 |
-| **요청 `Cookie` 헤더** | **반드시 그대로 전달** | 빠뜨리면 **인증이 통째로 안 된다.** `Content-Type`·`Accept-Language` 도 함께. `Host`·`Content-Length`·`Connection` 등 hop-by-hop 은 제외 |
-| **Origin** | **원본 그대로 전달** | 위장하면 프록시가 CSRF 우회로가 된다 (§2-5) |
-| **`X-Klow-Client-IP`** + **`X-Klow-Proxy-Secret`** | Vercel 이 준 XFF 의 leftmost | 서버가 secret 일치 시에만 신뢰. `trust proxy` 는 1 유지 |
-| **`X-Klow-Storefront-Host`** | 요청 Host | 결제 리턴(§4-3)의 신뢰 입력 |
-| **body** | `await req.arrayBuffer()` | klow_web 은 **multipart 0건 · JSON 만**(`api.upload` 는 컨시어지 제거 때 삭제됨) |
-| **경로 허용** | **`/v1/` 접두만.** `/admin/`·`/webhooks/`·`/embed/` 는 400 | 프록시가 어드민 표면을 브랜드 도메인에 노출시키면 안 된다 |
-| redirect / cache | `redirect:'manual'` + Location 그대로 전달 / `cache:'no-store'` | |
+| `api.ts` `BASE` | **절대 API URL 그대로** (`NEXT_PUBLIC_API_URL`) | 프록시가 없다. klow.kr 과 완전히 같은 경로라 회귀 위험 0 |
+| `api.ts` `credentials` | **`'omit'` 로 고정** | ⚠️ 아래 |
+| 헤더 로그인/내정보 · `/my` · `/orders` · `/login` 진입점 | **klow.kr 절대 링크**(같은 탭 이동) | 그 화면들은 세션이 있어야 의미가 있다 |
+| `SessionSyncMount` | **마운트하지 않는다** | 세션이 없어 카트 머지·프로필 승격이 전부 no-op 인데 `/v1/auth/me` 만 계속 친다 |
 
-**서버측 짝 — IP 신뢰**
+⚠️⚠️ **`credentials:'omit'` 이 핵심이다.** 그냥 두면 `SameSite=None` 이라 **Chrome 은 쿠키를 실어
+보내 로그인 상태로 보이고, Safari(ITP)는 차단해 비로그인으로 보인다** — 같은 사이트가 브라우저마다
+다르게 동작한다. 더 나쁜 건 그 상태로 담으면 **서버 카트에 replicate 되어** klow.kr 카트와 어긋나는
+것이다. "세션이 없다"를 우연에 맡기지 말고 **코드로 고정**한다.
 
-`common/client-ip.ts` 의 `clientIp(req)` 확장: `X-Klow-Proxy-Secret` 일치 시 `X-Klow-Client-IP` 우선.
-env 만 읽으므로 `common/` 규칙 2 유지. 소비처는 `public-orders.controller.ts:70,88` ·
-`public-seeding.controller.ts:102` **셋뿐**이고(확인 완료), 어드민·웹훅 경로는 프록시를 안 타므로 무영향.
+⚠️ `GoogleButton` 은 **손댈 필요가 없다**(로그인 진입점 자체가 klow.kr 로 나가므로 커스텀 도메인에서
+렌더되지 않는다). 구 계획의 "P3 에서는 숨김"·"P5 구글 핸드오프"는 **둘 다 불필요**해졌다.
 
-⚠️⚠️ **`clientIp()` 만 고치면 절반이다 — 전역 `ThrottlerGuard` 가 자기 tracker 를 따로 쓴다.**
-`app.module.ts:45` 는 `ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] })` 에 커스텀
-tracker 가 없어 **기본값 `req.ip`** 를 쓴다. 프록시 fetch 에는 XFF 가 없어 Railway 가 **Vercel 함수 IP**
-를 넣으므로, 그대로 두면 **커스텀 도메인 전체 트래픽이 IP 하나로 합산**된다 → 브랜드 몇 곳만 붙어도
-정상 방문자가 429 를 맞고, 그건 조용한 장애다(트래킹 120/분·담기 60/분도 같이 죽는다).
-→ `ThrottlerGuard` 를 상속한 `KlowThrottlerGuard` 의 `getTracker(req)` 가 **`clientIp()` 와 같은 규칙**을
-쓰게 하고 `APP_GUARD` 등록을 그 클래스로 바꾼다. **규칙은 한 함수에 둔다.**
+### 4-3. 핸드오프 송신부
 
-**klow_web 클라이언트 전환**
+- **위치는 카트 화면의 결제 버튼**(+ 바로구매가 있다면 그것). ⚠️ **PDP 담기는 넘기지 않는다** —
+  담기까지 커스텀 도메인에서 끝내는 것이 이 설계의 전부다
+- `location.assign(...)` 로 **top-level 이동**.
+  ⚠️ **새 탭·`window.open` 금지** — 모바일 인앱 브라우저에서 컨텍스트가 끊긴다.
+  결제 확정이 정확히 그 문제로 한 번 크게 데였다(CLAUDE.md 「결제 확정 3중 방어선」)
+- payload 의 `o` 는 **`location.host`**(자기 자신). 받는 쪽이 재검증하므로 여기서는 그냥 싣는다
+- `visitorId` 는 **`peekVisitorId()`** 로 읽는다. ⚠️ **`getVisitorId()` 금지** — 없으면 만들어 버리는데,
+  브랜드관을 거쳤다면 반드시 있고 **없다는 건 트래킹이 꺼진 손님**이라 새 토큰은 원장 없는 쓰레기가 된다
 
-`src/lib/host.ts` 신설(정본 호스트 Set + `isCustomDomain()`), `src/lib/api.ts:77`:
+**⚠️⚠️ `visitorId` 이관 규칙 (F5)**
 
-```ts
-const BASE =
-  typeof window !== 'undefined' && isCustomDomain()
-    ? '/api-proxy'
-    : (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000');
-```
+- klow.kr 에 vid 가 **없으면** → 핸드오프 vid 를 그대로 심는다
+- **있으면 덮지 않고** `sessionStorage['klow-handoff-vid']` 에 두고, **주문 생성 경로만**
+  `handoffVisitorId() ?? peekVisitorId()` 를 쓴다
 
-- **klow.kr 은 경로가 그대로**라 회귀 위험 0, Vercel 함수 비용 0
-- SSR 경로(`lib/brand-server.ts`, `app/sitemap.ts`)는 **절대 URL 유지** — 프록시를 타면 자기 자신을 호출한다
-- ⚠️ **`GoogleButton.tsx:11` 은 BASE 를 쓰면 안 된다.** `${BASE}/v1/auth/google` 로 **top-level 이동**
-  하는데, 서버가 돌려주는 **상대경로 302**(`public-auth.controller.ts:150`)가
-  `shop.brandA.com/v1/auth/google/authorize` 로 해석돼 404 가 난다. `googleStartUrl` 은 항상 절대 API
-  base 를 쓰도록 분리한다
+이유: 퍼널 원장은 `(brandId, date, visitorId)` 이고 그 행은 **커스텀 도메인에서 만들어졌다.** 주문이 다른
+vid 로 들어가면 `recordPurchase` 가 행을 못 찾아 **그 브랜드의 결제 단계가 영구 0** 이다(서버는 조용히
+버린다 — 2일 룩백도 못 구한다). 반대로 klow.kr 상용 손님의 vid 를 덮으면 그 사람의 klow.kr 원장 연속성이
+끊긴다. 그래서 **"없을 때만 심고, 있으면 이번 주문에만 쓴다."**
 
-### 4-3. 결제 리턴
+### 4-4. 결제 리턴 — **변경 없음**
 
-`return_url` 은 `EXIMBAY_RETURN_BASE_SERVER`(api 도메인)이라 **PG 쪽 도메인 등록 작업은 없다**
-(단 [README #0](./README.md#0--eximbay-문의-잠재-블로커) 확인 필요). 고칠 것은 확정 후 303 대상뿐이다.
+`/checkout` 부터가 klow.kr 이라 `POST /v1/orders` → `prepare` → 결제창 → `POST /payment/return` →
+`/checkout/redirect` → `/checkout/success` 가 **전부 오늘과 같은 오리진**에서 일어난다.
 
-- `Order.storefrontHost String? @db.VarChar(253)` 추가 — **nullable ADD COLUMN → 롤링 안전 · 백필 없음**
-- 기록은 `POST /v1/orders` 에서 **프록시가 실은 `X-Klow-Storefront-Host` 헤더**로만 한다.
-  ⚠️ **바디 필드로 받지 않는다** — 클라이언트가 임의 값을 넣으면 오픈 리다이렉트가 된다
-- **리턴 시 2중 검증** ([flow.md §4](./flow.md#4-결제-왕복)): ① 그 host 가 **지금 이 순간**
-  `BrandDomain(active)` 에 있고 ② 그 브랜드가 이 주문의 아이템 브랜드 중 하나일 때만 사용, 아니면
-  `FRONTEND_URL` 폴백 **+ Sentry 경고**. 스킴은 항상 서버가 `https://` 로 구성하고 host 는 DB 값만 쓴다
-- 순수 함수 `buildReturnRedirectUrl(qs, origin)` 로 분리해 스펙이 잠그고, 서비스
-  `resolveReturnRedirect(qs)` 가 조회·검증 후 호출한다.
-  `handleReturn` 은 **무변경**(절대 throw 하지 않는 성질 유지 — 웹훅·재확인 크론 경로를 건드리지 않는다)
+- `Order.storefrontHost` 컬럼·마이그레이션 **없음**
+- 리턴 host 재검증·`buildReturnRedirectUrl` **없음** — 오픈 리다이렉트 표면이 **생기지 않는다**
+- `/checkout/redirect` 의 `sessionStorage` 의존(결제한 상품만 카트에서 제거 · 시딩 링크 복귀)이
+  **원래대로 동작**한다. 프록시 안에서 가장 조마조마하던 부분이 통째로 사라진다
+- **`payment.service.ts` 를 이 기능이 건드리지 않는다**
 
-### 4-4. 구글 로그인 — P3 에서는 숨김
+### 4-5. 결제 후 카트 정리 — 커스텀 도메인 수신부
 
-이메일+비밀번호/OTP 는 프록시로 완전히 동작한다. 구글만 3중으로 깨진다(§4-2 상대경로 302 / 콜백이 api
-도메인에서 세션을 굽는다 / `public-auth.controller.ts:183` 이 `FRONTEND_URL` 로 redirect).
+브랜드관 진입 시 `?purchased=<id,id,…>` 가 있으면 (§3-4 의 반대편):
 
-**P3 에서는 `GoogleButton` 이 `isCustomDomain()` 이면 `null` 을 반환**한다(파일 1개·3줄,
-`LoginForm`/`SignupForm` 무변경 — 버튼이 스스로 사라진다). 정식 핸드오프는 §6.
+1. `useCartStore.removeProducts(ids)` — **klow.kr `/checkout/redirect` 가 쓰는 것과 같은 함수**
+2. `router.replace` 로 **파라미터 제거** (F15 와 같은 이유 — 주소창·히스토리에 남기지 않는다)
+
+⚠️ **비동기화(게스트) 상태의 `removeProducts` 는 묘비(tombstone)를 남긴다** — 그 손님이 나중에
+klow.kr 에서 로그인하면 머지가 **서버 카트에서도** 그 상품을 지운다. 여기서는 **원하는 동작**이지만
+(이미 산 상품이니까), 그 부수효과를 모른 채 이 함수를 다른 데 재사용하지 말 것.
+
+⚠️ **`?purchased=` 는 검증하지 않는다.** 하는 일이 "그 손님 자기 브라우저 카트에서 그 id 를 뺀다"뿐이라
+조작해도 **남에게 영향이 없다**(최악은 자기 카트를 자기가 비우는 것). 반면 `o` 는 **링크 href 로
+렌더**되므로 반드시 검증한다(F21) — **둘의 취급이 다른 이유가 이것이다.**
 
 ---
 
@@ -432,24 +558,64 @@ P4 에서 실제로 갱신하는 곳은 `DomainSection` 뿐이고, ShareModal·Q
 
 ## 6. P5 — 선택 항목
 
-### 6-1. 구글 로그인 핸드오프
+### 6-1. 풀 프록시 승격 — 로그인·결제까지 커스텀 도메인
+
+**브랜드가 "결제까지 우리 도메인" 을 실제로 요구하면** 그때 올린다. 여기 적힌 것이 그 작업 목록이고,
+**2026-08-20 이전 계획의 P2·P3 본문을 압축해 보존한 것**이다. 착수 전
+[README #0](./README.md#0--eximbay-도메인-제한-2026-08-20-조사--남은-질문-1개) **회신이 반드시 선행**한다
+(결제창 호출 도메인이 브랜드별로 갈리는 건 이 승격에서만 발생한다).
+
+**(a) 쿠키 host-only 전환** — `cookieOptions()` 는 전역 단일 함수라 5개 쿠키가 `Domain=.klow.kr` 을
+공유한다. 그 헤더는 `shop.brandA.com` 응답에 실리면 **브라우저가 통째로 버린다.**
+`cookieOptions(opts?: { hostOnly?: boolean })` + `makeCookieHelpers(name, ttl, opts)` 로 확장하고
+**klow_web 소유 쿠키만**(`klow_sid`·`klow_return_to`·`klow_google_state`·`klow_order`) 전환한다.
+
+- ⚠️⚠️ **`clear` 를 `set` 과 대칭으로 고칠 것.** `set` 은 레거시 `.klow.kr` 쿠키를 지우는 2줄
+  (`cookies.ts:45-46`)이 있어 **자동 마이그레이션을 겸하는데**, `clear` 는 한 줄뿐이라 그대로 두면
+  **로그아웃해도 레거시 세션 쿠키가 남는다.**
+- ⚠️ **`COOKIE_DOMAIN` 을 전역 제거하면 안 된다** — `klow_brand/src/middleware.ts` 가 `.klow.kr` 공유에
+  의존해 프론트 호스트에서 브랜드 세션 쿠키를 읽는다. 어드민도 같다.
+- `sameSite:'none'` 은 유지(admin/brand 는 여전히 cross-site).
+
+**(b) `/api-proxy/[...path]` Route Handler** (`runtime:'nodejs'`, `dynamic:'force-dynamic'`)
+
+⚠️⚠️ **`next.config.js` rewrites 로는 안 된다.** `main.ts:43-55` 가 `trust proxy = 1` 을 "Railway 엣지
+정확히 1단" 전제로 고정하고 **"앞단에 프록시를 새로 붙이면 홉 수가 2가 된다"고 이미 경고**한다.
+rewrites 를 쓰면 `req.ip` 가 Vercel IP 가 되어 **`Order.agreementIp`(PG 분쟁 증거)가 오염**되고,
+`trust proxy` 를 2로 올리면 직접 호출 경로에서 **XFF 위조**가 열린다. rewrites 는 헤더도 못 붙인다.
+
+| 항목 | 처리 | 이유 |
+|---|---|---|
+| 응답 Set-Cookie | `res.headers.getSetCookie()` 배열로 읽어 개별 `append`. **`get()` 금지** | 콤마로 합쳐져 쿠키가 손상된다 |
+| 요청 `Cookie` 헤더 | **그대로 전달** | 빠뜨리면 **인증이 통째로 안 된다** |
+| `Origin` | **원본 그대로** | 위장하면 프록시가 CSRF 우회로가 된다 |
+| `X-Klow-Client-IP` + `X-Klow-Proxy-Secret` | Vercel XFF 의 leftmost, 서버가 secret 일치 시에만 신뢰 | `trust proxy` 는 1 유지 |
+| 경로 허용 | **`/v1/` 접두만** | 어드민 표면을 브랜드 도메인에 노출시키지 않는다 |
+| body | `await req.arrayBuffer()` | klow_web 은 multipart 0건 |
+
+⚠️⚠️ **`clientIp()` 만 고치면 절반이다** — 전역 `ThrottlerGuard` 가 커스텀 tracker 없이 `req.ip` 를 쓰므로
+(`app.module.ts:45`) **커스텀 도메인 전체 트래픽이 IP 하나로 합산**돼 정상 방문자가 429 를 맞는다.
+`getTracker` 를 `clientIp()` 와 **같은 규칙**으로.
+
+**(c) 결제 리턴 되돌리기** — `Order.storefrontHost` 추가 + 프록시 헤더로만 기록(바디 금지) +
+**리턴 시점 재검증**(active + 주문 브랜드 일치, 스킴은 서버가 `https://` 구성). 폴백은 우아한 폴백이
+아니라 **보안장치**이고 발동 시 Sentry 경고 — [flow.md §4-2](./flow.md#4-2-승격-시-결제-왕복-p5).
+
+**(d) 구글 로그인 핸드오프** — 이메일/OTP 는 프록시로 그냥 되지만 구글만 3중으로 깨진다
+(상대경로 302 · 콜백이 api 도메인에서 세션을 굽는다 · `FRONTEND_URL` redirect).
 
 ```
-1. GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://shop.brandA.com
-                  (절대 URL, top-level 이동 — 프록시 안 탐)
-2. googleStart 가 origin 을 검증(BrandDomain active)해 klow_return_to 쿠키에 함께 담는다
-   ⚠️ state nonce 구조는 유지 — 세션 발급 전 state 대조가 로그인 CSRF 방어선이다
-3. googleCallback:
-   - origin 없음        → 현재 동작 그대로 (회귀 0)
-   - 검증된 커스텀 도메인 → setSessionCookie 를 호출하지 않고 AuthHandoff 토큰 발급 후
-                          303 → https://shop.brandA.com/auth/handoff?t=<raw>&returnTo=<path>
-4. klow_web /auth/handoff → /api-proxy 경유로 POST /v1/auth/session/exchange
-   → 서버가 그 도메인의 host-only 쿠키 발급 → 303 returnTo
+GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://shop.brandA.com  (절대 URL)
+  → googleStart 가 origin 을 검증(BrandDomain active)해 klow_return_to 에 담는다 (state nonce 구조 유지)
+  → googleCallback: 검증된 커스텀 도메인이면 setSessionCookie 대신 1회용 AuthHandoff 토큰(60초) 발급
+  → 303 https://shop.brandA.com/auth/handoff?t=<raw> → /api-proxy 경유 POST /v1/auth/session/exchange
 ```
 
-- 토큰은 **1회용 · 60초 TTL · 소비 즉시 삭제**. 전용 테이블 1개(`Session` 에 컬럼을 붙이는 것보다 깨끗 — 수명이 완전히 다르다)
-- ⚠️ **세션 토큰을 URL 에 직접 싣지 않는다** — Referer 유출·액세스 로그·브라우저 히스토리에 영구 세션이 남는다
-- ⚠️ 교환 호출을 **`/api-proxy` 경유**로 해서 Origin 을 정상적으로 싣는다 → `origin-exempt.ts` 무변경
+⚠️ **세션 토큰을 URL 에 직접 싣지 않는다**(Referer 유출·히스토리 잔존). 교환은 **`/api-proxy` 경유**로
+해서 Origin 이 정상적으로 실리게 한다 → `origin-exempt.ts` 무변경.
+
+**(e) 승격 시 되돌아오는 것** — P2 핸드오프(`/handoff`)는 **지우지 않는다.** 커스텀 도메인을 아직 안 붙인
+브랜드, 그리고 승격 배포 창에서 여전히 유효한 경로다. 승격 후에는 송신부(§4-3)만 끄면 된다.
 
 ### 6-2. 링크 도메인화
 
@@ -471,9 +637,15 @@ P4 에서 실제로 갱신하는 곳은 `DomainSection` 뿐이고, ShareModal·Q
 |---|---|---|
 | P0 | 아무 때나 | 독립 |
 | P1 | server (마이그레이션 포함) | 프론트가 아직 아무것도 안 부른다 |
-| P2 | server | klow.kr 사용자 영향 없음(§3) |
-| **P3** | **web → server(payment)** | web 을 먼저 올려도 P1·P2 가 준비돼 있어 안전하다. 반대로 하면 리턴이 아직 열리지 않은 도메인으로 튄다 |
+| **P2** | **web** | klow.kr 에서 불가시 — `/handoff` 를 가리키는 링크가 아직 없다(§3-3) |
+| **P3** | **web 단독** | **서버 변경이 없다.** P1 이 Origin 술어를 이미 열어 뒀다 |
 | P4 | brand | **반드시 마지막** — P3 전에 UI 를 열면 브랜드가 도메인을 연결했는데 사이트가 안 뜬다 |
+
+⚠️ **P2 → P3 순서는 필수다.** 송신부(P3)가 먼저 나가면 손님이 klow.kr 의 **없는 `/handoff` 로 튕겨 404**
+를 본다. 반대는 무해하다.
+
+ℹ️ 프록시 방식과 달리 **P3 에 서버 배포가 없다** — 결제·쿠키·IP·Throttler 를 건드리지 않기 때문이다.
+그만큼 롤백도 klow_web 하나만 되돌리면 끝난다.
 
 ---
 
@@ -486,9 +658,6 @@ P4 에서 실제로 갱신하는 곳은 `DomainSection` 뿐이고, ShareModal·Q
 | `test/app.e2e-spec.ts` **수정** | cron 목록에 `'brand-domain-verify'` 추가 → **8 → 9** |
 | `modules/brand-domains/__tests__/domain-host.spec.ts` **신규** | 정규화(대문자·trailing dot·스킴·포트 제거) · 거부 목록(`klow.kr`/`*.klow.kr`/`*.vercel.app`/IP 리터럴/localhost/253자·63자 초과) · punycode · **`brandA.co.kr` 을 코드가 apex 로 판정하지 않고 Vercel `apexName` 에 위임함** |
 | `modules/brand-domains/__tests__/verified-origin.spec.ts` **신규** | `active` 만 통과 / `https://` 만 / **와일드카드·서브도메인 확장 없이 정확 일치** / 삭제 즉시 반영 / 빈 스냅샷에서 false. **여기가 느슨하면 전 브랜드 도메인이 CSRF 우회로가 된다** |
-| `modules/payment/__tests__/return-redirect.spec.ts` **신규** | 미검증 host·타 브랜드 host → `FRONTEND_URL` 폴백 / `//evil.com` 류가 와도 `https://` 로만 구성 (**오픈 리다이렉트 회귀 잠금**) |
-| `common/__tests__/cookie-options.spec.ts` **신규** | `hostOnly` 분기 + **`clear` 가 레거시 `.klow.kr` 까지 지운다** |
-| `common/__tests__/client-ip.spec.ts` **신규** | secret 불일치면 `X-Klow-Client-IP` 를 **무시**(위조 차단) / 일치하면 헤더 우선 / **Throttler tracker 와 `clientIp()` 가 같은 값을 낸다** |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경으로 통과해야 한다** — 통과 안 하면 설계가 틀어진 것 |
 
 **검증 3층** (CLAUDE.md):
@@ -496,81 +665,109 @@ P4 에서 실제로 갱신하는 곳은 `DomainSection` 뿐이고, ShareModal·Q
 2. `npm run test:e2e` — DI 그래프 + **cron 9개**
 3. `npm run start` — env 가드 + 라우트 매핑(288 → **+4~5**)
 
-klow_web / klow_brand 는 **테스트 인프라가 없다**(`package.json` scripts = dev/build/start/lint/type-check)
-→ `npm run type-check` 로 `storefront.ts` 시그니처 파급만 확인한다.
+⚠️⚠️ **핸드오프 로직은 전부 klow_web 에 있고 klow_web 에는 테스트 인프라가 없다**
+(`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16 을 잠글 자동 테스트가
+없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
+(`encodeHandoff`/`decodeHandoff` 는 순수 함수라, 나중에 klow_web 에 테스트 러너를 들이면 **가장 먼저
+잠글 대상**이다.)
 
 ### 8-2. 수동 E2E (스테이징)
 
 1. 테스트 서브도메인 연결 → DNS 설정 → `pending → verifying → active` 전이
 2. `https://<도메인>/` 이 브랜드관 렌더 (rewrite, **주소창 유지**)
-3. PDP → 담기 → **네트워크 탭에서 모든 API 가 `/api-proxy/*` 로 나가는지**
-4. 이메일 로그인 → **쿠키 탭에서 `klow_sid` 에 `Domain` 속성이 없고 커스텀 도메인 소속인지**
-5. **Safari 에서 3~4 재현** (ITP 차단 여부는 여기서만 드러난다)
-6. 결제 완주 → `/payment/return` 이 **커스텀 도메인**의 `/checkout/redirect` 로 303
-7. 주문 상세에서 `agreementIp` 가 **Vercel IP 가 아닌 실제 클라이언트 IP** 인지
-8. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
-9. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
-10. 브랜드 `/stats` 에서 커스텀 도메인 방문·담기가 집계되는지 + 할인 링크 클릭이 계속 올라가는지
+3. 네트워크 탭 — API 가 **`api.klow.kr` 로 직접** 나가고 `Origin` 이 커스텀 도메인이며,
+   **트래킹 비콘 2개가 200**(403 이면 P1 Origin 술어가 안 걸린 것)
+4. 같은 탭 — **요청에 `Cookie` 헤더가 실리지 않는지**(`credentials:'omit'`). **Chrome·Safari 둘 다**
+5. klow.kr 에 로그인한 채로 커스텀 도메인 방문 → **양쪽 브라우저에서 똑같이 비로그인**으로 보이는지
+   (한쪽만 로그인으로 보이면 F8 위반)
+6. **핸드오프** — 담기 → 결제 → `klow.kr/handoff?h=…` → `/checkout` 에 **카트·국가·가격이 그대로**이고
+   주소창에 **`?h` 가 남지 않는지**(뒤로가기도 확인)
+7. **할인 링크 회귀(F6)** — `shop.brandA.com/{promotionSlug}` 로 진입해 세일가 확인 → 핸드오프 →
+   klow.kr 결제 금액이 **세일가 그대로**인지
+8. **국가 상이(F7)** — klow.kr 카트를 US 로 채워둔 뒤 JP 기준 커스텀 도메인에서 핸드오프 →
+   **기존 카트 폐기 + 안내**가 뜨고 남은 라인이 전부 JP 가격인지
+9. **퍼널(F5)** — 커스텀 도메인 방문·담기 → klow.kr 결제 완주 → 브랜드 `/stats` 에서
+   **방문·담기·결제 3단계가 모두** 오르는지. **결제만 0 이면 `visitorId` 이관 실패다**
+10. **담기 이중집계 없음(F1)** — 위 시나리오에서 `총 N번 담음` 이 **1 만** 오르는지
 11. 결제 완주 후 **결제한 상품만** 카트에서 빠지고 나머지는 남는지(시딩 결제면 시딩 링크로 복귀하는지)
-12. **부하** — 커스텀 도메인에서 짧은 시간에 여러 브라우저로 60회 이상 요청해 **429 가 뜨지 않는지**
-    (Throttler tracker 가 실 IP 로 갈리는지). 이걸 안 보면 **브랜드가 늘어난 뒤에야 터진다**
-13. **klow.kr 회귀 없음** — 로그인·담기·결제 완주 + `www.klow.kr` 정상
+11-1. **브랜드 도메인 카트 정리(§3-4)** — 결제 완주 → 성공 화면의 "계속 쇼핑" 이 **커스텀 도메인**을
+    가리키는지 → 눌러서 돌아갔을 때 **결제한 상품만** 그 도메인 카트에서 빠지고 주소창에
+    `?purchased=` 가 남지 않는지
+11-2. **F21 회귀** — `?h` 의 `o` 를 임의 도메인(예: `example.com`)으로 바꿔 진입 → 성공 화면의
+    "계속 쇼핑" 이 **그 도메인을 가리키지 않는지**(폴백 또는 버튼 숨김)
+12. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
+13. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
+14. **klow.kr 회귀 없음** — 로그인·담기·결제 완주 + `www.klow.kr` 정상
 
 ### 8-3. 문서
 
 - `docs/server/modules/brand-domains.md` 신설 + `docs/server/README.md` 색인 (컨트롤러 변경 시 함께 갱신 — CLAUDE.md 규칙)
 - `docs/deploy-custom-domain-runbook.md` (`deploy-free-text-product-tags-runbook.md` 형식)
-- 워크스페이스 `CLAUDE.md` Key Facts 항목 추가 (쿠키 전략 변경 · 프록시 경로 · 배포 순서 주의)
-- **릴리즈 노트/CS 가이드**: "커스텀 도메인과 klow.kr 은 로그인·장바구니가 별개"
+- 워크스페이스 `CLAUDE.md` Key Facts 항목 추가 — **핸드오프 경계**(브라우징·담기 = 커스텀 도메인 /
+  로그인·결제 = klow.kr) · 넘기는 상태 4개 · 배포 순서(P2 → P3)
+- **릴리즈 노트/CS 가이드**: "커스텀 도메인은 **둘러보기·담기 전용**이고 **로그인·결제는 klow.kr 에서**
+  진행됩니다. 두 주소의 장바구니·로그인은 별개입니다."
 
 ---
 
 ## 9. 불변식 체크리스트 (착수 전 필독)
 
 아래는 전부 **틀려도 컴파일과 테스트가 통과**한다. 각 PR 착수 전 해당 항목을 확인한다.
+⚠️ F1·F4~F9·F15·F16 은 **klow_web 이라 자동 테스트가 없다**(§8-1).
 
 | # | 불변식 | 어기면 | PR |
 |---|---|---|---|
-| **F1** | `makeCookieHelpers` 의 **`clear` 를 `set` 과 대칭**으로(도메인 없음 / `.klow.kr` / 현재 옵션) | 로그아웃해도 레거시 `.klow.kr` 세션 쿠키가 남는다 | P2 |
+| **F1** | 핸드오프 복원에 **`addToCart` 를 쓰지 않는다**(`replaceCart` 로 직접 쓴다) | 담기 비콘이 재발사돼 `cartAdds` 2배 — 순담기자는 flip-once 라 **전환율만 조용히 망가진다** | P2 |
 | **F2** | apex 판정은 **Vercel `apexName`** 에 위임. 직접 레이블 수를 세지 않는다 | `brandA.co.kr` 에 **잘못된 DNS 레코드를 안내** — 첫 한국 고객부터 | P1 |
 | **F3** | DNS 레코드 값은 **Vercel 응답을 저장해 그대로 표시**. 하드코딩 금지 | Vercel 이 값을 바꾼 날 신규 연결이 전부 실패 | P1 |
-| **F4** | 결제 리턴 host 는 **리턴 시점에 재검증**(active + 주문 브랜드 일치), 스킴은 서버가 `https://` 구성 | **오픈 리다이렉트** | P3 |
-| **F5** | 결제 리턴 host 는 **프록시 헤더로만** 받는다. 바디 금지 | 클라이언트가 임의 값 주입 → 오픈 리다이렉트 | P3 |
-| **F6** | 프록시가 **실 클라이언트 IP 를 헤더로 전달**하고 서버가 secret 검증 후 신뢰 | `Order.agreementIp` 가 Vercel IP — **PG 분쟁 증거 손상** | P3 |
-| **F7** | **`ThrottlerGuard.getTracker` 도 같은 IP 규칙**을 쓰게 한다 (`clientIp()` 만 고치면 절반) | 커스텀 도메인 전체가 한 rate-limit 버킷 → **정상 방문자 429** | P3 |
-| **F8** | 프록시가 **요청 `Cookie` 헤더를 그대로 전달** | **인증이 통째로 안 된다** | P3 |
-| **F9** | 응답 Set-Cookie 는 **`getSetCookie()` 배열**로 읽어 개별 `append` | 여러 쿠키가 콤마로 합쳐져 손상 | P3 |
-| **F10** | 미들웨어 matcher 에서 **`api-proxy` 제외** | API 호출이 브랜드관으로 rewrite 되어 전부 깨진다 | P3 |
+| **F4** | 핸드오프 payload 에 **가격을 싣지 않는다**(제품 id + 수량만) | 옛 국가·옛 프로모션 가격이 굳어 표시가 ≠ 청구가. 게다가 **서명이 필요해진다** | P2 |
+| **F5** | **`visitorId` 이관** — klow.kr 에 없으면 심고, **있으면 덮지 말고 그 주문에만** 사용 | **그 브랜드의 결제 단계 퍼널이 영구 0**(서버가 조용히 버린다) | P2·P3 |
+| **F6** | **`promotionCode` 이관** | **세일가가 정상가로 조용히 되돌아간다** | P2·P3 |
+| **F7** | **국가를 먼저** 세팅하고 카트를 재조회. 기존 klow.kr 국가와 다르면 **기존 카트 폐기** | 두 국가 가격이 섞인 카트 → 표시가 ≠ 청구가 | P2 |
+| **F8** | 커스텀 도메인 클라는 **`credentials:'omit'`** | Chrome 은 로그인·Safari 는 비로그인으로 **브라우저마다 화면이 갈리고**, 서버 카트가 어긋난다 | P3 |
+| **F9** | 송신은 **`location.assign`(top-level)** + **`peekVisitorId()`** | 새 탭이면 인앱 브라우저에서 컨텍스트 유실 / `getVisitorId()` 면 **원장 없는 토큰**만 생성 | P3 |
+| **F10** | **`handoff` 를 예약 슬러그**에 넣는다 | 그 슬러그를 가진 브랜드가 브랜드관을 잃는다 | P0 |
 | **F11** | 미들웨어 `/{seg}` 규칙을 **pass-through 로 바꾸지 않는다** | 브랜드 A 도메인에서 **브랜드 B 브랜드관**이 렌더된다 | P3 |
 | **F12** | `[influencer]/page.tsx` 의 `source` 를 **code 유무로 분기** | 미매칭 경로·봇이 전부 **할인 링크 유입으로 집계** | P0 |
 | **F13** | `resolveHost` 가 **`PUBLIC_BRAND_WHERE` + 구독 게이트**를 함께 태운다 | 구독이 끊긴 브랜드의 도메인만 계속 살아남는다 | P1 |
 | **F14** | `isVerifiedOrigin` 은 **정확 일치**. 와일드카드·서브도메인 확장 금지 | 전 브랜드 도메인이 **CSRF 우회로** | P1 |
-| **F15** | 프록시가 **Origin 을 위장하지 않는다** | 프록시 경로가 CSRF 가드 우회로 + 감사 불가 | P3 |
-| **F16** | 프록시 경로 허용은 **`/v1/` 접두만** | 어드민 표면이 브랜드 도메인에 노출 | P3 |
+| **F15** | 복원 직후 **`router.replace` 로 `?h` 제거** | 뒤로가기가 복원을 재실행 → F7 규칙이 다시 돌아 **손님 카트를 두 번 날린다** | P2 |
+| **F16** | **커스텀 도메인에서 열린 `/handoff` 는 복원하지 않는다**(`/cart` 로) | 손님이 브랜드 도메인에 남은 채 결제까지 진행 → 이 설계의 전제가 깨진다 | P2 |
 | **F17** | `test/app.e2e-spec.ts` cron 기대값 **8 → 9** | `@Cron` 미등록이 **완전 무음**(로그도 없다) | P1 |
-| **F18** | `COOKIE_DOMAIN` 을 **전역 제거하지 않는다**(admin/brand 쿠키는 유지) | klow_brand 미들웨어의 세션 사전 게이트가 죽는다 | P2 |
+| **F18** | 배포는 **P2(수신) → P3(송신)** | 손님이 klow.kr 의 없는 `/handoff` 에서 **404** | — |
+| **F21** | 복귀 host(`o`)는 **`/v1/storefront/resolve` 로 재검증**한 뒤에만 저장하고, **스킴은 클라가 `https://` 로 조립** | 결제 성공 화면의 "계속 쇼핑" 이 **임의 사이트로 보내는 링크**가 된다(오픈 리다이렉트) | P2 |
+| **F22** | `setBrandReturn(…?purchased=)` 갱신을 `removeProducts` 와 **같은 블록**에 둔다 | 한쪽만 도는 조합이 생겨 **브랜드 도메인 카트가 정리되지 않는다** | P2 |
 | **F19** | `origin-exempt.spec.ts` 가 **무변경으로 통과** | 통과하지 않으면 설계가 틀어진 것 | P1 |
 | **F20** | Vercel 추가 후 DB insert 실패 시 **보상 제거** + 해지 도메인 **정리 경로** | Vercel 쿼터 누수 · orphan 누적 | P1 |
 
 ---
 
-## 10. 부록 — 코드로 검증한 사실 (2026-08-19)
+## 10. 부록 — 코드로 검증한 사실 (2026-08-19, #0 은 2026-08-20)
 
 이 계획의 전제들이다. **재조사하지 말고, 대신 구현 시점에 어긋나면 계획을 의심할 것.**
 
 | # | 사실 | 왜 중요한가 | 근거 |
 |---|---|---|---|
-| V1 | **`@/lib/api` 의 소비자는 전부 `'use client'` 컴포넌트다** (importer 중 `'use client'` 없는 파일 0건) | `BASE` 를 브라우저에서만 프록시로 바꿔도 **SSR 이 깨지지 않는다**. 서버 사이드 fetch 는 `lib/brand-server.ts`·`app/sitemap.ts` 가 각자 절대 URL 로 따로 한다 | §4-2 |
-| V2 | **klow_web 에 multipart/파일 업로드가 0건** (`api.upload` 는 컨시어지 제거 때 함께 삭제) | 프록시가 `arrayBuffer()` 로 바디를 통째 읽어도 된다 → 스트리밍(`duplex:'half'`) 불필요 | §4-2 |
-| V3 | **`checkout/success` 는 API 를 부르지 않는다** (주문번호·이메일 쿼리로만 렌더) | 결제 완료 화면에 세션이 필요 없다 | `flow.md` §4 |
-| V4 | **주문 확인 이메일의 배송조회는 쿠키가 아니라 URL 서명 토큰** (`/track/{id}?t=signGuestOrderToken(...)`) | 이메일 링크가 klow.kr 이어도 정상 동작 → 이메일 도메인화는 급하지 않다 | `order-confirmation-email.ts:86` |
-| V5 | **전역 `ThrottlerGuard` 에 커스텀 tracker 가 없다** (기본 `req.ip`) | `clientIp()` 만 고치면 **커스텀 도메인 전체가 한 rate-limit 버킷**이 된다 | `app.module.ts:45`, F7 |
-| V6 | **`clientIp()` 소비처는 3곳뿐** — `public-orders.controller.ts:70,88`, `public-seeding.controller.ts:102` | 어드민·웹훅 IP 기록은 프록시를 안 타므로 무영향 | §4-2 |
-| V7 | **`[influencer]/page.tsx` 는 프로모션 code 가 null 이어도 `notFound()` 하지 않는다** | 미들웨어 `/{seg}` 규칙의 결과가 404 가 아니라 **자기 브랜드관**이다. 그래서 P0-5 의 `source` 분기가 필요하다 | F11, F12 |
-| V8 | **Eximbay 결제 payload 에 도메인 파라미터가 없다** (`fgkey`/`payment`/`merchant`/`buyer`/`url`/`settings`/`product`) | 제한이 있다면 **가맹점 계정 설정** 쪽 → 코드로 확인 불가, 문의 필요 | `README.md` #0 |
+| V1 | **`@/lib/api` 의 소비자는 전부 `'use client'` 컴포넌트다** (importer 중 `'use client'` 없는 파일 0건) | `credentials` 를 브라우저에서만 분기해도 **SSR 이 깨지지 않는다**. 서버 사이드 fetch 는 `lib/brand-server.ts`·`app/sitemap.ts` 가 각자 절대 URL 로 따로 한다 | §4-2 |
+| V2 | **`repriceCartForCountry`(`lib/cart-reprice.ts`)가 이미 `productId` + 국가 + 프로모션으로 카트 라인을 재구성한다** | 핸드오프 복원은 **새 로직이 아니라** 그 헬퍼(`toCartItem` · `qk.productDetail` 캐시)의 재사용이다. 사본을 만들면 같은 자원을 두 경로가 각자 읽는다 | §3-3 |
+| V3 | **`useCartStore.addToCart` 가 `trackStorefrontCartAdd` 비콘을 쏜다** (`useCartStore.ts:7`) | 복원에 쓰면 **담기가 두 번 집계**된다 | F1 |
+| V4 | **`useCheckoutGate` 가 결제 진입마다 로그인/비회원을 다시 묻는다** (`useAuthGate.ts:104`, `?guest=1`) | 도메인이 바뀌는 지점과 로그인 화면이 **원래 겹쳐 있다** → 이음매를 놓기 가장 덜 어색한 자리 | §4-0 |
+| V5 | **`OnboardingModal.select()` 는 가격 기준국이 실제로 바뀔 때만 카트를 비운다** | 핸드오프의 국가 규칙(F7)은 **그 기존 규칙의 재사용**이지 새 정책이 아니다 | §3-3 |
+| V6 | **`checkout/success` 는 API 를 부르지 않는다** (주문번호·이메일 쿼리로만 렌더) | 결제 완료 화면에 세션이 필요 없다 | `flow.md` §4 |
+| V7 | **주문 확인 이메일의 배송조회는 쿠키가 아니라 URL 서명 토큰** (`/track/{id}?t=signGuestOrderToken(...)`) | 이메일 링크가 klow.kr 이어도 정상 동작 | `order-confirmation-email.ts:86` |
+| V8 | **Eximbay 는 결제창 호출 도메인을 런타임에 검사하지 않는다** — 샌드박스 3지점(CORS preflight / `POST /v1/payments` / 게이트웨이 form POST) 전부 Origin·Referer 무관 (2026-08-20 실측). 남은 건 **심사·계약 축** | 핸드오프에서는 결제창 호출 도메인이 **오늘과 동일한 klow.kr** 이라 **이 축 자체가 P3 전제에서 빠진다** | `README.md` #0 |
 | V9 | **klow_web 에 `src/middleware.ts` 가 없다** | 신규 생성이라 기존 미들웨어와의 충돌을 걱정할 필요가 없다 | §4-1 |
-| V10 | **klow_web·klow_brand 에 테스트 인프라가 없다** (`package.json` scripts = dev/build/start/lint/type-check) | 회귀 잠금은 **전부 klow_server 스펙 + `type-check`** 로만 가능 | §8-1 |
+| V10 | **klow_web·klow_brand 에 테스트 인프라가 없다** (`package.json` scripts = dev/build/start/lint/type-check) | **핸드오프 불변식을 잠글 자동 테스트가 없다** → 수동 E2E 가 유일한 방어선 | §8-1 |
 | V11 | **`RESERVED_BRAND_SLUGS` 에 실제 라우트인 `customer-center`·`track`·`seed` 가 빠져 있다** | 이미 존재하는 잠재 버그이고, 미들웨어가 이 목록을 재사용하므로 P0 에서 먼저 고친다 | §1-1 |
 | V12 | **cron 실제 개수는 8개** (워크스페이스 `CLAUDE.md` 의 "6개"는 낡았다) | 새 cron 추가 시 기대값은 **8 → 9** | F17 |
-| V13 | **klow.kr ↔ api.klow.kr 은 eTLD+1 이 같아 브라우저에게 same-site** | 지금 세션이 정상인 이유이자, **klow.kr 을 프록시에서 제외해도 되는 근거** | `flow.md` §1-1 |
+| V13 | **klow.kr ↔ api.klow.kr 은 eTLD+1 이 같아 브라우저에게 same-site** | 지금 세션이 정상인 이유이자, **klow.kr 흐름을 한 줄도 안 건드려도 되는 근거** | `flow.md` §1-1 |
 | V14 | **klow_web 클라 `StorefrontVisitSource` 는 `direct \| promotion` 둘뿐** (서버 enum 에는 `onsite` 도 있지만 클라가 보내지 않는다) | 유입 경로에 `custom_domain` 을 추가할 때 클라·서버 양쪽을 봐야 한다 | §2-9 |
+| V15 | **`[influencer]/page.tsx` 는 프로모션 code 가 null 이어도 `notFound()` 하지 않는다** | 미들웨어 `/{seg}` 규칙의 결과가 404 가 아니라 **자기 브랜드관**이다. 그래서 P0-5 의 `source` 분기가 필요하다 | F11, F12 |
+
+> **승격(§6-1) 전제로만 유효한 사실** — 지금은 쓰지 않는다.
+> **VP1** klow_web 에 multipart/파일 업로드가 **0건**(`api.upload` 는 컨시어지 제거 때 삭제) → 프록시가
+> `arrayBuffer()` 로 바디를 통째 읽어도 된다.
+> **VP2** 전역 `ThrottlerGuard` 에 커스텀 tracker 가 **없다**(기본 `req.ip`, `app.module.ts:45`) →
+> 프록시를 붙이면 **커스텀 도메인 전체가 한 rate-limit 버킷**이 된다.
+> **VP3** `clientIp()` 소비처는 **3곳뿐** — `public-orders.controller.ts:70,88`,
+> `public-seeding.controller.ts:102`.
