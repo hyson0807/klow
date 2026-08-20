@@ -361,6 +361,19 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 ② 모달을 닫은 게스트 ③ klow_web 배포 이후에야 채워지기 시작. "국가별로 안 나온다"는 문의가
 오면 이 셋이 답이다.
 
+### 일자별 시리즈 · 직전 기간 비교
+
+`points` 는 **`series` 와 같은 길이·순서**의 dense 배열이고, `prevVisitors` 는 **직전 동일 길이
+기간**의 합이다(`previousWindow()` — 창 바로 앞, 닫힌 구간).
+
+- 화면이 이 둘로 **누적 영역 차트 + 순위표**를 한 카드에 그린다. 색 점이 차트 조각을 가리키므로
+  차트와 표는 반드시 **같은 출처**여야 한다.
+- ⚠️ 미상은 **일자별로도** 같은 뺄셈을 한다(`그날 uniqueVisits − 그날 국가 합`). 기간 합계만
+  맞추고 일자를 안 맞추면 누적 영역의 그날 높이가 그날 방문자 수와 어긋난다.
+- ⚠️ 직전 기간에만 있던 국가는 **행으로 나오지 않는다**(랭킹은 현재 기간 기준). "사라진 국가"는
+  화면에서 볼 수 없다 — 의도된 한계다.
+- ⚠️ 집계 시작 직후엔 직전 기간에 기록이 없어 전부 `신규` 로 보인다. 0 이 아니라 데이터 없음이다.
+
 ### ⚠️ 한 화면에 국가 랭킹이 둘이다
 
 | | 방문 국가 TOP | 국가 TOP |
@@ -424,7 +437,7 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
   totals: { direct, promotion, all },        // 각각 {visits, uniqueVisits, cartAdds, uniqueCartAdds, cartConversionPct,
                                              //        purchases, uniquePurchases, purchaseConversionPct}
   series: [{ date, direct:{…}, promotion:{…}, all:{…} }],  // dense 제로필 (onsite 키는 없다)
-  countries: [{ source, iso2, nameKo, visitors }] }       // 방문 국가 — 아래 절
+  countries: [{ source, iso2, nameKo, visitors, prevVisitors, points }] }  // 방문 국가 — 아래 절
 ```
 
 - **dense 제로필** — 데이터 없는 날이 배열에서 빠지면 차트가 그 구간을 이어 그려 추이를 왜곡한다
@@ -464,19 +477,28 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 
 ```
 { range: { from, to },                                // 창의 실제 경계('all' 은 서버가 정한다)
+  dates: ['YYYY-MM-DD', …],                           // 창 전체 dense — countries[].points 의 x 축
   summary:   { direct, promotion, onsite, all },      // 각각 {orders, quantity, productCount}
-  countries: [{ channel, iso2, nameKo, orders, quantity }],
-  products:  [{ channel, productId, name, image, orders, quantity }],
-  onsiteDaily: [{ date, orders }] }                   // 현장만, 창 전체 dense 제로필
+  countries: [{ channel, iso2, nameKo, orders, quantity, prevOrders, points }],
+  products:  [{ channel, productId, name, image, orders, quantity, prevQuantity }] }
 ```
+
+> **2026-08-20**: `countries` 에 일자별 `points` 와 `prevOrders` 가 붙고 `onsiteDaily` 는 **제거**됐다.
+> 화면이 결제도 방문 국가와 같은 모양(누적 영역 + 순위표)으로 그리게 되면서 현장 전용 시리즈가
+> 필요 없어졌다 — 현장 탭도 국가별 조각으로 그린다.
+> ⚠️ **국가 집계에 일자를 넣어 한 번에 뽑고 합계는 서버가 접는다.** 합계용 쿼리를 따로 두면 같은
+> 조인을 한 번 더 훑는데다 두 값이 갈릴 여지가 생긴다(한 주문은 하루·한 국가에만 속하므로 접기가
+> 정확하다).
+> ⚠️ **`days='all'` 은 직전 기간을 조회하지 않는다** — 첫 결제일부터가 창이라 "그 앞"이 존재하지
+> 않고, `paidAt` 인덱스가 없어 헛스캔이 비싸다. 그 탭에선 증감이 전부 `신규` 다.
+> ⚠️ 직전 기간 쿼리는 **경계가 둘**이다(`>= prevStart AND < start`). 하한만 걸면 현재 기간까지
+> 함께 세어 증감률이 늘 "그대로"로 나온다.
 
 - **채널 = 주문의 성질**: `onsite`(현장) > `promotionId≠null`(할인링크) > `direct`(그 외).
   ⚠️ 퍼널의 `source`(그 방문자의 **그날 첫 진입 경로**)와 **정의가 다르다** — 할인 링크로 들어왔지만
   체크아웃까지 code 가 안 따라간 주문은 퍼널에선 `promotion`, 여기선 `direct` 다. 같은 사실의 두
   측정이지 버그가 아니다(화면이 각주로 명시). 억지로 맞추려면 방문 원장과 주문을 조인해야 하는데,
   그 순간 랭킹이 퍼널 모집단으로 쪼그라들어 이 기능의 목적(전 주문 수요 파악)이 사라진다.
-- **`onsiteDaily` 는 현장만** 담는다 — 일반·할인링크의 추이는 퍼널 응답(명 단위)이 그리므로,
-  세 채널을 다 제로필하면 `days='all'` 에서 **아무도 안 읽는 730행**이 따라간다.
 - **채널별 raw 행을 한 번에 내려보낸다** — 화면의 채널 탭 전환에 **재요청이 없고**, `전체` 탭은
   클라가 채널을 합산한다(서버가 `전체` 를 따로 계산하면 부분합과 전체가 갈릴 여지가 생긴다).
   합산이 정확한 이유: 한 주문은 정확히 **하나의 (채널, 국가)** 에 속한다.
@@ -523,6 +545,30 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 보존기간·조건은 서비스가 소유하고 cron 파일은 스케줄만 갖는다.
 
 ⚠️ 이 cron 이 늘어 `test/app.e2e-spec.ts` 의 기대 목록이 **8개**가 됐다.
+
+## 화면 구성 (klow_brand `/stats`, 2026-08-20 개편)
+
+```
+요약 카드   방문자 · 장바구니 · 결제        ← 퍼널(명)
+[방문 국가]  누적 영역(국가별 명) + 순위표   ← BrandVisitorCountryDay
+[결제]       누적 영역(국가별 건) + 국가·제품 순위표  ← Order/OrderItem
+```
+
+- **방문자 추이 차트를 따로 두지 않는다** — 방문 국가 누적 영역의 높이가 곧 그날 방문자 수라
+  같은 그림을 두 번 그리는 셈이 된다.
+- ⚠️⚠️ **두 패널의 단위가 다르다**(명 vs 건). 차트와 표가 **같은 출처**여야 색 점이 조각을
+  가리키므로, 결제 패널을 퍼널(명)로는 그릴 수 없다. 그래서 요약 카드의 "결제 N명"과 결제
+  패널의 "N건"은 서로 다른 숫자다 — 각 패널의 `note` 한 줄이 그걸 적는다(**지우지 말 것**.
+  이 화면에서 유일하게 남은 모집단 설명이다).
+- 색은 **항목(국가)에 붙지 순위에 붙지 않는다.** 배정은 탭과 무관한 **전체 순위**로 하고 채널
+  탭을 옮겨도 재배정하지 않는다 — 필터 하나 바꿨을 뿐인데 살아남은 국가 색이 뒤바뀌면 안 된다.
+  검증된 5색(`SERIES_PALETTE`) + 잔여 무채색(`SERIES_OTHER_COLOR`)이고, 6번째 국가부터는
+  '기타' 한 조각으로 접는다. 미상은 정체성이 아니라 잔여라 무채색을 쓴다.
+- ⚠️ 팔레트 3색이 흰 배경 대비 3:1 미만이라 **표가 반드시 차트와 함께 있어야 한다**(색만으로
+  정체성을 나르지 않게 하는 relief 조건).
+- ⚠️ **펼침 버튼은 패널이 소유한다.** 표마다 두면 결제 패널(국가·제품)에서 카드 아래 같은
+  버튼이 두 개 생긴다.
+- 현장 탭은 방문을 수집하지 않으므로 **방문 국가 패널이 없고** 요약 카드도 결제 요약으로 바뀐다.
 
 ## 화면 표기 규칙 — 퍼널은 "명", 횟수는 보조줄
 
