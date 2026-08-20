@@ -75,6 +75,15 @@
 | POST   | `/admin/shipments/:id/refresh-tracking`               | 단건 EFS 추적 갱신 (30s throttle)                                |
 | POST   | `/admin/shipments/:id/dev-set-tracking`               | [DEV] 추적 상태 수동 주입 (`ALLOW_DEV_TRACKING_OVERRIDE` 게이트)  |
 | POST   | `/admin/shipments/refresh-tracking`                   | 여러 송장 EFS 추적 일괄 갱신 (ok/skipped/failed 분리)            |
+| POST   | `/admin/shipments/delete-failed`                      | `{ids}` 실패 기록 하드 삭제 (실패 탭 정리, `{deleted, skipped}`)  |
+
+> ⚠️ **`delete-failed` 는 `status='failed'` 인 행만 지운다** — 조건이 서비스의 `deleteMany` **where 절**에 있고 클라가 보낸 목록을 그대로 믿지 않는다. 발급된(`submitted`) 송장을 여기서 지우면 **EFS 에는 살아있는 송장의 우리 쪽 기록만 사라져** 추적·정산·EFS 청구가 전부 그 행을 잃는다. `ShipmentItem` 은 FK `onDelete: Cascade` 로 함께 지워지고 `Shipment` 를 참조하는 다른 테이블은 없다.
+>
+> ⚠️ 실패 행에는 **EFS 송장번호가 없다**(`executeCreate` 의 두 실패 분기가 모두 `efsTrackingNumber` 를 null 로 남긴다) — 그래서 EFS 쪽에 취소를 걸 대상이 없고 삭제는 우리 DB 안에서 끝난다(EFS 호출 없음).
+>
+> ⚠️ 이건 "이 발송을 없던 일로" 가 **아니라 실패 기록만 지우는** 것이다. 주문이 아직 유효하면(paid · 취소 아님 · onsite 아님) 그 (orderId, brandId) 그룹은 곧바로 **대기 탭에 다시 뜬다**(`listPendingGroups` 가 송장 행 없는 그룹을 잡는다). 함께 사라지는 건 실패 사유(`errorMessage`·`responseRaw`·`requestPayload`)와 자동 재시도 예약(`nextRetryAt`)뿐이라, 원인 추적 중이라면 삭제 전에 상세를 봐야 한다(서버 로그에 `admin <id> deleted N/M failed shipment(s)` 경고 1줄 + `AdminAuditLog`).
+>
+> **`AdminGuard`** 다(super 아님) — 실패 큐를 실제로 처리하는 건 operator 이고, 여기서 지울 수 있는 건 EFS 에 존재하지 않는 기록뿐이다. 라우트가 `:id` 가 아니라 bulk 인 이유는 실패가 배포 사고·EFS 장애처럼 **한 번에 여러 건**으로 생기고 정리도 그 단위이기 때문(`refresh-tracking` bulk 와 같은 모양). 행 버튼은 `ids` 1개를 보낸다. 회귀 잠금은 `__tests__/shipment-delete-failed.spec.ts`(where 절에 status 조건 · 중복 id 제거 · skipped 보고).
 
 ## brand-shipments.controller.ts (`@Controller('v1/brand/shipments')`)
 
