@@ -132,7 +132,9 @@ GET https://shop.brandA.com/
 | `/` | **rewrite** → `/{slug}` | 브랜드관이 홈이어야 한다 |
 | `/{자기 slug}` | **308** → `/` | 같은 콘텐츠가 두 URL 에 뜨는 것 방지 |
 | `/product/…` `/cart` … (예약어 최상위 세그먼트) | **pass-through** | 둘러보기·담기는 이 도메인에서 끝난다 |
-| `/checkout` `/login` `/my` `/orders` `/handoff` | pass-through 되지만 **화면이 klow.kr 로 보낸다** | 세션이 필요한 흐름은 klow.kr 소관(§1-3). 미들웨어가 아니라 **화면이** 처리한다 — 미들웨어에서 302 하면 카트·국가·프로모션이 안 실려 넘어간다 |
+| **쿠키·세션이 필요한 경로** — `/checkout` `/login` `/signup` `/my` `/orders` **`/seed/*`** `/handoff` | pass-through 되지만 **화면이 klow.kr 로 보낸다** | 세션이 필요한 흐름은 klow.kr 소관(§1-3). 미들웨어가 아니라 **화면이** 처리한다 — 미들웨어에서 302 하면 카트·국가·프로모션이 안 실려 넘어간다. ⚠️ **경로를 외우지 말고 "쿠키가 필요한가"로 판정할 것** — `/seed/*` 는 `klow_order` 게스트 쿠키에 의존해 특히 놓치기 쉽다 |
+| `/track/{id}?t=` | **pass-through, 그대로 동작** | 쿠키가 아니라 **URL 서명 토큰**으로 여는 화면이라 cross-site 여도 무관하다(위 규칙의 유일한 예외 — 근거가 있어서 예외다) |
+| `?mode=onsite` | **대상 아님** | 현장 QR 은 klow_brand 가 **klow.kr 로 생성**하고 방문 집계도 onsite 를 제외한다. 커스텀 도메인에서 이 모드를 지원하지 않는다 |
 | `.` 포함 세그먼트(`/robots.txt`, `/naver….html`) | pass-through (`/sitemap.xml` 만 404) | `SLUG_REGEX` 가 `.` 을 허용하지 않아 안전한 판별자 |
 | `/{seg}` (예약어 아닌 단일 세그먼트) | **rewrite** → `/{slug}/{seg}` | 프로모션 할인 링크가 커스텀 도메인에서도 동작 |
 | `/{seg}/…` (2세그먼트 이상, 예약어 아님) | pass-through → 404 | |
@@ -282,14 +284,14 @@ klow.kr/checkout/success
 | 방문→담기 퍼널 | `visitorId`(localStorage)가 같은 오리진 안에서 일관 → **성립** | 변경 없음 ✅ |
 | **담기→결제 퍼널** | 결제가 **다른 오리진**에서 일어난다 → `visitorId` 를 핸드오프로 옮겨야 성립 | **§2-3 이관 규칙 필수.** 빠뜨리면 결제 단계만 영구 0 |
 | **순방문 수** | `visitorId` 가 오리진별이라 같은 사람이 klow.kr 과 자기 도메인을 다 보면 **순방문 2로 중복 계상** | 감수(방문수는 원래 재방문 포함이라 무관). 문서 명시 |
-| **유입 경로 `source`** | 커스텀 도메인 루트가 전부 `direct` 로 뭉쳐 "내 도메인 유입"을 구분 못 한다 | **P1 에서 `custom_domain` enum 값 추가 권장** — 나중에 넣으면 그 기간 데이터가 영영 복구 불가 |
+| **유입 경로 `source`** | 커스텀 도메인 루트가 전부 `direct` 로 뭉쳐 "내 도메인 유입"을 구분 못 한다 | **감수한다.** ⚠️ `StorefrontVisitSource` 에 `custom_domain` 을 **넣지 않는다** — `source` 는 유입 경로 축이고 호스트는 다른 축이라, 넣으면 커스텀 도메인의 **할인 링크 유입이 promotion 으로 안 잡힌다**([plan §2-9](./implementation-plan.md#2-9-유입-경로-enum--custom_domain-을-추가하지-않는다)) |
 | **판매 분석(국가·제품)** | `Order` 기반이라 **오리진과 무관** | 무영향 ✅ |
 | klow_brand `/stats` 페이지 | `brand.klow.kr` 에서 돌고 쿠키도 `.klow.kr` 유지 | 무영향 ✅ |
 | 프로모션 유입 | `/summer` → rewrite → `[brandSlug]/[influencer]` → `source="promotion"` | 변경 없음 ✅ |
 | **프로모션 세일가** | 브랜드관·PDP 는 정상. **결제는 klow.kr** 이라 `promotionCode` 를 안 넘기면 정상가가 된다 | **핸드오프 필수 필드**(§2-3) |
 | 카페24 임베드 `/embed/*` | 스크립트 src 가 API 호스트라 **완전 무관** | 손대지 말 것 ✅ |
 | 임베드 딥링크·프로모션 pretty 링크·현장 QR·인스타 답글 링크 | klow.kr 로 생성 | **알려진 갭**. P5 에서 primary 도메인 반영 검토 |
-| 시딩 링크 `/seed/{token}` | klow.kr | **그대로 둔다** — 크리에이터 운영 링크지 브랜드 마케팅 표면이 아니다 |
+| 시딩 링크 `/seed/{token}` | klow.kr | **그대로 둔다** — 크리에이터 운영 링크지 브랜드 마케팅 표면이 아니다. ⚠️ 커스텀 도메인으로 열리면 **klow.kr 로 보낸다**(§2-2) — `klow_order` 게스트 쿠키가 필요해 cross-site 에서 조용히 깨진다 |
 | Eximbay 웹훅 / payment-reconcile cron | api 도메인 직결 | 무관 ✅ |
 | **결제 흐름 전체** | klow.kr 에서 오늘과 동일하게 일어난다 | **무변경** ✅ (§4-1) |
 | **장바구니** | 오리진별로 별개(zustand persist). 결제 시 핸드오프로 넘어간다 | 결제 완주 후 성공 화면의 **"계속 쇼핑" 링크에 `?purchased=`** 를 실어 브랜드 도메인 카트도 정리한다(`removeProducts` 재사용 — [plan §3-4](./implementation-plan.md#3-4-결제-후-브랜드-도메인-카트-정리)). ⚠️ **best-effort** — 손님이 그 버튼을 안 누르거나 탭을 닫으면 그 도메인 카트에 산 상품이 남는다(**재구매 가능일 뿐 오청구는 아니다**) |

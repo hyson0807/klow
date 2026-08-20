@@ -17,7 +17,7 @@
 |---|---|---|---|
 | **P0** | 정지 작업(예약 슬러그·하드코딩·집계 버그) | web, server, brand | 없음 (독립 배포 가능) |
 | **P1** | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 | server | 없음 (아직 서빙 안 함) |
-| **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web | 없음 (klow.kr 에서 불가시·무해) |
+| **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
 | **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
 | **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
 | **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
@@ -100,7 +100,10 @@ model BrandDomain {
 }
 ```
 
-`Brand` 에 `domains BrandDomain[]` 역참조 1줄 추가. 브랜드당 상한은 **앱 레벨 2개**(apex + www).
+`Brand` 에 `domains BrandDomain[]` 역참조 1줄 추가. 브랜드당 상한은 **앱 레벨 3개**.
+⚠️ 2개(apex + www)로 잡으면 **`shop.brandA.com` 를 쓰는 브랜드가 apex·www 리다이렉트를 함께 걸 수
+없다** — 서브도메인 운영이 오히려 흔한 형태다. 상한은 Vercel 쿼터가 아니라 **운영 부담**을 막으려는
+값이므로 숫자를 상수 하나로 두고 주석에 이유를 남긴다.
 
 ⚠️ **"primary 는 브랜드당 1개"를 DB 유니크로 못 박지 않는다** — Prisma 는 partial unique index
 (`WHERE role='primary'`)를 지원하지 않고, `@@unique([brandId, role])` 로 하면 `redirect` 도 1개로
@@ -180,9 +183,15 @@ trailing dot 제거, 253자·라벨 63자 상한, **`klow.kr`·`*.klow.kr`·`*.v
 
 ### 2-5. Origin 술어 (CSRF 가드 + CORS)
 
-커스텀 도메인에서 나가는 **POST 가 둘 남는다** — 방문·담기 트래킹 비콘
-(`/v1/storefront-stats/track/{visit,cart-add}`). 프록시가 없으므로 이건 **진짜 cross-origin** 요청이고
-브라우저가 `Origin: https://shop.brandA.com` 을 싣는다 → 지금 코드면 **403 + CORS 차단**.
+⚠️⚠️ **이 술어가 없으면 비콘이 아니라 브랜드관 화면이 통째로 빈다.** 두 가지가 걸린다:
+
+| 걸리는 것 | 무엇이 | 없으면 |
+|---|---|---|
+| **CORS** (더 크다) | 브랜드관·PDP 의 **모든 데이터 GET**. `BrandStorefront` 는 `'use client'` 라 `useBrandBySlugQuery`·`useProductsByBrandQuery` 가 **브라우저에서** `api.klow.kr` 를 친다 | 제품·브랜드가 하나도 안 뜬다 |
+| **Origin CSRF 가드** | 방문·담기 트래킹 비콘 2개 (`/v1/storefront-stats/track/{visit,cart-add}`) | 403 (집계만 유실) |
+
+프록시가 없으므로 이건 **진짜 cross-origin** 이고 브라우저가 `Origin: https://shop.brandA.com` 을 싣는다
+→ 지금 코드면 GET 은 CORS 로, POST 는 403 으로 막힌다.
 
 `main.ts` 의 `buildAllowedOrigins()` 정적 배열을 **술어**로 바꾸고 화이트리스트 미스 시 폴백:
 
@@ -197,6 +206,8 @@ const originAllowed = (o: string) =>
   ⚠️ **도메인 삭제·비활성 전이는 그 자리에서 스냅샷 갱신**(지연되면 안 된다)
 - `app.enableCors({ origin: (o, cb) => cb(null, !o || originAllowed(o)) })` 로 **함께** 교체 —
   두 판정이 갈리면 반드시 사고가 난다
+- 비콘 POST 가 `Content-Type: application/json` 이라 **방문마다 preflight** 가 붙는다 →
+  `enableCors({ maxAge })` 를 함께 준다(없으면 요청 수가 2배)
 - ⚠️ **자격증명은 이 오리진에서 오가지 않는다** — 커스텀 도메인 클라는 `credentials:'omit'` 로 고정한다(§4-2 · F8).
   `credentials:true` 설정 자체는 유지하되(klow.kr 용), **커스텀 도메인 요청에 쿠키가 실리면 설계가 어긋난 것**이다
 - `common/origin-exempt.ts` 는 **손대지 않는다** — 새 예외 경로가 없다.
@@ -241,14 +252,23 @@ VERCEL_TEAM_ID=        # 팀 소속이면 필수 (team_xxx)
 "조용히 깨지고 돈이 사라지는" 경로다. 도메인은 미설정 시 브랜드가 즉시 에러를 보므로 부팅을 막을 성질이
 아니다. 대신 서비스가 `503 도메인 기능이 아직 활성화되지 않았습니다` 로 명시 거부.
 
-### 2-9. (권장) 유입 경로 enum 값 추가
+### 2-9. 유입 경로 enum — **`custom_domain` 을 추가하지 않는다**
 
-커스텀 도메인 루트 방문이 전부 `direct` 로 뭉쳐 브랜드가 "내 도메인 유입"을 구분하지 못한다.
-`StorefrontVisitSource` 에 `custom_domain` 을 **P1 에서** 추가하는 것을 권한다 — 나중에 넣으면 그
-기간 데이터는 **영영 복구 불가**(전부 direct 로 섞임)다.
+커스텀 도메인 루트 방문은 전부 `direct` 로 잡힌다. "내 도메인 유입"을 구분하고 싶어지는데,
+⚠️ **`StorefrontVisitSource` 에 `custom_domain` 을 넣으면 안 된다 — 축이 다르다.**
 
-⚠️ Postgres 는 `ALTER TYPE … ADD VALUE` 로 추가한 enum 값을 **같은 트랜잭션에서 쓰지 못하고** Prisma 는
-마이그레이션을 트랜잭션으로 감싼다(국내배송 `DOMESTIC` 선례) → **마이그레이션과 코드 배포를 분리**한다.
+`source` 는 **유입 경로**(`direct` | `promotion`)이고 `custom_domain` 은 **호스트**다. 원장 키가
+`(brandId, date, source)` 라 값은 **하나만** 저장된다. 커스텀 도메인으로 들어온 할인 링크 방문은
+promotion 이거나 custom_domain 이거나 둘 중 하나가 되고, **어느 쪽을 골라도 한 축이 통째로 사라진다.**
+promotion 을 잃으면 브랜드가 "이 링크에 할인을 계속 줄지"를 판단하는 그 숫자가 무너진다 — 커스텀
+도메인을 붙인 브랜드에서만, 조용히.
+
+**지금 결정: 커스텀 도메인 방문도 `direct` / `promotion` 그대로 기록한다.**
+
+나중에 정말 호스트 축이 필요하면 그건 **enum 값이 아니라 별도 차원**이어야 하고(원장·읽기모델의 유니크
+키가 바뀌는 별건 작업이다), 그때 과거 데이터가 없는 건 감수한다. ⚠️ **"나중에 넣으면 복구 불가라서 지금
+넣자"는 유혹을 여기서 명시적으로 기각한다** — 복구 불가한 건 맞지만, 그 대가로 **이미 운영 중인 지표를
+망가뜨린다.** 없는 데이터보다 틀린 데이터가 나쁘다.
 
 ---
 
@@ -294,8 +314,9 @@ localStorage, `country`·`promotionCode` 는 URL·모달, `visitorId` 는 클라
 사이트로 보내는 링크가 된다. 서명 대신 **서버 재검증**으로 막는다(§3-3 · F21).
 ⚠️ 뒤집어 말하면 **가격을 payload 에 실으면 그 순간 서명이 필요해진다** → 싣지 않는다(F4).
 
-크기는 제품 30개 기준 base64 약 1.2KB 로 URL 길이 문제가 없다. 상한을 넘는 비정상 payload 는
-`decodeHandoff` 가 `null` 로 떨군다.
+크기는 제품 30개 기준 base64 약 1.2KB 로 URL 길이 문제가 없다. `decodeHandoff` 는 **raw 8KB · 라인
+100개**를 넘으면 `null` 로 떨군다(정상 카트는 브랜드당 5개 상한이라 근처도 못 간다 — 이 숫자는 기능
+제약이 아니라 **손으로 만든 URL 방어선**이다).
 
 ### 3-3. `klow_web/src/app/handoff/page.tsx` (신규, `'use client'`)
 
@@ -305,12 +326,30 @@ localStorage, `country`·`promotionCode` 는 URL·모달, `visitorId` 는 클라
 2. **국가 먼저** — `setCountry(c)`. ⚠️ 기존 klow.kr `country` 와 **다르면 기존 카트를 버린다.**
    `OnboardingModal.select()` 의 기존 규칙과 **같은 이유**다(라인이 담을 때 `customerPriceUsd` 를
    스냅샷하므로 두 국가가 섞이면 표시가 ≠ 청구가). 같으면 수량 max-merge.
+   ⚠️ **로그인 사용자면 버릴 id 들을 `removedIds` 로 모아 5단계 merge 에 함께 보낸다** — 로컬만
+   지우면 다음 동기화가 **서버 카트에서 되살린다**(그게 묘비 메커니즘이 있는 이유다).
 3. `setPromotion(p)`
 4. `visitorId` 이관 — §4-3 규칙
 5. **카트** — `l` 의 각 `productId` 를 **그 국가·프로모션 기준으로 다시 조회**해 `toCartItem()` 으로 라인을
    만든다. `lib/cart-reprice.ts` 의 `repriceCartForCountry` 가 쓰는 **같은 `qk.productDetail` 캐시·같은
    헬퍼**를 재사용한다(사본을 만들면 두 경로가 각자 캐시 없이 같은 자원을 읽는다).
    조회 실패한 라인은 **버리고 나머지를 살린다** — 그쪽과 같은 판단이다(정본은 `/v1/orders/quote`).
+
+   ⚠️⚠️ **쓰는 방법이 로그인 여부로 갈린다. 이건 취향이 아니라 경합 때문이다.**
+
+   | 상태 | 반영 방법 |
+   |---|---|
+   | 비로그인 | `replaceCart(merged, null)` |
+   | 로그인 | **`api.cart.merge(lines, removedIds)`** → 그 응답으로 `replaceCart(res, user.id)` |
+
+   `replaceCart` 는 **서버에 복제하지 않는다**(스토어의 `set()` 하나다). 그런데 `SessionSyncMount` 는
+   **fresh mount 마다** 로컬 카트를 읽어 `api.cart.merge()` 한 뒤 그 결과로 다시 `replaceCart` 한다 —
+   그리고 핸드오프는 **cross-origin 이동이라 klow.kr 레이아웃이 언제나 fresh mount** 다. 순서에 따라
+   **복원한 카트가 서버 카트로 덮이거나**(sync 가 나중), **복원분이 서버에 영영 안 올라간다**(sync 가
+   먼저 읽고 `syncedUserIdRef` 로 재실행을 막는다). 결제 직전에 카트가 흔들리는 건 이 기능에서 가장
+   비싼 실패다.
+   → **`useSession().ready` 를 기다린 뒤** 복원하고, 로그인 상태면 **로그인 머지와 같은 경로**로 태운다.
+   그러면 2단계의 폐기도 `removedIds` 로 서버까지 전파된다.
 6. **복귀 주소 검증** — `o` 가 있으면 **`GET /v1/storefront/resolve?host={o}`**(P1 에 이미 있는
    엔드포인트, 새로 만들지 않는다)로 확인해 `slug` 가 non-null 일 때만
    `setBrandReturn("https://" + o + "/")`. ⚠️ **스킴은 클라가 `https://` 로 직접 조립**하고 `o` 는
@@ -361,6 +400,8 @@ shop.brandA.com    ?purchased= 읽고 removeProducts(ids) → router.replace 로
 상품들이 팔렸다"를 아는 **유일한 지점**이고, 둘이 갈라지면 한쪽만 도는 조합이 생긴다.
 ⚠️ 저장된 값이 커스텀 도메인이 아니면(=평소 klow.kr 브랜드관) `?purchased=` 를 붙일 필요가 없다 —
 그쪽 카트는 이미 같은 오리진에서 정리됐다. **붙여도 무해**하지만(§4-5 가 멱등) 붙이지 않는 게 맞다.
+⚠️ 판정은 **`new URL(저장값).host !== location.host`** 로 한다. `isCustomDomain()` 은 **자기
+`location.host`** 를 보는 함수라 여기서는 쓸 수 없다(그 시점 호스트는 언제나 klow.kr 이다).
 
 **⚠️ 이건 best-effort 다 — 명시적으로 감수한다**
 
@@ -433,9 +474,18 @@ shop.brandA.com    ?purchased= 읽고 removeProducts(ids) → router.replace 로
 
 **host 해석 캐시** — 모듈 레벨 `Map`(양성 TTL 60초 / 음성 TTL 300초). Next 의 Data Cache 는 미들웨어에서
 동작하지 않으므로 직접 관리한다.
-**fetch 실패 시 stale 값 우선, 없으면 pass-through(fail-open)** — fail-closed 로 하면 API 가 3초 흔들릴
-때 전 브랜드 도메인이 동시에 죽는다. fail-open 의 최악은 "브랜드 도메인 루트에 KLOW 홈이 잠깐 뜬다"이고
-되돌릴 수 있다.
+**fetch 실패 시 stale 값 우선** — fail-closed 로 하면 API 가 3초 흔들릴 때 전 브랜드 도메인이 동시에
+죽는다. 다만 **stale 도 없을 때의 폴백은 경로마다 다르다:**
+
+| 경로 | stale 없음 + resolve 실패 |
+|---|---|
+| `/` (루트) | **pass-through**(fail-open). 최악이 "브랜드 도메인 루트에 KLOW 홈이 잠깐 뜬다"이고 되돌릴 수 있다 |
+| 그 외 전부 | **중립 오류(503)**. pass-through 금지 |
+
+⚠️⚠️ **`/{seg}` 를 fail-open 하면 F11 이 통째로 무력화된다.** pass-through 된 `shop.brandA.com/brandB`
+는 `[brandSlug]` 라우트에 **그대로 걸려 브랜드 B 의 브랜드관을 브랜드 A 도메인에 렌더**한다 — rewrite
+규칙이 유일한 방어인데 그 방어를 건너뛰는 경로가 폴백이 되는 것이다. "잠깐 KLOW 홈이 뜬다"는 루트에만
+해당하는 이야기다.
 
 ```ts
 export const config = {
@@ -457,13 +507,24 @@ export const config = {
 |---|---|---|
 | `api.ts` `BASE` | **절대 API URL 그대로** (`NEXT_PUBLIC_API_URL`) | 프록시가 없다. klow.kr 과 완전히 같은 경로라 회귀 위험 0 |
 | `api.ts` `credentials` | **`'omit'` 로 고정** | ⚠️ 아래 |
-| 헤더 로그인/내정보 · `/my` · `/orders` · `/login` 진입점 | **klow.kr 절대 링크**(같은 탭 이동) | 그 화면들은 세션이 있어야 의미가 있다 |
+| **쿠키·세션이 필요한 모든 경로** — 로그인/내정보 헤더 · `/login` · `/signup` · `/my` · `/orders` · **`/seed/*`** | **klow.kr 절대 링크**(같은 탭 이동) | 아래 ⚠️ |
 | `SessionSyncMount` | **마운트하지 않는다** | 세션이 없어 카트 머지·프로필 승격이 전부 no-op 인데 `/v1/auth/me` 만 계속 친다 |
 
 ⚠️⚠️ **`credentials:'omit'` 이 핵심이다.** 그냥 두면 `SameSite=None` 이라 **Chrome 은 쿠키를 실어
 보내 로그인 상태로 보이고, Safari(ITP)는 차단해 비로그인으로 보인다** — 같은 사이트가 브라우저마다
 다르게 동작한다. 더 나쁜 건 그 상태로 담으면 **서버 카트에 replicate 되어** klow.kr 카트와 어긋나는
 것이다. "세션이 없다"를 우연에 맡기지 말고 **코드로 고정**한다.
+
+⚠️⚠️ **경로를 열거하지 말고 "쿠키가 필요한가"로 판정한다.** 특히 **`/seed/*` 를 빠뜨리기 쉽다** —
+`seed` 는 예약 슬러그(P0-1)라 미들웨어가 pass-through 시키므로 **커스텀 도메인에서 그대로 렌더되는데**,
+시딩 claim/checkout 은 **`klow_order` 게스트 쿠키에 의존한다**(`public-seeding.controller.ts:95` —
+결제 이탈 후 예약 재사용 `resumeOrderId` 를 그 쿠키에서 복원하고, `payment/prepare` 의 게스트
+ownership 검증도 같은 쿠키다). `credentials:'omit'` + cross-site 라 **그 쿠키는 절대 붙지 않는다** →
+예약이 조용히 새로 잡히거나 결제가 막힌다.
+
+ℹ️ **`/track/{id}?t=` 는 예외로 남겨도 된다** — 쿠키가 아니라 **URL 서명 토큰**으로 여는 화면이기
+때문이다(부록 V7). 이 근거를 규칙 옆에 적어 둘 것. 안 적으면 다음 사람이 "세션 비슷하니까" 하고 통째로
+옮기거나, 반대로 `/seed` 를 여기 끼워 넣는다.
 
 ⚠️ `GoogleButton` 은 **손댈 필요가 없다**(로그인 진입점 자체가 klow.kr 로 나가므로 커스텀 도메인에서
 렌더되지 않는다). 구 계획의 "P3 에서는 숨김"·"P5 구글 핸드오프"는 **둘 다 불필요**해졌다.
@@ -666,8 +727,8 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 3. `npm run start` — env 가드 + 라우트 매핑(288 → **+4~5**)
 
 ⚠️⚠️ **핸드오프 로직은 전부 klow_web 에 있고 klow_web 에는 테스트 인프라가 없다**
-(`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16 을 잠글 자동 테스트가
-없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
+(`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F24 를 잠글 자동
+테스트가 없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
 (`encodeHandoff`/`decodeHandoff` 는 순수 함수라, 나중에 klow_web 에 테스트 러너를 들이면 **가장 먼저
 잠글 대상**이다.)
 
@@ -696,6 +757,11 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 11-2. **F21 회귀** — `?h` 의 `o` 를 임의 도메인(예: `example.com`)으로 바꿔 진입 → 성공 화면의
     "계속 쇼핑" 이 **그 도메인을 가리키지 않는지**(폴백 또는 버튼 숨김)
 12. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
+12-1. **F11 폴백 회귀** — resolve 를 강제로 실패시킨 채(서버 중단·네트워크 차단) `shop.brandA.com/{다른브랜드}`
+    진입 → **브랜드 B 브랜드관이 뜨지 않는지**(503 이어야 한다). 루트만 KLOW 홈 폴백
+12-2. **F23** — klow.kr 에 **로그인한 상태**로 핸드오프 → `/checkout` 카트가 그대로이고, **새로고침
+    후에도** 유지되는지(서버 카트에 올라갔다는 뜻). 국가가 달라 폐기된 상품이 **되살아나지 않는지**
+12-3. **F24** — `shop.brandA.com/seed/{token}` 진입 시 **klow.kr 로 보내지는지**
 13. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
 14. **klow.kr 회귀 없음** — 로그인·담기·결제 완주 + `www.klow.kr` 정상
 
@@ -713,7 +779,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 ## 9. 불변식 체크리스트 (착수 전 필독)
 
 아래는 전부 **틀려도 컴파일과 테스트가 통과**한다. 각 PR 착수 전 해당 항목을 확인한다.
-⚠️ F1·F4~F9·F15·F16 은 **klow_web 이라 자동 테스트가 없다**(§8-1).
+⚠️ F1·F4~F9·F15·F16·F21~F24 는 **klow_web 이라 자동 테스트가 없다**(§8-1).
 
 | # | 불변식 | 어기면 | PR |
 |---|---|---|---|
@@ -727,7 +793,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | **F8** | 커스텀 도메인 클라는 **`credentials:'omit'`** | Chrome 은 로그인·Safari 는 비로그인으로 **브라우저마다 화면이 갈리고**, 서버 카트가 어긋난다 | P3 |
 | **F9** | 송신은 **`location.assign`(top-level)** + **`peekVisitorId()`** | 새 탭이면 인앱 브라우저에서 컨텍스트 유실 / `getVisitorId()` 면 **원장 없는 토큰**만 생성 | P3 |
 | **F10** | **`handoff` 를 예약 슬러그**에 넣는다 | 그 슬러그를 가진 브랜드가 브랜드관을 잃는다 | P0 |
-| **F11** | 미들웨어 `/{seg}` 규칙을 **pass-through 로 바꾸지 않는다** | 브랜드 A 도메인에서 **브랜드 B 브랜드관**이 렌더된다 | P3 |
+| **F11** | 미들웨어 `/{seg}` 규칙을 **pass-through 로 바꾸지 않는다.** ⚠️ **resolve 실패 폴백도 마찬가지** — fail-open 은 **`/` 에만**, 그 외는 503 | 브랜드 A 도메인에서 **브랜드 B 브랜드관**이 렌더된다(폴백 경로로도 뚫린다) | P3 |
 | **F12** | `[influencer]/page.tsx` 의 `source` 를 **code 유무로 분기** | 미매칭 경로·봇이 전부 **할인 링크 유입으로 집계** | P0 |
 | **F13** | `resolveHost` 가 **`PUBLIC_BRAND_WHERE` + 구독 게이트**를 함께 태운다 | 구독이 끊긴 브랜드의 도메인만 계속 살아남는다 | P1 |
 | **F14** | `isVerifiedOrigin` 은 **정확 일치**. 와일드카드·서브도메인 확장 금지 | 전 브랜드 도메인이 **CSRF 우회로** | P1 |
@@ -737,6 +803,8 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | **F18** | 배포는 **P2(수신) → P3(송신)** | 손님이 klow.kr 의 없는 `/handoff` 에서 **404** | — |
 | **F21** | 복귀 host(`o`)는 **`/v1/storefront/resolve` 로 재검증**한 뒤에만 저장하고, **스킴은 클라가 `https://` 로 조립** | 결제 성공 화면의 "계속 쇼핑" 이 **임의 사이트로 보내는 링크**가 된다(오픈 리다이렉트) | P2 |
 | **F22** | `setBrandReturn(…?purchased=)` 갱신을 `removeProducts` 와 **같은 블록**에 둔다 | 한쪽만 도는 조합이 생겨 **브랜드 도메인 카트가 정리되지 않는다** | P2 |
+| **F23** | 복원은 **`session.ready` 이후**에 하고, 로그인 상태면 **`api.cart.merge(lines, removedIds)`** 경로로 태운다 | `SessionSyncMount` 와 경합해 **복원한 카트가 덮이거나 서버에 영영 안 올라간다.** 국가 폐기분도 서버 카트에서 되살아난다 | P2 |
+| **F24** | **쿠키가 필요한 경로는 전부 klow.kr** — 특히 **`/seed/*`**(예약 슬러그라 pass-through 된다) | 시딩 claim 이 `klow_order` 게스트 쿠키를 못 받아 **예약 재사용·결제가 조용히 깨진다** | P3 |
 | **F19** | `origin-exempt.spec.ts` 가 **무변경으로 통과** | 통과하지 않으면 설계가 틀어진 것 | P1 |
 | **F20** | Vercel 추가 후 DB insert 실패 시 **보상 제거** + 해지 도메인 **정리 경로** | Vercel 쿼터 누수 · orphan 누적 | P1 |
 
@@ -761,7 +829,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | V11 | **`RESERVED_BRAND_SLUGS` 에 실제 라우트인 `customer-center`·`track`·`seed` 가 빠져 있다** | 이미 존재하는 잠재 버그이고, 미들웨어가 이 목록을 재사용하므로 P0 에서 먼저 고친다 | §1-1 |
 | V12 | **cron 실제 개수는 8개** (워크스페이스 `CLAUDE.md` 의 "6개"는 낡았다) | 새 cron 추가 시 기대값은 **8 → 9** | F17 |
 | V13 | **klow.kr ↔ api.klow.kr 은 eTLD+1 이 같아 브라우저에게 same-site** | 지금 세션이 정상인 이유이자, **klow.kr 흐름을 한 줄도 안 건드려도 되는 근거** | `flow.md` §1-1 |
-| V14 | **klow_web 클라 `StorefrontVisitSource` 는 `direct \| promotion` 둘뿐** (서버 enum 에는 `onsite` 도 있지만 클라가 보내지 않는다) | 유입 경로에 `custom_domain` 을 추가할 때 클라·서버 양쪽을 봐야 한다 | §2-9 |
+| V14 | **klow_web 클라 `StorefrontVisitSource` 는 `direct \| promotion` 둘뿐** (서버 enum 에는 `onsite` 도 있지만 클라가 보내지 않는다) | 커스텀 도메인 방문도 이 둘로만 기록한다 — **값을 늘리지 않는 근거** | §2-9 |
 | V15 | **`[influencer]/page.tsx` 는 프로모션 code 가 null 이어도 `notFound()` 하지 않는다** | 미들웨어 `/{seg}` 규칙의 결과가 404 가 아니라 **자기 브랜드관**이다. 그래서 P0-5 의 `source` 분기가 필요하다 | F11, F12 |
 
 > **승격(§6-1) 전제로만 유효한 사실** — 지금은 쓰지 않는다.
