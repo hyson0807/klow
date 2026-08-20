@@ -19,7 +19,8 @@ klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정
 |---|---|---|
 | 출처 | `BrandDailyStat`(읽기 모델) | `Order`/`OrderItem`(원장) |
 | 모집단 | **그날 브랜드관을 거친 방문자**의 결제만 | **결제 완료된 전 주문** |
-| `/shop`·검색·자사몰 임베드 유입 | 제외 | 포함 |
+| `/shop`·검색 유입 | 제외 | 포함 |
+| 자사몰 임베드·브랜드 상품 링크(`?brand=`) | **포함**(2026-08-20~) | 포함 |
 | 현장(부스 QR) | **제외**(수집 안 함) | 포함 |
 | 환불 주문 | 차감 안 함 | **제외**(`paymentStatus='paid'`) |
 | 날짜 버킷 | 원장 행의 날짜(방문일) | **`paidAt`**(결제일) |
@@ -95,9 +96,32 @@ klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정
 ⚠️ prisma enum 의 `onsite` 값은 **묘비로 남긴다**(Postgres enum 값 제거는 타입 재생성이 필요하고
 과거 행이 그 값을 참조한다).
 
-**브랜드관이 아닌 것**: 자사몰 카페24 임베드 버튼은 `/product/{id}?brand={slug}` = **PDP** 로 간다
-(브랜드관 방문 아님. 단 거기서 "바로구매"를 누르면 `/{slug}` 로 push 되어 그때 `direct` 로 잡힌다).
-시딩 `/seed/{token}` 도 별도 페이지다.
+### 제품 상세(PDP)도 수집 지점이다 (2026-08-20~)
+
+브랜드 피드백 — "브랜드관으로 들어가야만 집계된다". 자사몰 카페24 임베드 버튼이 보내는
+`/product/{id}?brand={slug}` 유입이 방문뿐 아니라 **담기·결제까지** 통째로 빠지고 있었다
+(담기 게이트가 원장 행을 요구하고 `Order.visitorId` 도 방문 비콘이 만든 토큰에 달려 있다).
+
+| klow_web 라우트 | URL | source |
+|---|---|---|
+| `app/product/[id]/page.tsx` | `/product/{id}?brand={slug}` | `direct` (귀속은 **productId**) |
+
+- **게이트는 `?brand=` 유무 하나**다. `/shop`·검색을 둘러보다 스쳐간 조회는 안 센다 — PDP 가
+  국가 선택 모달에 이미 쓰는 조건(`useGuestCountryPrompt(brandMode && …)`)과 **같은 잣대**다.
+- **새 `source` 값을 만들지 않고 `direct` 에 합쳤다** — 그 덕에 prisma enum·`REPORTED_SOURCES`·
+  응답 shape·klow_brand·klow_admin 이 전부 무변경이고 마이그레이션도 없다.
+- ⚠️⚠️ **귀속 키는 `productId` 다. URL 의 슬러그를 쓰면 안 된다** — 주소창에서 바꿀 수 있어
+  `/product/{A사 제품}?brand={B사}` 로 남의 방문수를 부풀리는 통로가 된다. 슬러그는 **클라의
+  게이트로만** 쓰고, 서버가 `Product.brandId` 로 해석한다(담기 비콘과 같은 방식).
+- ⚠️ 브랜드관 그리드의 상품 링크에도 `?brand=` 가 붙어 **임베드 URL 과 형태가 같다**(구별 불가).
+  그래서 klow_web 이 모듈 레벨 `visitedBrands` 로 **그 탭에서 그 브랜드를 아직 안 봤을 때만**
+  PDP 방문을 센다. 순방문(명)은 원장 유니크 제약이라 이 가드가 없어도 정확하고, 가드가 지키는
+  건 `visits`(회)의 의미와 요청 수뿐이다 — 새 탭·새로고침 누수를 더 메우려 들지 말 것.
+- ⚠️ **담기가 방문 비콘을 기다린다**(`pendingVisit`). 딥링크 PDP 는 담기 버튼이 활성화되는
+  순간이 방문 POST 를 쏘는 순간과 거의 같아서, 안 기다리면 **이 기능이 살리려던 바로 그 담기가
+  원장 행보다 먼저 도착해 버려진다**.
+
+**여전히 브랜드관이 아닌 것**: `?brand=` 없는 PDP(`/shop`·검색 경유), 시딩 `/seed/{token}`.
 
 ## 할인 링크 클릭도 이 파이프라인으로 통일했다 (2026-08-19)
 
@@ -153,10 +177,10 @@ B 가 묻히면 안 된다.
   **"방문한 그 사람이 담았는가"를 서버가 알 수 없어 퍼널 자체가 성립하지 않는다**.
 - 서버 쿠키를 기각한 이유: 호스트가 갈리면 SameSite 처리가 필요하고 프리뷰 환경에서 조용히
   무력화된다. 고 QPS 경로마다 `Set-Cookie` 비용도 붙는다.
-- ⚠️ **토큰을 새로 만드는 건 방문 비콘(`getVisitorId`) 하나뿐이고, 담기·결제는 `peekVisitorId`
-  (있으면 읽고 없으면 만들지 않음)를 쓴다.** 브랜드관을 안 거친 손님(`/shop`·검색·임베드 PDP)의
-  담기·결제는 어차피 원장이 없어 서버가 버리므로, 거기서 발급하면 통계에 잡히지도 않는 추적
-  식별자만 남는다.
+- ⚠️ **토큰을 새로 만드는 건 방문 비콘(`getVisitorId`)뿐이고, 담기·결제는 `peekVisitorId`
+  (있으면 읽고 없으면 만들지 않음)를 쓴다.** 방문 비콘은 **두 곳**에서 나간다 — 브랜드관과
+  브랜드 문맥 PDP(2026-08-20~). 그 둘 다 안 거친 손님(`/shop`·검색)의 담기·결제는 어차피
+  원장이 없어 서버가 버리므로, 거기서 발급하면 통계에 잡히지도 않는 추적 식별자만 남는다.
 - klow_web `lib/visitor-id.ts` 는 **저장소를 못 쓰면 null 을 돌려주고 트래킹을 통째로 건너뛴다** —
   매번 임시 id 를 만들면 순방문이 방문수까지 부풀어 오른다(조용히 틀린 숫자보다 조용히 빠진
   숫자가 낫고, `visits` 도 함께 빠지므로 두 지표의 비율은 유지된다).
@@ -173,8 +197,10 @@ B 가 묻히면 안 된다.
 `recordCartAdd` 는 원장에 `(brandId, date, visitorId)` 행이 **이미 있을 때만** 집계하고, 없으면
 아무것도 하지 않는다.
 
-- 이게 "브랜드관에 들어온 사람이 담는가"라는 정의 그 자체다. `/shop`·검색·임베드 PDP 에서 담은
-  건은 방문 모집단 밖이라 빠진다.
+- 이게 "브랜드를 거친 사람이 담는가"라는 정의 그 자체다. `/shop`·검색에서 담은 건은 방문
+  모집단 밖이라 빠진다.
+- ⭐ **자사몰 임베드 PDP 는 2026-08-20 부터 빠지지 않는다** — PDP 방문이 원장 행을 만들면서
+  그 뒤의 담기·결제가 처음으로 집계에 들어온다. **이 변경의 실질 가치가 여기다**(방문수보다).
 - 덕분에 **`uniqueCartAdds ≤ uniqueVisits` 가 구조적으로 보장**돼 전환율에 `min(100, …)` 클램프가
   필요 없다(클램프는 정의가 틀렸다는 신호를 숨길 뿐이다).
 - 귀속 경로는 **그 방문자의 그날 첫 진입 경로**(원장 행의 `source`)다 — 담기 시점의 URL 이 아니다.
@@ -265,8 +291,16 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 `source` 가 `onsite` 라, 나중에 온라인 결제해도 `REPORTED_SOURCES` 필터에 걸려 어느 칸에도 안 뜬다.
 방문·담기가 이미 그렇게 동작하므로 일관되지만, 알고는 있어야 한다.
 
-⚠️ **자사몰(카페24) 임베드는 완전히 밖은 아니다** — 임베드 PDP 에서 "바로구매"를 누르면
-`/{slug}` 로 push 돼 그때 `direct` 방문이 찍히므로, 그 경로의 구매는 `direct` 로 잡힌다.
+⚠️ **자사몰(카페24) 임베드는 2026-08-20 부터 PDP 진입 시점에 이미 잡힌다**(그전엔 "바로구매"로
+`/{slug}` 에 push 됐을 때만 잡혔다).
+
+⚠️ **임베드 PDP 를 먼저 본 사람은 그날 귀속이 `direct` 로 고정된다.** 오전에 임베드 PDP 로 들어와
+원장 행이 `direct` 로 생기면, 오후에 할인 링크로 브랜드관에 와서 결제해도 그 결제는 `promotion`
+이 아니라 `direct` 에 잡힌다(원장 유니크 키에 source 가 없고 "그날 최초 진입 경로"가 기준이다).
+그 결과 **"할인 링크 추이: 클릭 1" 인데 "할인링크 탭: 방문자 0"** 으로 두 화면이 어긋나 보일 수
+있다. 위 부스 사례와 같은 성질이고, 고치려면 마지막-쓰기-승이 필요한데 그건 읽기 모델에 감산을
+요구해 음수 카운터를 만든다(이 모듈이 기각한 방향). 회귀 스펙이 이 동작을 **의도된 손실로
+명문화**해 두었다.
 
 ### ⚠️ `Order.visitorId` 도 원장과 함께 파기한다
 
@@ -278,8 +312,8 @@ klow_web 은 카트가 비면 체크아웃을 못 하고 모든 담기 경로가
 
 ### 신뢰성 한계 (브랜드 안내용)
 
-**이 숫자는 브랜드의 실제 주문 건수보다 적다.** `/shop`·검색·자사몰 임베드 PDP 직행으로 산 주문은
-방문 모집단 밖이고, 이틀 이상 지난 방문의 결제도 빠진다. **정산·주문 화면의 숫자와 다른 게 정상**
+**이 숫자는 브랜드의 실제 주문 건수보다 적다.** `/shop`·검색 직행으로 산 주문은 방문 모집단
+밖이고, 이틀 이상 지난 방문의 결제도 빠진다(자사몰 임베드 PDP 는 2026-08-20 부터 포함). **정산·주문 화면의 숫자와 다른 게 정상**
 이며, 그쪽이 매출의 정본이다.
 
 ## 방문 국가 (2026-08-20)
@@ -404,9 +438,14 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 
 | Method | Path | body | throttle |
 |---|---|---|---|
-| POST | `/v1/storefront-stats/track/visit` | `{ brandId, visitorId, source }` | 120회/분 |
+| POST | `/v1/storefront-stats/track/visit` | `{ brandId ⊕ productId, visitorId, source }` | 120회/분 |
 | POST | `/v1/storefront-stats/track/cart-add` | `{ productId, visitorId }` | 60회/분 |
-| POST | `/v1/storefront-stats/track/country` | `{ brandId, visitorId, countryCode }` | 120회/분 |
+| POST | `/v1/storefront-stats/track/country` | `{ brandId ⊕ productId, visitorId, countryCode }` | 120회/분 |
+
+> ⚠️ `brandId` 와 `productId` 는 **정확히 하나만** 온다(zod `superRefine`). 브랜드관은 전자,
+> 제품 상세는 후자다 — PDP 는 brandId 를 알 수 없다(`StrippedPricingKeys`).
+> `z.union` 이 아니라 `superRefine` 인 이유: union 은 400 바디에 중첩 `unionErrors` 를 통째로
+> 실어 보내지만 이건 issue 1개다.
 
 > `track/visit` 은 `countryCode?` 를 **함께** 받는다(마운트 시점에 이미 고른 손님 — 흔한 경로에
 > 요청을 더 만들지 않는다). `track/country` 는 **방문 뒤에 고른 경우** 전용이다.
@@ -600,7 +639,7 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 
 | 앱 | 파일 |
 |---|---|
-| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 — 방문/국가 **각각의 Set**) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
+| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 **Set 3개** — `sentVisits`/`visitedBrands`/`sentCountries`, + 담기가 기다리는 `pendingVisit`) · `app/product/[id]/page.tsx`(PDP 방문·국가 effect) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
 | klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
 | klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
 
@@ -663,6 +702,22 @@ klow_web 이 먼저였던 건 할인 링크 클릭 유실 때문이고 여기엔
 흔적 없이 사라진다.
 마이그레이션은 **nullable ADD COLUMN + CREATE TABLE = 추가 전용 → 롤링 안전 · 백필 없음**,
 **cron 개수 불변(8)**, 라우트 +1(294).
+
+### PDP 집계 배포 (2026-08-20) — **klow_server → klow_web**
+
+| 순서 | 그 창에서 벌어지는 일 |
+|---|---|
+| klow_server 먼저 ✅ | XOR 스키마·`resolveBrandId` 가 준비된다. 구 klow_web 은 `{brandId,…}` 만 보내고 그건 XOR 을 통과하므로 **동작 100% 동일, 쓰기 변화 0** |
+| klow_web 다음 | 여기부터 PDP 방문·담기·결제가 쌓인다. 소급 불가 |
+| klow_brand / klow_admin | **배포 없음** — 응답 shape·enum·프론트 타입 전부 무변경(`direct` 에 합친 결정의 배당금) |
+
+⚠️ **klow_web 을 먼저 내면 그 창의 PDP 방문이 통째로 유실된다.** 국가 수집 배포 때는 필드
+*추가*라 구 서버가 unknown key 를 조용히 strip 했지만, 여기는 **필수 필드(`brandId`) 제거**라
+구 서버 zod 가 **400** 을 내고 `api.ts` 의 `.catch(devWarn)` 이 프로덕션에서 삼킨다.
+마이그레이션 없음 · cron 8개 불변 · **라우트 수 불변**(새 라우트 없음).
+
+⚠️ **배포 첫날 `uniqueVisits(direct)` 와 `purchases` 가 계단처럼 올라간다**(임베드 유입이 새로
+들어온다). 할인 링크 클릭이 봇 제외로 계단처럼 내려갔던 것과 같은 성질이니 운영팀에 미리 알릴 것.
 
 ## 교차링크
 
