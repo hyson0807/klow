@@ -58,7 +58,7 @@
 | PATCH  | `/admin/orders/:id/status`    | 주문 상태 변경 — `{ status: 'pending'\|'processing'\|'shipped'\|'completed' }`. 역행·`cancelled` 주문 변경은 400 |
 | PATCH  | `/admin/orders/:id/reconcile-payment` | **결제 재확인** — 미결제로 남은 주문을 Eximbay 에 직접 조회(`/v1/payments/retrieve`, `key_field='order_id'`)해 실제 승인(`SALE`/`AUTH`)이면 `markPaid` 로 확정. 응답 `{ result: 'paid'\|'not_paid'\|'not_found'\|'mismatch', order }` (확정 성공 시에만 `order` 동봉 — 어드민이 재조회하지 않게, `refund` 와 같은 관례). 15분 주기 `payment-reconcile` 크론과 **같은 경로**이고 운영자가 즉시 처리하기 위한 수동 트리거다. ⚠️ **임의로 `paid` 를 찍는 엔드포인트가 아니다** — 반드시 PG 재조회를 거치고 금액이 어긋나면(`mismatch`) 전이하지 않는다. 손으로 결제완료를 찍게 하면 미결제 주문이 정산에 섞인다 |
 | PATCH  | `/admin/orders/:id/refund`    | 환불/취소 처리 — `{ reason: 1~500자 }`. `paid` 면 Eximbay cancel 호출 후 `refunded`, `pending` 이면 결제 없이 `cancelled`. 이미 취소·환불·실패 주문은 400 |
-| PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN·MX→세금식별코드)는 주문의 기존 `countryCode` 로 `assertEfsCountryFields` 가 강제(세금식별코드는 형식까지 검사). 발급된 송장 반영은 `POST /admin/shipments/:id/change-cnee` 별도 호출 |
+| PATCH  | `/admin/orders/:id/recipient` | 수화인(배송) 정보 수정 — EFS 송장 인쇄 필드만(`fullName`/`phone`/`email`/주소/`state`/영문명·영문주소/`recipientTaxId`). 국가·품목·금액은 불변이고, 국가별 필수(US→state, JP→영문, CN·MX→세금식별코드)는 주문의 기존 `countryCode` 로 `assertEfsCountryFields` 가 강제(세금식별코드는 형식까지 검사). 발급된 송장 반영은 `POST /admin/shipments/:id/cancel-reissue`(취소+재발급, 송장번호가 바뀐다) 별도 호출 — EFS `ChangeCnee` 의 city 칸이 좁아 US "City, State" 를 못 담아 우회하는 것이라 `change-cnee` 라우트는 존재하지 않는다 |
 
 ### 목록 쿼리 (`OrderAdminListQueryInput`)
 
