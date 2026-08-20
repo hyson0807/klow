@@ -119,7 +119,12 @@ klow_brand `/stats` 가 둘을 같이 그리므로, 숫자가 안 맞는 게 정
   건 `visits`(회)의 의미와 요청 수뿐이다 — 새 탭·새로고침 누수를 더 메우려 들지 말 것.
 - ⚠️ **담기가 방문 비콘을 기다린다**(`pendingVisit`). 딥링크 PDP 는 담기 버튼이 활성화되는
   순간이 방문 POST 를 쏘는 순간과 거의 같아서, 안 기다리면 **이 기능이 살리려던 바로 그 담기가
-  원장 행보다 먼저 도착해 버려진다**.
+  원장 행보다 먼저 도착해 버려진다**. **국가 비콘도 같은 이유로 같이 기다린다.**
+- ⚠️⚠️ **국가 dedupe 키를 `productId` 로 되돌리지 말 것.** 그 축이면 `trackStorefrontProductVisit`
+  이 "브랜드관에서 국가를 고른 뒤 제품 5개 클릭 = 헛 POST 5개"를 막으려고 게이트 **앞**에서
+  키를 찍게 되고, 그 순간 **국가를 나중에 고른 딥링크 PDP 손님의 국가가 영원히 전송되지
+  않는다**(2026-08-20~21 실제 버그 — 임베드 유입 국가가 100% '미상'이었다). 축은 브랜드
+  문맥이어야 하고, 표시는 실제 전송과 같은 경로에서만 한다("프론트 배선" 절).
 
 **여전히 브랜드관이 아닌 것**: `?brand=` 없는 PDP(`/shop`·검색 경유), 시딩 `/seed/{token}`.
 
@@ -639,13 +644,26 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 
 | 앱 | 파일 |
 |---|---|
-| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 **Set 3개** — `sentVisits`/`visitedBrands`/`sentCountries`, + 담기가 기다리는 `pendingVisit`) · `app/product/[id]/page.tsx`(PDP 방문·국가 effect) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
+| klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 **Set 3개** — `sentVisits`/`visitedBrands`/`sentCountries`, + **담기·국가**가 기다리는 `pendingVisit`) · `app/product/[id]/page.tsx`(PDP 방문·국가 effect) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
 | klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
 | klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
 
 - ⚠️ 방문 중복 가드는 **모듈 레벨 `Set`** 이다 — 컴포넌트 `useRef` 로는 StrictMode dev 이중 effect 는
   막아도 `?mode=onsite` 토글·view 전환 **remount** 에서 뚫린다. 키에 `source` 를 넣어 같은 탭에서
   경로를 바꿔 재진입한 것은 각각 잡히게 한다(그게 실제로 다른 유입이다).
+- ⚠️ **`sentCountries` 의 축은 "브랜드 문맥 × 국가"다 — 제품이 아니다.** 원장 키가
+  `(brandId, date, visitorId)` 이고 국가가 첫-쓰기-승이라, 국가 비콘이 의미를 갖는 단위는
+  **탭 × 브랜드 하나**다. 그래서 키가 두 별칭(`id:{brandId}:{cc}` / `slug:{slug}:{cc}`)이고
+  브랜드관 비콘이 둘 다 찍는다 — 이어지는 제품 클릭(slug 만 아는 PDP)이 헛 POST 를 안 쏘게.
+  ⚠️⚠️ **표시는 반드시 실제 전송과 같은 경로에서만 한다**(`markCountrySent`). 2026-08-20~21
+  사이 `trackStorefrontProductVisit` 이 `visitedBrands` 게이트 **앞**에서 키를 찍는 바람에,
+  국가를 나중에 고른 딥링크 PDP 손님(= 자사몰 임베드 유입 = 이 기능의 주 대상)의 국가가
+  **한 번도 서버에 도달하지 못하고** 전부 '미상'으로 남았다. 그 최적화를 되살리려고 시드를
+  게이트 위로 올리지 말 것 — 지금은 slug 별칭이 같은 일을 한다.
+- ⚠️ **국가 비콘도 `pendingVisit` 을 기다린다**(담기와 같은 `afterVisit`). 국가 POST 가 방문
+  POST 를 앞지르면 서버가 원장 행을 못 찾아 버리는데 클라는 이미 dedupe 에 찍어 **재시도가
+  없다**. 로그인 손님에서 실제로 난다 — `useSessionSync` 가 `/v1/auth/me` 직후 `syncCountry`
+  를 호출해 마운트 직후에 `country` 가 채워진다.
 - ⚠️ 담기 초크포인트는 `useCartStore.addToCart` 의 `addQty <= 0` early return **바로 다음**이다.
   그 가드가 "눌렀지만 브랜드당 5개 상한에 막혀 아무 일도 안 일어난 경우"를 자동으로 제외해 준다.
   `updateQuantity`(카트 `+`)·`replaceCart`(로그인 머지)는 이 함수를 타지 않아 유령 이벤트가 없다.
