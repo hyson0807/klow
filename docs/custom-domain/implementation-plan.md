@@ -17,7 +17,7 @@
 |---|---|---|---|
 | **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **2026-08-21 완료** | web, server, brand | 없음 (독립 배포 가능) |
 | **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **2026-08-21 완료 · ⚠️ 미배포** | server | 없음 (아직 서빙 안 함) |
-| **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
+| **P2** ✅ | **핸드오프 수신부**(klow.kr `/handoff`) — **2026-08-21 완료 · ⚠️ 미배포** | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
 | **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
 | **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
 | **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
@@ -505,7 +505,73 @@ promotion 을 잃으면 브랜드가 "이 링크에 할인을 계속 줄지"를 
 
 ---
 
-## 3. P2 — 핸드오프 수신부 (klow.kr)
+## 3. P2 — 핸드오프 수신부 (klow.kr) ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+
+코드는 `klow_web` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
+**어긋난 전제만 이 절에 기록한다.**
+
+### 착수 중 어긋난 전제 (P3 이후가 믿어야 할 것)
+
+| # | 계획이 가정한 것 | 실제 | 결과 |
+|---|---|---|---|
+| 1 | §3-3 이 "페이지 안에서 ①→②③④ 순서를 지키면" 복원이 안전하다 | ⚠️⚠️ **안 된다.** `SessionSyncMount` 은 `layout.tsx:77` 에서 **`{children}` 앞 형제**라 **effect 가 페이지보다 먼저** 돈다 — `syncServerProfileToStore(user)` 가 동기적으로 `syncCountry(프로필 국가)` 를 때리고(그래서 2단계가 비교하는 "기존 국가"부터 오염된다), 옛 카트로 `merge` 를 동시에 쏘며, `clearRemovedIds()` 가 핸드오프가 쓸 묘비를 지운다 | `useSessionSync` 안에 **`usePathname() !== '/handoff'` 스위치**. `/handoff` 가 같은 일(프로필 국가 업로드 → merge → replaceCart)을 직접 한다. ⚠️ "이미 동기화됨" 플래그는 **일부러 안 뒀다** — `/checkout` 에서 훅이 한 번 도는 게 no-op(`sameCart` early-return)이면서 핸드오프 merge 실패 시 **자가치유**가 된다 |
+| 2 | "수량 **max-merge**" | ⚠️ `cart.service.ts:221` 이 `quantity: { set }` — **클라 승**이다. `Math.max`(:212)는 payload 내부 중복 제거용일 뿐 | 핸드오프 payload 가 그 id 들의 수량을 확정한다. 대신 3번이 필요해진다 |
+| 3 | (언급 없음) | ⚠️ **`PUT /v1/cart/merge` 는 브랜드당 5개 상한을 검사하지 않는다**(상한은 `cart.upsert`:126 과 **주문 생성** `orders.service.ts:414` 에만 있다) | 합친 뒤 `brandRemainingCapacity` 로 **클램프**. 안 하면 손님이 결제 버튼에서 raw 400 을 본다 |
+| 4 | §3-3 2단계 "버릴 id 들을 `removedIds` 로" | ⚠️ 스토어에 **이미 쌓여 있던 묘비**를 언급하지 않는다 | `기존 removedIds ∪ 폐기분` **합집합**. 살아남은 라인은 목록에서 뺀다(카트에 있는 상품의 묘비는 모순) |
+| 5 | 비로그인 = `replaceCart(merged, null)` | ⚠️ 같은 §3-3 트랩의 "`syncedUserId` 보존"과 **자기모순**이다(쿠키 만료 직후에 실제로 갈린다) | **기존 값 보존**(`prevSyncedUserId`) |
+| 6 | V2 "`repriceCartForCountry` 재사용" | ⚠️ 그 함수는 **이미 있는 라인을 다시 매기는** 것이라 `[productId,qty]` 로 라인을 못 만든다(`repriceCart` 가 기존 cart 를 map 한다) | per-line 조회를 **인덱스 보존** `fetchCartLines()` 로 추출해 둘이 공유 |
+| 7 | §3-5 i18n | ✅ `GOOGLE_TRANSLATE_API_KEY` 가 `klow_server/.env` 에 실재 → `npm run i18n:fill` 로 6개 로케일 생성 | ⚠️⚠️ **fill 은 값이 en 과 같은 로케일 문자열을 "누락"으로 보고 다시 기계번역한다** — `labels.category` 의 큐레이션 값 3개(`id.mist`=Mist / `vi.toner`=Toner / `vi.serum`=Serum)가 `Kabut`·`Mực toner`·`Huyết thanh`(혈청)로 **되돌아갔다.** 손으로 복구했다. **다음에 fill 을 돌리면 그 3개를 반드시 다시 확인할 것** |
+| 8 | 토스트 문구가 `useT` 로 충분하다 | ⚠️ 토스트는 effect 안에서 **한 번만** 만들어지는데 그 클로저의 `t` 는 **첫 렌더**의 것이라 persist rehydration 전 locale(en)로 굳는다 — 일본어 화면에 영어 토스트가 떴다(실측) | 토스트만 `translate(localeForCountry(getState().country), path)` 로 **부르는 시점에** 번역 |
+
+### 이 PR 이 실제로 남긴 것
+
+- 신규: `lib/handoff.ts`(`encode/decodeHandoff` + 오리진을 건너는 상수 `HANDOFF_PATH`·
+  `HANDOFF_PARAM`·`PURCHASED_PARAM`) · `lib/host.ts`(`isCustomDomain`·`isExternalHref`) ·
+  `lib/cart-sync.ts`(`mergeCartToServer`) · `app/handoff/page.tsx` · `i18n/locales/en/handoff.ts`
+- 수정: `hooks/useSessionSync.ts`(경로 스위치 + 전송부를 `cart-sync` 로 위임) ·
+  `store/useCartStore.ts`(`addRemovedIds`) · `lib/cart-reprice.ts`(`fetchCartLines` 추출) ·
+  `lib/visitor-id.ts`(`VISITOR_ID_RE`·`adoptVisitorId`·`visitorIdForOrder`) ·
+  `lib/locale.ts`(`currentLocale`) · `lib/api.ts`(`storefront.resolve`) ·
+  `lib/brandReturn.ts`(`appendPurchasedToBrandReturn`) ·
+  `checkout/{page,redirect/page,_components/SuccessView,preview/page}.tsx`
+- **서버·brand·admin 무변경. 마이그레이션 없음.**
+
+⚠️ **한 벌만 두기로 한 것 3가지** — 나중에 두 번째 사본을 만들지 말 것:
+① **서버 카트 머지 절차**(`lib/cart-sync.ts`) — "묘비는 서버가 삭제를 확인했을 때만 비운다"가
+`useSessionSync` 와 `/handoff` 두 곳에 흩어지면 한쪽만 고쳐진다.
+② **"남의 오리진인가"**(`lib/host.ts isExternalHref`) — `?purchased=` 를 붙일지와 성공 화면을
+`<Link>` 로 그릴지가 같은 값을 두 규칙(`startsWith('https://')` vs host 비교)으로 보고 있었다.
+③ **주문이 쓸 방문자 토큰**(`visitor-id.ts visitorIdForOrder`) — `handoffVisitorId` 를 export 하지
+않아 담기 비콘 같은 데 끼워 넣는 두 번째 호출부가 **구조적으로** 불가능하다.
+
+**검증 결과**: `type-check`(i18n 파리티 포함) · `eslint`(신규 경고 0) · `build` 통과.
+순수 함수 24케이스 수동 검증(라운드트립·8KB/100라인 상한·`o` 의 `//evil.com`·`javascript:`·
+`host:port`·`host/path` 거부·dedupe). 실측 E2E(로컬 dev+prod, 실 DB): 게스트 국가변경 폐기 ·
+브랜드 상한 클램프(4+3 → 5) · 로그인 경로(`PATCH /v1/auth/me` 1회 + `merge` 1회, `/checkout`
+재진입에도 **국가가 안 되돌아감**) · **담기 비콘 0건** · `o=example.com` → `brandReturn` 미기록 ·
+`?purchased=` 가 절대 URL 에만 붙고 상대경로엔 안 붙음 · 게스트→로그인 머지 무회귀.
+
+⚠️ **dev 에서 `/checkout/success` 의 "계속 쇼핑" 버튼이 안 보이는 건 이 PR 과 무관한 기존
+StrictMode 아티팩트다** — 그 페이지 effect 가 두 번 돌면서 두 번째에 이미 비운
+`readBrandReturn()` 을 읽어 state 를 `null` 로 덮는다. 프로덕션 빌드에서는 정상이다(실측).
+
+### P3 로 넘기는 메모
+
+- ⚠️ 송신부는 `encodeHandoff` 를 그대로 쓴다. **`o` 는 `location.host`(소문자 host 만)** 여야 한다 —
+  디코더가 대문자·포트·경로를 전부 거부한다(fail-closed).
+- ⚠️ `?purchased=` 값은 `URLSearchParams` 가 콤마를 `%2C` 로 인코딩한다. 받는 쪽은
+  `searchParams.get(PURCHASED_PARAM)` 로 읽으면 자동 디코드되므로 `.split(',')` 이면 된다.
+  **파라미터 이름은 `lib/handoff.ts` 의 `PURCHASED_PARAM` 을 import 할 것** — 오리진을 건너는
+  계약이라 문자열을 양쪽에 흩어 두면 갈린다.
+- ⚠️ `isCustomDomain()` 은 **부정형**이다(본 도메인이 아니면 전부 커스텀). 본 도메인 판정은
+  **존 접미사 규칙**(`host === apex || host.endsWith('.'+apex)`)이라 `www.`·`staging.klow.kr` 같은
+  건 자동으로 덮인다 — 서버 `domain-host.ts` 가 `klow.kr`·`*.klow.kr` 을 커스텀 도메인으로
+  **거부**하는 것과 정확히 맞물린다. 그 밖의 호스트(`*.vercel.app`·localhost)만 목록이다.
+  ⚠️ P3 미들웨어는 어차피 호스트를 분류하므로, 그 판정을 아래로 내려보내고 이 함수를 그 값을
+  읽는 쪽으로 줄이는 편이 낫다(지금은 두 번째 분류기가 될 수 있다).
+- 커스텀 도메인 쪽 `?purchased=` **수신**부(§4-5)는 아직 없다.
+
+---
 
 커스텀 도메인은 **브라우징 + 담기까지**만 맡고, **로그인·결제·주문조회는 `klow.kr`** 이 맡는다.
 그 경계를 건너는 순간 **오리진이 바뀌어 `localStorage` 가 따라오지 않는다.** 이 PR 은 klow.kr 쪽
