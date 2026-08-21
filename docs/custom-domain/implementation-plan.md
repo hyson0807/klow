@@ -16,7 +16,7 @@
 | PR | 내용 | 레포 | 이 단계에서 사용자에게 보이는 것 |
 |---|---|---|---|
 | **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **2026-08-21 완료** | web, server, brand | 없음 (독립 배포 가능) |
-| **P1** | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 | server | 없음 (아직 서빙 안 함) |
+| **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **2026-08-21 완료 · ⚠️ 미배포** | server | 없음 (아직 서빙 안 함) |
 | **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
 | **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
 | **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
@@ -104,7 +104,62 @@ klow_web 이 못 열거나 그 반대가 된다.
 
 ---
 
-## 2. P1 — 서버 기반
+## 2. P1 — 서버 기반 ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+
+코드는 `klow_server` `develop/custom-domain` 에 있고 **배포는 P0 과 같은 창에서** 한다(§7).
+아래 절들은 착수 시점의 설계 그대로이고, **어긋난 전제만 이 절에 기록한다.**
+
+### 착수 중 어긋난 전제 (다음 PR 이 믿어야 할 것)
+
+| # | 계획이 가정한 것 | 실제 | 결과 |
+|---|---|---|---|
+| 1 | §2-4 가 "`PUBLIC_BRAND_WHERE` 와 구독 게이트를 함께 태운다"고 적었다 | ⚠️⚠️ **`PUBLIC_BRAND_WHERE` 에는 구독 게이트가 아예 없다** — status `notIn [rejected, withdrawal_pending, withdrawn]` 뿐이라 `pending`·`draft` 도 통과한다. 구독 게이트는 **제품 쪽에만** 있었다(`product-selects.ts` `isPurchasable()`) | 브랜드 루트 짝 **`canServeStorefront()`** 을 `brands/brand-selects.ts` 에 신설. resolve 와 오리진 스냅샷이 둘 다 이걸 탄다 |
+| 2 | §2-4 가 resolve 에 `/embed/*` 식 공개 표면 규칙을 암시 | **CORS 대상이 아니다** — 부르는 쪽이 브라우저가 아니라 klow_web 미들웨어(서버 사이드)다 | `ACAO:*` 수동 배선을 **복사하지 않았다**. `Cache-Control` 만 세팅 |
+| 3 | §2-3 이 `@vercel/sdk` 를 쓴다고 적었다 | 실제로 필요한 값(`rank` 배열 권장값 · 409 의 `error.domain.projectId`)이 전부 raw 응답이고 SDK 를 써도 에러를 다시 벗겨야 한다 | **native fetch**(`instagram.client.ts` 관례). 새 의존성 0 |
+| 4 | §2-5 가 "`credentials:true` 설정 자체는 유지"라고 적었다 | F8(커스텀 도메인은 `credentials:'omit'`)이 klow_web 규율에만 걸려 있는데 klow_web 엔 테스트 인프라가 없다(V10) | `enableCors` 를 **delegate** 로 바꿔 **오리진별로 credentials 를 가른다** — 커스텀 도메인은 `false` 라 F8 이 서버쪽에서 fail-closed 다 |
+| 5 | `Brand.slug` 이 항상 있다고 암묵 가정 | **nullable** 이다 — 도메인은 붙었는데 슬러그가 없는 브랜드가 성립한다 | `slug === null` 이면 resolve 가 미해석으로 내린다(스펙이 잠금) |
+| 6 | §2-3 이 API 버전을 add v10 / config v6 만 실측 | **5개 전부 실측 확정**(2026-08-21, 스테이징 프로젝트) | add `v10` / get·verify·remove `v9` / config `v6`. 409·400·404 본문 모양도 재확인 |
+
+### 이 PR 이 실제로 남긴 것
+
+- 마이그레이션 `20260821052240_add_brand_domains` — `CREATE TYPE ×2 + CREATE TABLE` (롤링 안전 · 백필 없음)
+- 모듈 `src/modules/brand-domains/` 7파일 + `__tests__/` 5스펙 + `harness.ts`
+- `common/validation/brand-domain.ts`(+배럴) · `brands/brand-selects.ts` 의 `canServeStorefront`/`STOREFRONT_BRAND_SELECT`
+- `main.ts` Origin 술어 + CORS delegate · `app.module.ts` 등록 · `.env.example` 4개 · `test/app.e2e-spec.ts` cron 9
+- `common/origin-policy.ts`(+스펙) · `brands/brand-selects.ts` 가 브랜드 축 게이트의 단일 소유자
+- 문서: `docs/server/modules/brand-domains.md` + 색인 · 워크스페이스 `CLAUDE.md` Key Facts + cron 9
+
+⚠️ 착수 후 `/simplify` 리뷰에서 **실제 결함 3개**가 더 나와 함께 고쳤다:
+① `cleanupOrphans` 의 후보 조건이 서빙 게이트의 부정이 아니어서 `pending`·`rejected`·
+`withdrawal_pending` 브랜드가 정리 대상에서 통째로 빠져 있었다(서빙은 막혔는데 Vercel 등록만
+영원히 남는다) → 브랜드 축 규칙을 `brands/brand-selects.ts` 한 곳이 소유하게 하고 Prisma 짝
+(`BRAND_SERVICEABLE_WHERE` / `BRAND_NOT_SERVICEABLE_WHERE`)을 신설, `product-selects.ts` 도
+그걸 호출하게 바꿔 **네 벌이던 규칙을 한 벌로** 줄였다.
+② `resolveHost` 가 정규화를 손으로 다시 써 **IDNA 변환이 빠져 있었다**(한글 도메인이 저장은
+punycode, 조회는 U-label) → `canonicalHost()` 를 쓰기·읽기가 공유한다.
+③ 재확인 실패 문구가 www 전용 카피를 재사용해 `shop.brand.com` 같은 호스트에도 "www 주소가…"
+가 붙었다 → `pairErrorMessage` / `reconnectErrorMessage` 로 분리.
+
+그 밖에 오리진 분류·정책을 **`common/origin-policy.ts`** 로 빼서 스펙으로 잠갔고
+(`origin-exempt.ts` 선례 — 익명 콜백 안에서는 테스트가 닿지 않는다), 7일 폴링 포기 규칙도
+순수 함수 `shouldGiveUpPending()` 으로 빼 스펙을 붙였다.
+
+**검증 3층 결과**: typecheck(2 tsconfig) 통과 · `test:e2e` 2/2(cron 9) · 전체 unit **659/659** · **라우트 298 → 303**.
+실측 확인: resolve 200(primary→slug / www→apex host / Host 헤더 형태 흡수) · 브랜드 도메인 오리진에
+`ACAO` 는 붙고 **`ACAC` 는 안 붙음** · redirect 롤 호스트는 오리진 불허 · 비콘 POST 가 브랜드 도메인에서
+200, 임의 오리진에서 403 · `/embed/v1.js` 는 여전히 `ACAO:*` · `origin-exempt.spec.ts` 무변경 통과.
+
+### P2 이후로 넘기는 메모
+
+- ⚠️ 로컬 `klow_server/.env` 의 `VERCEL_PROJECT_ID` 는 **스테이징(`klow-web-staging`)** 을 가리킨다(확인 완료).
+  운영 Railway 에는 **운영 프로젝트 id** 를 따로 넣어야 한다.
+- ⚠️ `redirectTo` 는 **호스트만** 담는다 — P3 미들웨어가 `https://{host}{pathname}{search}` 로 조립할 것.
+- ⚠️ 미들웨어 양성 캐시는 **60초를 넘기지 말 것**. resolve 응답 캐시 60초와 합쳐 §2-4 가 수용한
+  "반영 지연 최대 2분"이 그 합이다.
+- 실도메인 E2E(§8-2 A-1·1-1)는 **아직 안 했다** — 스테이징 Vercel 프로젝트에 테스트 도메인을
+  붙여서 P3 와 함께 한다. ⚠️ 그때 Vercel 대시보드에서 그 도메인에 **"Redirect to primary domain" 이
+  붙지 않았는지** 확인할 것(붙으면 기능이 통째로 죽는다).
+
 
 ### 2-1. Prisma 모델
 
@@ -961,6 +1016,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | `modules/brand-domains/__tests__/domain-host.spec.ts` **신규** | 정규화(대문자·trailing dot·스킴·포트 제거) · 거부 목록(`klow.kr`/`*.klow.kr`/`*.vercel.app`/IP 리터럴/localhost/253자·63자 초과) · punycode · **`brandA.co.kr` 을 코드가 apex 로 판정하지 않고 Vercel `apexName` 에 위임함** |
 | `modules/brand-domains/__tests__/verified-origin.spec.ts` **신규** | `active` 만 통과 / `https://` 만 / **와일드카드·서브도메인 확장 없이 정확 일치** / 삭제 즉시 반영 / 빈 스냅샷에서 false. **여기가 느슨하면 전 브랜드 도메인이 CSRF 우회로가 된다** |
 | `modules/brand-domains/__tests__/domain-status.spec.ts` **신규** | **F29** — `verified:true` + `misconfigured:true` 조합이 `active` 가 **되지 않음** / 둘 다 만족할 때만 active / `verification` 있으면 `verifying` |
+| `modules/brand-domains/__tests__/resolve-host.spec.ts` **신규** | **F13** — 구독 비-active·탈퇴·미승인 브랜드 미해석 / `Brand.slug` 이 null 이면 미해석 / www redirect 파생과 **오픈 리다이렉트 차단**(짝 primary 검증) / 미등록 host 는 404 가 아니라 200 |
 | `modules/brand-domains/__tests__/domain-pairing.spec.ts` **신규** | apex 입력 → `www` redirect 동반 생성 / **서브도메인 입력 → 페어 없음**(F28) / 페어 실패가 primary 를 롤백하지 않음 / primary 삭제 시 페어 동반 삭제 |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경으로 통과해야 한다** — 통과 안 하면 설계가 틀어진 것 |
 
