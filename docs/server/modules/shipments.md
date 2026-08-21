@@ -70,6 +70,7 @@
 | POST   | `/admin/shipments`                                    | 주문의 모든 미발급 브랜드 그룹 일괄 발급                          |
 | POST   | `/admin/shipments/order/:orderId/brand/:brandId`      | 단일 (orderId, brandId) 그룹 발급                                |
 | POST   | `/admin/shipments/:id/retry`                          | failed/cancelled 송장 그룹 재발급                                |
+| PATCH  | `/admin/shipments/:id/efs-fields`                     | EFS 회신 4개 값 수동 수정 (송장번호·로컬 캐리어·로컬 송장번호·서비스 타입) |
 | POST   | `/admin/shipments/:id/cancel`                         | EFS 송장 실제 취소(changeShipment Cancel) → cancelled (일반주문은 shipped→processing 복귀, 시딩은 주문·링크까지 완전 취소, EFS 거부 시 502) |
 | POST   | `/admin/shipments/:id/cancel-reissue`                 | EFS 송장 취소 + 같은 그룹 즉시 재발급(수화인 수정 반영, 새 송장번호) |
 | POST   | `/admin/shipments/:id/refresh-tracking`               | 단건 EFS 추적 갱신 (30s throttle)                                |
@@ -84,6 +85,29 @@
 > ⚠️ 이건 "이 발송을 없던 일로" 가 **아니라 실패 기록만 지우는** 것이다. 주문이 아직 유효하면(paid · 취소 아님 · onsite 아님) 그 (orderId, brandId) 그룹은 곧바로 **대기 탭에 다시 뜬다**(`listPendingGroups` 가 송장 행 없는 그룹을 잡는다). 함께 사라지는 건 실패 사유(`errorMessage`·`responseRaw`·`requestPayload`)와 자동 재시도 예약(`nextRetryAt`)뿐이라, 원인 추적 중이라면 삭제 전에 상세를 봐야 한다(서버 로그에 `admin <id> deleted N/M failed shipment(s)` 경고 1줄 + `AdminAuditLog`).
 >
 > **`AdminGuard`** 다(super 아님) — 실패 큐를 실제로 처리하는 건 operator 이고, 여기서 지울 수 있는 건 EFS 에 존재하지 않는 기록뿐이다. 라우트가 `:id` 가 아니라 bulk 인 이유는 실패가 배포 사고·EFS 장애처럼 **한 번에 여러 건**으로 생기고 정리도 그 단위이기 때문(`refresh-tracking` bulk 와 같은 모양). 행 버튼은 `ids` 1개를 보낸다. 회귀 잠금은 `__tests__/shipment-delete-failed.spec.ts`(where 절에 status 조건 · 중복 id 제거 · skipped 보고).
+
+### EFS 회신 4개 값 수동 수정 (`PATCH :id/efs-fields`, 2026-08-21)
+
+어드민 송장 상세의 **EFS 회신** 카드(`klow_admin` `/shipments/[id]`)가 읽기 전용이라, EFS 가 **안 준 값**(라스트마일 번호 미배정)이나 **잘못 준 값**을 운영자가 메일·전화로 확인해도 DB 를 직접 고치는 수밖에 없었다. 카드에 편집 모드 + **변경 전/후 비교 확인 모달**을 붙이고 이 라우트를 뒀다. `AdminGuard`(super 아님 — 같은 페이지의 취소·재발급과 같은 급)이고 **스키마·마이그레이션 변경 없음**.
+
+⚠️ **이 4개 값은 표시용이 아니다.** 무엇이 따라 움직이는지가 이 기능의 전부다:
+
+| 필드 | 소비자 | 잘못 넣으면 |
+|---|---|---|
+| `efsTrackingNumber` | 추적 폴링·추적 cron·**EFS 취소(`{번호}\|Cancel` 로 그대로 전송)**·efs-billing **매칭 키(HAWB)**·공개 `/track` | **남의 소포를 추적**해 `latestStatus*`·`trackingEvents` 를 덮고 픽업 이벤트가 `brandConfirmedShippedAt` 을 찍어 `maybeMarkOrderCompleted` 까지 돈다. 취소를 누르면 **남의 송장이 취소**된다 |
+| `localTrackingNumber` | `tracking-url.ts` 가 **번호 포맷**으로 USPS/GOFO/SingPost 판정 | 추적 링크가 엉뚱한 캐리어로 간다 |
+| `localCarrierName` | 공개 `/track` 의 `carrier: trackingCarrier ?? localCarrierName` | **고객 화면**에 잘못된 배송사명 |
+| `efsServiceType` | efs-billing 리포트·엑셀 표시 | 표시만 틀어진다(EFS 로 재전송되지 않는다) |
+
+- ⚠️ **`submitted` 인 송장만** 수정할 수 있다(아니면 400). `pending`/`failed` 는 네 값이 전부 null 이고 재발급이 어차피 EFS 값으로 덮으며, **`cancelled` 송장의 번호를 손으로 되살리면 efs-billing 의 HAWB 매칭이 취소된 건에 다시 붙는다.**
+- ⚠️ **송장번호는 비울 수 없다**(zod 가 nullable 이 아니다). `null` 이 되는 순간 그 송장은 추적 cron·수동 추적 갱신·`cancelAndReissue`·**efs-billing 전체**(`efsTrackingNumber: { not: null }`)에서 조용히 빠지고 공개 `/track` 이 `preparing` 으로 되돌아간다. 틀린 번호는 **교체**로 고친다. 반대로 로컬 2필드는 비울 수 있고, 비우면 아래 backfill 이 다시 열린다.
+- ⚠️ **송장번호는 `.trim().toUpperCase()` 로 저장한다** — efs-billing 이 HAWB 를 `normalizeHawb`(trim+upper)로 비교해 수기 청구행과 dedupe 하므로 소문자로 저장되면 그 dedupe 를 빠져나가 **같은 배송이 청구서에 두 번** 실린다. (그 함수를 import 하지 않는다 — efs-billing 이 이미 shipments 의 `LOCAL_TRACKING_MAX_LEN` 을 import 해 역방향은 순환이다. `common/` 은 애초에 `modules/` 를 못 본다.)
+- ⚠️ 충돌은 **두 테이블**을 본다: 다른 `Shipment`(P2002 를 잡아 **409**) + **`EfsManualBillingRow.hawb`**(DB 제약이 테이블을 가로질러 못 걸려 직접 조회 → 409). 겹치면 `mergeBillingRows` dedupe 에서 **수기 행이 조용히 사라진다**.
+- ⚠️ 손으로 넣은 `localTrackingNumber` 는 **EFS 추적 갱신이 덮지 않는다** — backfill 2곳(`refreshTracking`, efs-billing `monthlyReport`)이 "비어 있을 때만" 채우기 때문이다. 즉 **오타는 자가 치유되지 않는다**(그래서 확인 모달이 이 문구를 띄운다). 반대로 `efsServiceType` 은 **재발급하면 EFS 값으로 되돌아간다**(payload 는 매번 `carrier` 에서 재계산 — 수정은 기록·리포트 표시용).
+- ⚠️ **EFS 를 호출하지 않는다.** 이건 "EFS 값을 고쳐 달라"가 아니라 **우리 기록을 EFS 실제에 맞추는** 조작이다.
+- ⚠️ 서비스가 이전 값을 `logger.warn` 으로 남긴다 — `AdminAuditInterceptor` 는 요청 body(=**새 값**)만 저장하고 **이전 값을 남기지 않아** 잘못 고친 값을 되돌릴 근거가 없다(`deleteFailed` 와 같은 이유).
+- 업데이트는 **명시적 allow-list 스프레드**(`...(patch.x !== undefined && { x: patch.x })`)라 `undefined`(미변경)와 `null`(지우기)이 갈린다. zod 는 `patchOf()` 를 **쓰지 않는다**(그 헬퍼는 `.optional()` 만 씌워 `null` 을 못 받는다).
+- 회귀 잠금 `__tests__/shipment-efs-fields.spec.ts`(대문자 정규화·빈 값 거부·컬럼 폭·`''`→null·submitted 게이트·P2002 409·수기 HAWB 409·미전송 키 불변). 이 4개 컬럼의 **첫 회귀망**이다(종전엔 `efsServiceType` 2건뿐). 배포 순서는 **klow_server → klow_admin**(반대면 저장이 404).
 
 ## brand-shipments.controller.ts (`@Controller('v1/brand/shipments')`)
 
