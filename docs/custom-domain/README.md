@@ -3,8 +3,10 @@
 KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하면, **그 주소에서 KLOW 쇼핑 흐름
 전체**(브랜드관 → 제품 상세 → 장바구니 → 로그인 → 결제)가 동작하게 하는 기능의 설계 문서 모음.
 
-> **현재 상태: 📄 문서 = 구현 미착수.** 5개 레포 어디에도 `customDomain` / `custom_domain` 문자열이
-> **0건**이고, `klow_web` 에는 `src/middleware.ts` 자체가 없다. 완전한 신규 기능이다.
+> **현재 상태: ✅ P0 완료(2026-08-21) · P1 미착수.** 기능 본체는 아직 0 — 5개 레포 어디에도
+> `customDomain` / `custom_domain` / `BrandDomain` 문자열이 **0건**이고 `klow_web` 에는
+> `src/middleware.ts` 자체가 없다. P0(정지 작업) 5건만 반영됐다 →
+> [implementation-plan §1](./implementation-plan.md#1-p0--정지-작업).
 >
 > 설계·통합 지점은 실측 코드와 대조해 확정했다 → 이 문서만 보고 구현에 들어갈 수 있다.
 > ⚠️ **2026-08-20 설계 변경** — 결제·로그인을 `klow.kr` 로 넘기는 **핸드오프**로 바꿨다(원안은 결제까지
@@ -77,10 +79,10 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 | **0** 🟡 | **단일 MID 로 복수 도메인에서 결제창을 호출하는 구성이 계약·심사상 허용되는가** — 아래 별도 절. 런타임 도메인 차단은 없음을 실측했고, 남은 건 심사 축이다 | **P0~P4 는 막지 않는다**(결제가 klow.kr 에서 일어난다). **[P5 풀 프록시 승격](./implementation-plan.md#6-1-풀-프록시-승격--로그인결제까지-커스텀-도메인)의 선행 조건** |
 | 1 | `GET /v6/domains/{d}/config` 응답에 권장 A/CNAME 값이 실려 오는지 | 없으면 DNS 안내 값 출처를 재설계 |
 | 2 | `domain_already_in_use` 의 정확한 HTTP status + `error.code` 문자열 | 에러 매핑 |
-| 3 | **Vercel 플랜** — Hobby 는 프로젝트당 50개 상한. Pro 여야 무제한 | 확장성 |
+| 3 ✅ | **Vercel 플랜 = Pro** (2026-08-21 확인, 팀 `welkit's projects`) → 도메인 무제한(soft 100k) | 해소 |
 | 4 | Railway 엣지가 `X-Forwarded-For` 를 append 하는지 replace 하는지 + express `req.ips` semantics | **P5 승격 시에만** 필요(프록시 IP 신뢰 설계) |
-| 5 | **스테이징 klow_web 이 별도 Vercel 프로젝트인지** — 같은 도메인을 두 프로젝트에 붙일 수 없어 실도메인 테스트가 불가능하다 | 테스트 전용 도메인 필요 |
-| 6 | 기존 브랜드 중 `customer-center`/`track`/`seed` 슬러그 보유자 유무 | P0 선행 |
+| 5 ✅ | **별도 프로젝트다** — `klow-web` / `klow-web-staging` 이 각각 존재(2026-08-21 확인). 실도메인 E2E 는 스테이징 프로젝트에 **테스트 전용 도메인**을 붙여서 한다. ⚠️ 따라서 **`VERCEL_PROJECT_ID`(§2-8)는 환경별로 다른 값**이어야 한다 — 스테이징 klow_server 가 운영 프로젝트에 도메인을 꽂으면 브랜드 도메인이 운영으로 붙는다 | 해소 |
+| 6 ✅ | 기존 브랜드 중 `customer-center`/`track`/`seed`/`handoff` 보유자 **0건** — **운영 브랜치에서 확인**(⚠️ 로컬 `.env` 는 dev 브랜치라 근거가 못 된다). P0 에서 예약어 추가 완료 | 해소 |
 | 7 | 커스텀 도메인 브랜드관의 법적 표기(통신판매 주체는 KLOW) — 푸터가 그대로 따라가므로 별도 조치는 불필요해 보이나 확인 권장 | 컴플라이언스 |
 
 ### #0 — Eximbay 도메인 제한 (2026-08-20 조사 · 남은 질문 1개)

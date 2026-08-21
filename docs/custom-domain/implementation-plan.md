@@ -15,7 +15,7 @@
 
 | PR | 내용 | 레포 | 이 단계에서 사용자에게 보이는 것 |
 |---|---|---|---|
-| **P0** | 정지 작업(예약 슬러그·하드코딩·집계 버그) | web, server, brand | 없음 (독립 배포 가능) |
+| **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **2026-08-21 완료** | web, server, brand | 없음 (독립 배포 가능) |
 | **P1** | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 | server | 없음 (아직 서빙 안 함) |
 | **P2** | **핸드오프 수신부**(klow.kr `/handoff`) | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
 | **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
@@ -36,31 +36,70 @@
 
 ---
 
-## 1. P0 — 정지 작업
+## 1. P0 — 정지 작업 ✅ **완료 (2026-08-21)**
 
 독립 배포 가능하고 되돌릴 일이 없다. 먼저 내보낸다.
 
-1. **예약 슬러그 누락 보강** — `klow_web/src/lib/reserved-slugs.ts` 와
-   `klow_server/src/common/reserved-slugs.ts`(**미러 2파일**)에 실제 최상위 라우트인
-   `customer-center`·`track`·`seed` 와 신설 예정인 `handoff`(P2 수신 라우트) 를 추가.
-   P3 미들웨어가 이 목록으로 "브랜드 슬러그 경로인가"를 판정하므로 **선행 필수**다.
-   ⚠️ 추가 전 `SELECT slug FROM "Brand" WHERE slug IN (...)` 로 **기존 보유 브랜드가 없는지 확인**.
-   있으면 예약어에 넣지 말고 미들웨어 전용 상수로 분리한다(살아있는 브랜드관을 죽이면 안 된다).
+| # | 내용 | 파일 | 상태 |
+|---|---|---|---|
+| 1 | 예약 슬러그에 `customer-center`·`track`·`seed`·`handoff` 추가 (F10) | `klow_web/src/lib/reserved-slugs.ts` · `klow_server/src/common/reserved-slugs.ts` (미러 2개, 41개) | ✅ |
+| 2 | 도메인 정본을 **apex(`klow.kr`)** 로 통일 | `klow_web/src/lib/seo.ts` · `.env.example` + Vercel/Railway 설정 | ✅ |
+| 3 | `klow.kr/${slug}` 하드코딩 → `storefrontLabel(slug)` | `klow_brand/src/components/auth/SlugCheck.tsx` | ✅ |
+| 4 | 워크스페이스 `CLAUDE.md` cron 개수 6 → **8** | `CLAUDE.md` | ✅ |
+| 5 | code 가 null 이면 `source='direct'` (F12) | `klow_web/src/app/[brandSlug]/[influencer]/page.tsx` | ✅ |
 
-2. `klow_web/src/lib/seo.ts:3` 의 기본값 `https://www.klow.kr` 을 실제 링크 생성값(`klow.kr`)과 통일.
-   지금 og:url/canonical 과 브랜드가 공유하는 링크의 호스트가 어긋나 있다.
+⚠️ **1번은 운영(production) DB 에서 충돌 0건을 확인하고 넣었다.** 로컬 `klow_server/.env` 는 **Neon dev
+브랜치**라 그쪽 조회는 근거가 못 된다(브랜드 목록이 `test`·`test123` 류다). 앞으로 "기존 데이터가 있는가"를
+묻는 모든 확인은 운영 브랜치에서 할 것.
 
-3. `klow_brand/src/components/auth/SlugCheck.tsx:48` 의 `klow.kr/${slug}` 하드코딩 →
-   `storefrontLabel(slug)`. 부수효과로 로컬/스테이징 라벨이 정확해진다.
+⚠️ **1번의 두 파일은 반드시 같은 배포 창에** 나가야 한다 — 미러가 갈리면 서버는 가입을 허용하는데
+klow_web 이 못 열거나 그 반대가 된다.
 
-4. 워크스페이스 `CLAUDE.md` 의 "cron 6개" 서술을 실제값 **8개**로 정정
-   (`klow_server/test/app.e2e-spec.ts:44-58` 이 정본).
+### 2번은 문서의 전제가 반대였다 — 기록해 둔다
 
-5. **`klow_web/src/app/[brandSlug]/[influencer]/page.tsx` — code 가 null 이면 `source` 를 `'direct'` 로.**
-   지금은 프로모션이 없거나 Off 여도 `source="promotion"` 을 고정으로 넘겨서
-   `klow.kr/brandA/아무거나`(봇 포함)가 전부 **할인 링크 유입으로 집계**된다. 이미 존재하는 버그이고,
-   P3 의 `/{seg}` rewrite 가 이걸 증폭시킨다(커스텀 도메인의 **모든** 미매칭 경로가 여기로 온다).
-   ⚠️ **`notFound()` 로 바꾸지 말 것** — "Off 면 정상가로 렌더"는 의도된 graceful degradation 이다.
+착수 전 이 문서는 *"canonical(www)이 브랜드 공유 링크(apex)와 어긋난다"* 고 적었는데, 실측하니
+**운영 Vercel primary 가 `www.klow.kr` 이고 apex 가 307 로 www 에 넘어가고 있었다.** 그리고 링크 계열이
+**둘로 갈라져** 있었다:
+
+| 링크 | 만드는 곳 | 전환 전 |
+|---|---|---|
+| 카페24 임베드 딥링크 · 프로모션 pretty 링크 · 시딩 링크 · 인스타 답글 · 주문확인/배송 메일 · **결제 리턴 303** | 서버, 전부 `FRONTEND_URL` 파생 | **www** |
+| 현장 QR · 브랜드 공유 링크 | klow_brand `lib/storefront.ts`(API 호스트에서 파생) | **apex** |
+
+전환 내용(전부 반영 완료):
+- Vercel `klow-web`: `klow.kr` = **Production**, `www.klow.kr` = **308 → klow.kr**
+- Railway `FRONTEND_URL` = `https://klow.kr` (`COOKIE_DOMAIN` = `.klow.kr` 유지)
+- `seo.ts` 기본값 = `https://klow.kr`
+  ⚠️ **운영 Vercel 에 `NEXT_PUBLIC_SITE_URL` 이 없다 — 그래서 이 기본값이 곧 운영값이다.**
+  변수를 새로 만들지 말 것(코드가 단일 출처여야 값이 갈리지 않는다).
+- Cloudflare DNS 는 **무변경** — apex `A 216.198.79.1`(이미 Vercel 현재 대역) · `cdn.klow.kr` 은 R2 라
+  Proxied 유지. Vercel 의 `DNS Change Recommended` 는 에러가 아니라 새 CNAME 타겟 권장이다.
+
+⚠️⚠️ **오리진이 www → apex 로 옮겨가 `localStorage` 가 한 번 초기화된다.** 손님들은 그동안 실제로는
+`www.klow.kr` 오리진에 있었고, 저장소는 오리진 단위라 이관이 **원리적으로 불가능**하다(커스텀 도메인
+문서가 iframe 카트 정리를 기각한 것과 같은 뿌리 — [§3-4](#3-4-결제-후-브랜드-도메인-카트-정리)).
+
+- `klow-web-cart` → **비로그인 게스트 카트가 비어 보인다**(로그인 사용자는 서버 카트에서 복원)
+- `klow-web-store` → 국가 선택 초기화 · **`promotionCode` 소실**(링크를 다시 타면 복구)
+- `klow-vid` → 새 토큰 → 며칠간 **순방문이 부풀고** 진행 중이던 담기→결제 퍼널이 한 번 끊긴다
+- 세션 쿠키는 `Domain=.klow.kr` 이라 **유지된다**
+
+### P3 로 넘기는 메모
+
+- `lib/host.ts` 의 본 도메인 Set 에 **`klow.kr` 과 `www.klow.kr` 둘 다** 넣는다(www 는 308 로 빠지지만
+  미들웨어가 그 요청을 커스텀 도메인으로 오인하면 안 된다).
+- ⚠️ Vercel 에 커스텀 도메인을 추가할 때 **"Redirect to primary domain" 이 붙으면 기능이 통째로 죽는다**
+  (브랜드 도메인이 전부 klow.kr 로 튕긴다). P1 `vercel.client.ts` 가 도메인 추가 시 리다이렉트 설정을
+  넣지 않는지 확인할 것.
+- ⚠️ `VERCEL_PROJECT_ID` 는 **환경별로 다른 값**이다(`klow-web` / `klow-web-staging`).
+
+### 배포 후 확인 (아직 남음)
+
+- `curl -s https://klow.kr/shop | grep canonical` 이 apex 인지 (배포 전엔 www 였다)
+- **결제 1건 완주** — 리턴 303 목적지와 주문확인 메일의 배송조회 링크가 apex 인지
+  (`FRONTEND_URL` 은 dev DB 로는 관측이 불가능해 코드 리뷰로만 확인했다)
+- 릴리즈 노트: ① 할인 링크 방문이 한 번 계단처럼 내려간다(봇·미매칭 제외 — 5번의 효과)
+  ② 위 `localStorage` 초기화
 
 ---
 
@@ -315,9 +354,13 @@ P4 화면은 **primary 의 상태**를 크게 그리고, redirect 는 그 아래
 
 ```
 VERCEL_TOKEN=          # 프로젝트 도메인 관리 권한
-VERCEL_PROJECT_ID=     # klow_web 프로젝트 (prj_xxx)
+VERCEL_PROJECT_ID=     # klow_web 프로젝트 (prj_xxx) — ⚠️ 환경별로 다른 값
 VERCEL_TEAM_ID=        # 팀 소속이면 필수 (team_xxx)
 ```
+
+⚠️⚠️ **`VERCEL_PROJECT_ID` 는 운영·스테이징이 서로 다른 프로젝트다**(`klow-web` / `klow-web-staging`,
+2026-08-21 확인). 스테이징 klow_server 가 운영 프로젝트 id 를 들고 있으면 **테스트로 붙인 브랜드
+도메인이 운영 사이트에 꽂힌다.** 플랜은 **Pro** 라 도메인 수 상한은 걱정하지 않아도 된다.
 
 ℹ️ 프록시 공유 비밀(`KLOW_PROXY_SECRET`)은 **없다.** 핸드오프 방식에는 프록시가 없다(§4-0).
 승격 시에만 필요하다 → §6-1.
