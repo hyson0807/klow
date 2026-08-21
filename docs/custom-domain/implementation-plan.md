@@ -18,7 +18,7 @@
 | **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **2026-08-21 완료** | web, server, brand | 없음 (독립 배포 가능) |
 | **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **2026-08-21 완료 · ⚠️ 미배포** | server | 없음 (아직 서빙 안 함) |
 | **P2** ✅ | **핸드오프 수신부**(klow.kr `/handoff`) — **2026-08-21 완료 · ⚠️ 미배포** | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
-| **P3** | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** | web | **커스텀 도메인이 실제로 동작** |
+| **P3** ✅ | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** — **2026-08-21 완료 · ⚠️ 미배포** | web | **커스텀 도메인이 실제로 동작** |
 | **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
 | **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
 
@@ -758,7 +758,96 @@ klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fi
 
 ---
 
-## 4. P3 — 커스텀 도메인 서빙 (핵심)
+## 4. P3 — 커스텀 도메인 서빙 (핵심) ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+
+코드는 `klow_web` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
+**어긋난 전제만 이 절에 기록한다.**
+
+### 착수 중 어긋난 전제 (다음 사람이 믿어야 할 것)
+
+| # | 계획이 가정한 것 | 실제 | 결과 |
+|---|---|---|---|
+| 1 | `credentials:'omit'`(F8)은 "브라우저마다 로그인 상태가 갈리는 것"을 막는 **위생** 조치다 | ⚠️⚠️ **아니다 — 화면이 뜨는 조건이다.** `origin-policy.ts:31` 이 브랜드 오리진에 `credentials:false` 를 주므로 응답에 `Access-Control-Allow-Credentials` 가 안 붙고, 그러면 `'include'` 요청은 쿠키만 빠지는 게 아니라 **브라우저가 CORS 실패로 응답 자체를 막는다**(= 브랜드관 전체가 빈 화면). 서버가 이걸 fail-closed 로 의도했다 | 이 PR 의 **1순위 변경**. 그리고 `isCustomDomain` 을 **`'use client'` 인 `host.ts` 가 아니라 지시자 없는 `host-classify.ts`** 에 둬야 한다 — `api.ts` 는 지시자가 없어 서버 그래프에 들어갈 수 있고, `'use client'` 모듈을 import 하면 client reference 가 되어 터진다(지금 안 터지는 건 `brand-server.ts` 가 raw fetch 를 쓰는 우연이다) |
+| 2 | rewrite 는 `new URL('/'+slug, req.url)` | ⚠️ 그건 **쿼리스트링을 버린다.** P2 가 만든 복귀 경로가 죽는다 — `/handoff` 가 저장하는 값이 `https://{o}/`(루트)라 **`?purchased=` 는 언제나 `/` 로 도착**하고 `/` 가 바로 rewrite 대상이다. UTM·`?_rsc=` 프리페치도 같이 날아간다 | **`req.nextUrl.clone()`** 로 바꿔 `search` 를 보존한다(실측 확인) |
+| 3 | §2-2·flow.md: `/{seg}/…`(2세그먼트, 예약어 아님)는 "pass-through → 404" | ⚠️⚠️ **404 가 아니다.** `[brandSlug]/[influencer]` 는 `isBrandSlugAllowed` 만 보고 통과시켜 `shop.brandA.com/brandB/nana` 가 **브랜드 B 의 브랜드관을 브랜드 B 의 세일가까지 적용해** 렌더하고, `source='promotion'` 비콘이 나가 **브랜드 B 의 할인 링크 통계까지 오염**시킨다. (부록 V15 가 이미 "code 가 null 이어도 notFound 하지 않는다"고 적어 둔 것과 표가 모순이었다) | **F11 구멍이었다.** 1세그먼트와 동일 처리(`seg1===slug` 면 307, 아니면 404). `flow.md` 표도 함께 고쳤다 |
+| 4 | 리다이렉트는 **308** | ⚠️ 308·301 은 브라우저가 **영구 캐시**해 되돌릴 수 없는데, 두 리다이렉트 모두 **가변 DB 상태**에서 파생된다(`redirectTo` · 슬러그). 서버 자신이 같은 데이터에 `max-age=60` 을 건다 | **307** 로 바꿨다(`NextResponse.redirect` 기본값도 307이라 어차피 명시가 필요하다). flow.md 도 정정 |
+| 5 | 쿠키 경로 차단(F24)은 **화면**이 한다("미들웨어에서 리다이렉트하면 카트·국가·프로모션이 안 실려 넘어간다") | ⚠️ 그 근거는 **`/checkout` 에만** 해당한다. `/login`·`/my`·`/seed` 는 카트를 들고 갈 필요가 없다 | 그 다섯은 **미들웨어에서 307**(깜빡임 없음 · 대상 페이지 effect 와 경합 없음 · JS 꺼져도 동작). `/checkout` 만 화면이 핸드오프한다 |
+| 6 | (언급 없음) | ⚠️ 수신부 `/handoff` 가 `setCountry(c)` 를 부르는데 그건 `syncCountry` 와 달리 **`onboardedAt` 까지 찍는다** | 국가 미선택 손님을 `?? 'US'` 로 넘기면 klow.kr 에서 **국가 모달이 영구 억제된 채 US 가격으로 결제**한다 → 송신부가 미선택이면 **넘기지 않고 국가 모달을 연다** |
+| 7 | §5-4: PDP 바로구매의 담기 비콘 유실은 "감수한다" | ⚠️ `storefront-track.ts:317` 에 **"언로드 유실 걱정은 없다 — 담기 후 이동이 전부 `router.push`"** 라는 전제가 주석으로 박혀 있었다. `location.assign` 이 그걸 깬다. 게다가 같은 창에서 `peekVisitorId()` 도 아직 `null` 일 수 있다(→ **결제 단계 퍼널 영구 0**) | 감수하지 않고 고쳤다 — `flushPendingVisit(300ms)` 를 노출해 송신부가 기다린 뒤 이동한다. **그 주석도 함께 고쳤다** |
+| 8 | `?mode=onsite` 는 "커스텀 도메인 대상 아님"이라 신경 쓸 것 없다 | ⚠️ 2번을 고쳐 쿼리를 보존하는 순간 **실제로 도달한다** → `onsiteMode` 가 켜져 결제가 `/checkout/onsite`(게스트 쿠키 필요)로 분기 | 미들웨어가 그 파라미터를 **떼어 내고 307** |
+| 9 | 음성 캐시 TTL 300초 | ⚠️ 서버 응답 자체가 `max-age=60` 이다. 300초면 도메인 검증 직후 **아이솔레이트마다 404 와 정상이 뒤섞여** 브랜드가 "됐다 안 됐다"를 겪는다 | **60초**로 낮추고, **실패는 아예 캐시하지 않는다**(stale 읽기만). `Host` 는 공격자 통제 값이라 Map 에 **상한 256 + 축출**, fetch 전 **문법 검사** |
+| 10 | (언급 없음) | ⚠️ 루트 레이아웃 컴포넌트에서 `useSearchParams()` 를 쓰면 **전 페이지가 CSR 로 deopt** 된다 | `CustomDomainMount` 는 `window.location.search` 를 마운트 effect 에서 읽는다(`useCheckoutGate` 선례). 빌드 결과 정적 페이지가 전부 `○` 로 유지됨을 확인 |
+
+### 이 PR 이 실제로 남긴 것
+
+- 신규: `src/middleware.ts` · `lib/host-classify.ts`(순수 호스트 분류 + `isHostShaped` — edge·서버
+  그래프·클라 공용) · `lib/handoff-send.ts`(**`useGoCheckout()` = 결제 진입점 하나**) ·
+  `components/common/CustomDomainMount.tsx` · `scripts/check-handoff.ts` ·
+  값 없는 공유 상수 3종 `lib/api-base.ts` · `lib/api-types.ts` · `lib/onsite-entry.ts`
+- 수정: `lib/host.ts`(분류를 위임 + `useIsCustomDomain` 훅) · `lib/handoff.ts`(`sanitizeHandoffPayload`) ·
+  `lib/api.ts`(credentials) · `lib/storefront-track.ts`(`flushPendingVisit` + 주석 정정) ·
+  `hooks/useSession.ts` · `hooks/useSessionSync.ts` · `components/layout/BottomTabBar.tsx` ·
+  `app/layout.tsx` · `app/cart/page.tsx` · `app/product/[id]/page.tsx` · `package.json`
+- **서버·brand·admin 무변경. 마이그레이션 없음. 신규 i18n 키 없음**(`i18n:fill` 을 돌리지 않았다).
+
+⚠️ **`encodeHandoff` 가 자기 정화(self-sanitizing)가 됐다** — "encode 가 만든 것은 decode 가 반드시
+받는다"가 이제 불변식이다. `decodeHandoff` 는 fail-closed 라 **선택 필드 하나만 어긋나도 payload
+전체를 버리는데**, 송신부가 싣는 값 중 셋이 우리 통제 밖이다: `o = location.host`(**로컬·스테이징에서
+포트가 붙어 실제로 전량 폐기됐다**) · `p = promotionCode`(localStorage) · `l`(persist 스키마).
+어긋났을 때 증상이 "프로모션만 빠짐"이 아니라 **손님이 klow.kr `/cart` 로 떨어져 장바구니가 사라진
+것처럼 보이는** 것이라 조용하다. 규약을 아는 `handoff.ts` 가 직접 떨어낸다 — 술어를 export 해서
+송신부가 검사하게 하면 **검사를 잊는 두 번째 호출부**가 생긴다.
+
+**검증 결과**: `type-check` · `next lint`(신규 경고 0) · `build` 통과(정적 페이지가 전부 정적으로
+유지됨 = 루트 레이아웃 deopt 없음, `ƒ Middleware 77.4 kB` 등록 확인).
+**신규 `npm run check:handoff`** — 순수 함수 9케이스(정상 왕복 · 포트 붙은 `o` · 망가진 promotionCode ·
+형식 틀린 vid · 수량 클램프/dedupe · 150→100 라인 · 소문자 국가 · 빈 카트 · sanitize 멱등) 전부 통과.
+⚠️ klow_web 에 테스트 러너가 없어 **프레임워크 없이 tsx 로 도는 순수 함수 검사만** 뒀다(의존성 추가 0).
+**프로덕션 빌드 실측 라우팅**(`Host` 헤더 + resolve 스텁): 본 도메인 4종 무변경(`X-Robots-Tag` 없음) ·
+커스텀 도메인 전 응답에 `noindex` · `/`→브랜드관 rewrite(주소창 유지) · `/{다른브랜드}`→**브랜드 A**
+브랜드관 · `/{자기slug}`→307 `/` · **`/{다른브랜드}/{seg}`→404** · www 페어→apex 307(경로·쿼리 유지) ·
+쿼리 보존(`?purchased=`·`?keep=`) 및 `mode` 만 제거 · klow.kr 전용 8경로 307 · `/track/x?t=` 통과 ·
+`/handoff` 404 · `/sitemap.xml` 404 · **API 다운 시 `/`는 pass-through, `/{seg}`는 503**(F11 폴백).
+
+### 정리 라운드에서 더 고친 것 (`/simplify` 4개 관점 리뷰)
+
+구현 직후 재사용·단순화·효율·고도(altitude) 4관점 리뷰를 돌려 **같은 PR 안에서** 반영했다.
+동작이 바뀐 것은 ①뿐이고 나머지는 구조 정리다.
+
+1. ⚠️⚠️ **예약어 pass-through(허용적) → `STOREFRONT_SEGMENTS` 허용목록(제한적).** 기본값의 방향이
+   틀려 있었다 — 새 최상위 라우트를 추가하면 **아무도 미들웨어를 안 고쳐도 전 브랜드 도메인에서
+   세션 없이 열렸다.** 게다가 `RESERVED_BRAND_SLUGS` 는 **klow_server 미러라 klow_web 이 편집할 수
+   없는 파일**인데 그게 브랜드 도메인 라우팅을 지배하고 있었다. 이제 모르는 경로는 404 다.
+2. **`HOST_RE` 가 미들웨어에 복사돼 있었다** — `handoff.ts` 가 바로 위에서 "정규식을 export 하면
+   검사를 잊는 두 번째 호출부가 생긴다"고 적어 놓고, 같은 diff 가 그 두 번째 호출부를 **사본으로**
+   만들었다(export 보다 나쁘다). `host-classify.isHostShaped()` 한 벌로 통합.
+3. **`MAX_HANDOFF_RAW_LENGTH` export 제거** — 같은 자기모순이었다. `encodeHandoff` 가 자기 상한을
+   직접 검사하고 **`string | null`** 을 돌려준다(호출부가 잊을 수 없다).
+4. **결제 진입점 2곳 → `useGoCheckout()` 하나.** 두 사본이 "**둘 다** 바꿔야 한다"는 주석으로
+   동기화를 지키고 있었는데, 그 주석이 곧 초크포인트가 없다는 신호였다(세 번째 결제 버튼이
+   생기는 날 깨진다). 현장 분기 중복도 같이 사라졌다.
+5. **자격증명 정책의 소유자를 전송 계층으로.** `api.ts` 가 `canAuthenticate()` 를 노출하고
+   `useSession`·`useSessionSync` 가 그걸 쓴다 — 세션 계층이 주소창(DNS)을 다시 묻지 않는다.
+6. `dedupeLines()` 를 sanitize·decode 가 공유 · `dropIfUnmatched` 모듈 스코프화 ·
+   `pass()`/`redirect()` 원시 함수(307 결정이 호출부 관례가 아니라 구조로 강제된다) ·
+   빈 `if (!seg1) {}` 분기 제거 · `CustomDomainMount` effect 2개→1개 + 파생 ref 제거.
+7. **효율**: `isCustomDomain()` 지연 캐시(모든 API 요청·매 렌더에서 재계산하던 것) ·
+   `bareHost` 배열 할당 제거 · 문법 검사를 캐시 히트 뒤로 · `API_BASE` 4곳 통합 ·
+   matcher 에 정적 자산 2건 추가 · `flushPendingVisit` 의 진 타이머 정리.
+8. ⚠️ **정리 중에 스스로 만든 회귀를 잡았다** — onsite 상수를 `useOnsiteStore`(`'use client'` +
+   최상위 `create()` 부수효과)에서 import 했더니 **zustand 가 통째로 edge 번들에 들어가** 미들웨어가
+   77.4 → 82.1 kB 로 늘었다. 값 없는 `lib/onsite-entry.ts` 로 분리해 77.5 kB 로 복귀.
+   **미들웨어가 import 하는 모듈에 부수효과를 들이지 말 것.**
+
+**남긴 것**(리뷰가 제안했으나 이번 범위 밖): 라우트별 정책 테이블(`route-policy.ts`) 전면 도입 ·
+`/checkout` 핸드오프를 라우트 자체로 내리는 안(그쪽은 `useCheckoutGate` 가 먼저 도는 마운트 경합이
+생긴다) · `/shop` 링크를 그리는 나머지 지점(`useSmartBack` 폴백 등)의 일괄 처리.
+ℹ️ 미들웨어가 **klow.kr 요청에서도 매번 호출**되어 즉시 bail 하는 비용은 Next 14 matcher 가
+경로 기준이라 피할 수 없다 — 의식적으로 감수한 것이다.
+
+⚠️ **아직 브라우저 E2E 는 하지 않았다** — 핸드오프 왕복·`credentials:'omit'` 실측(Chrome·Safari)·
+결제 완주 후 `?purchased=` 정리는 §8-2 의 스테이징 수동 항목으로 남아 있다.
+
 
 ### 4-0. 왜 프록시가 아니라 핸드오프인가
 
@@ -1094,8 +1183,8 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 ⚠️⚠️ **핸드오프 로직은 전부 klow_web 에 있고 klow_web 에는 테스트 인프라가 없다**
 (`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F26 을 잠글 자동
 테스트가 없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
-(`encodeHandoff`/`decodeHandoff` 는 순수 함수라, 나중에 klow_web 에 테스트 러너를 들이면 **가장 먼저
-잠글 대상**이다.)
+(`encodeHandoff`/`decodeHandoff` 는 순수 함수라 **P3 에서 가장 먼저 잠갔다** — 프레임워크 없이 tsx 로
+도는 `npm run check:handoff`(`klow_web/scripts/check-handoff.ts`). 러너를 들이면 그걸 그대로 옮기면 된다.)
 
 ### 8-2. 수동 E2E (스테이징)
 
