@@ -1,7 +1,7 @@
 # storefront-stats — 브랜드관 방문 통계 · 장바구니 · 결제 전환 · 판매 분석
 
 - **모듈 경로**: `src/modules/storefront-stats/`
-- **주 클라이언트**: klow_web(수집) + klow_brand `/stats`(브랜드 조회) + klow_admin 대시보드 홈(운영 조회)
+- **주 클라이언트**: klow_web(수집) + klow_brand `/stats`(브랜드 조회) + klow_admin 대시보드 홈 · 브랜드 상세 "브랜드관 통계" 탭(운영 조회)
 - **관련 파일**: `storefront-stats.service.ts`(퍼널), `storefront-sales.service.ts`(판매 분석), `stats-window.ts`(창 규칙 공용), 컨트롤러 3개(public·brand·admin), `storefront-stats-retention.cron.ts`, `common/validation/storefront-stats.ts`
 - **회귀 잠금**: `__tests__/storefront-stats.spec.ts`(퍼널) · `__tests__/storefront-sales.spec.ts`(판매 분석)
 
@@ -580,7 +580,30 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 
 | Method | Path | 기능 |
 |---|---|---|
-| GET | `/admin/stats/storefront-visits?days=` | 브랜드별 집계(방문 내림차순) + 전체 합계 |
+| GET | `/admin/stats/storefront-visits?days=1~90(기본 30)` | 전 브랜드 집계(방문 내림차순) + 전체 합계 |
+| GET | `/admin/stats/storefront/:brandId?days=1~90\|all` | 브랜드 하나의 유입 퍼널 — 브랜드 라우트와 **같은 응답** |
+| GET | `/admin/stats/storefront/:brandId/sales?days=1~90\|all` | 브랜드 하나의 판매 분석 — 브랜드 라우트와 **같은 응답** |
+
+> 아래 둘은 `seriesForBrand`/`salesForBrand` 를 **그대로** 부른다(그 메서드들은 원래 brandId 를
+> 인자로 받고, 브랜드 전용이라는 제약은 brand 컨트롤러의 `requireBrandId(user)` 에만 있었다).
+> 집계를 두 벌로 구현하지 않았으므로 klow_admin 브랜드 상세 탭과 klow_brand `/stats` 는
+> **구조적으로 같은 숫자**를 낸다 — "우리 화면엔 47명인데 운영팀은 52명" 이 날 수 없다.
+
+> ⚠️⚠️ **`days=all` 이 여기선 되고 위 전체 목록에선 안 된다.** 스키마가 다르다 —
+> 브랜드 상세 2개는 **브랜드용 `StorefrontStatsQuery`/`StorefrontSalesQuery` 를 재사용**하고,
+> 전체 목록만 `StorefrontRollupQuery`(숫자 전용)를 쓴다. 갈리는 축은 **호출자가 아니라 쿼리
+> 비용**이다 — `trafficForAdmin` 은 **전 브랜드를 스캔**하고 `kstDateWindow('all')` 이 깨지지만,
+> 단일 브랜드 조회는 코드경로가 브랜드 라우트와 완전히 같다(그래서 스키마 이름도 "Admin" 이
+> 아니라 "Rollup" 이다). **반대로 `trafficForAdmin` 쪽에 `'all'` 을 열지 말 것.**
+
+> ⚠️ **브랜드 상세 2개는 `storefront-visits` 가 아니라 `storefront` 밑에 있다.** 롤업은 실제로
+> 방문만 담지만 이 둘은 퍼널 + **주문 원장**이라, `storefront-visits/:brandId/sales` 로 두면
+> 경로가 "visits 안의 sales" 라는 거짓말을 한다(브랜드 쪽 짝인 `v1/brand/storefront-stats`
+> + `/sales` 도 이미 상위를 `storefront-stats` 로 부른다).
+
+> ⚠️ **브랜드 존재 검증을 하지 않는다** — 없는 brandId 는 0 으로 채워진 정상 응답이 되고
+> (거짓말이 아니라 '데이터 없음'), 게이트는 이미 klow_admin `brands/[id]/page.tsx` 의
+> `api.brands.get()` → `notFound()` 다. 검증을 넣으면 흔한 경로마다 Neon 왕복이 하나 더 붙는다.
 
 ## cron
 
@@ -614,6 +637,21 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
   버튼이 두 개 생긴다.
 - 현장 탭은 방문을 수집하지 않으므로 **방문 국가 패널이 없고** 요약 카드도 결제 요약으로 바뀐다.
 
+**klow_admin 브랜드 상세 3번째 탭이 같은 구성을 재현한다**(2026-08-21). 로직(접기·색 배정·
+탭 분기)은 그대로 옮기고 마크업만 어드민 토큰/프리미티브(`Card`·`StatCard`·`Table`·
+`SegmentedToggle`)로 바꿨다. ⚠️ **두 화면은 서로의 거울이라 한쪽만 고치면 갈린다** — 접기 규칙·
+색 배정·`note` 문구를 바꿀 때는 반드시 양쪽을 함께 볼 것. 다른 점 셋:
+- 팔레트가 `klow_admin/src/lib/chart-theme.ts` 에 산다(그 파일이 **recharts 를 import 하지
+  않는다**는 계약을 갖고 있어, 색 점·색 배정 모듈이 recharts 를 끌어오지 않는다).
+  ⚠️ klow_brand `LazyTrendChart.tsx` 는 `export { SERIES_PALETTE } from './TrendChart'` 로
+  **값을 정적 재export** 해서 lazy 경계가 사실상 뚫려 있다 — 어드민에 그 패턴을 옮기지 말 것
+  (Lazy 파일은 `dynamic()` + `export type` 만).
+- 운영팀이 CS 문의를 **받는** 쪽이라 패널 아래에 모집단 차이 각주를 한 줄 남겼다
+  (klow_brand 는 각주가 길어 걷어낸 자리다 — 그쪽 결정은 그대로 둔다).
+- klow_brand `TrendChart` 의 `variant: 'line' | 'stacked-area'` 분기 중 **누적 영역만** 옮겼다
+  (선 차트를 쓰던 할인 링크 추이 화면이 어드민엔 없다). 선 차트가 필요해지면 파일을 새로
+  만들지 말고 그 파일에 variant 를 되살릴 것.
+
 ## 화면 표기 규칙 — 퍼널은 "명", 횟수는 보조줄
 
 `visits`/`cartAdds`(회)와 `uniqueVisits`/`uniqueCartAdds`(명)를 **같은 크기로 나란히 두지 않는다.**
@@ -646,7 +684,7 @@ await this.bumpCountry(brandId, date, led.source, countryCode);
 |---|---|
 | klow_web | `lib/visitor-id.ts`(난수 토큰) · `lib/storefront-track.ts`(발사 + 중복 가드 **Set 3개** — `sentVisits`/`visitedBrands`/`sentCountries`, + **담기·국가**가 기다리는 `pendingVisit`) · `app/product/[id]/page.tsx`(PDP 방문·국가 effect) · `components/brand/BrandStorefront.tsx`(방문 effect, `source`/`promotionCode` prop) · `store/useCartStore.ts`(담기 1줄) · `lib/brand-server.ts` `resolvePromotionCode`(집계 아님, code 해석만) |
 | klow_brand | `app/(authed)/stats/page.tsx` + `_components/StorefrontStatsBoard.tsx` · `_hooks/useStorefrontStats.ts` · `components/charts/{TrendChart,ChartChrome}.tsx`(할인 링크 추이 탭과 공유) |
-| klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx` · `lib/api/stats.ts` |
+| klow_admin | `app/(authed)/_components/StorefrontVisitSection.tsx`(대시보드 표 — 브랜드명이 `?tab=stats` 로 링크) · `app/(authed)/brands/_components/BrandDetailTabs.tsx`(3번째 탭) · `app/(authed)/brands/_components/stats/{BrandStorefrontStatsPanel,BreakdownPanel,ChannelTabs,breakdown-series}` · `components/charts/{TrendChart,LazyTrendChart,ChartChrome}.tsx`(klow_brand 트리 의도적 미러) · `components/ui/segmented-toggle.tsx` · `lib/chart-theme.ts`(SERIES_PALETTE) · `lib/api/stats.ts` |
 
 - ⚠️ 방문 중복 가드는 **모듈 레벨 `Set`** 이다 — 컴포넌트 `useRef` 로는 StrictMode dev 이중 effect 는
   막아도 `?mode=onsite` 토글·view 전환 **remount** 에서 뚫린다. 키에 `source` 를 넣어 같은 탭에서
@@ -736,6 +774,21 @@ klow_web 이 먼저였던 건 할인 링크 클릭 유실 때문이고 여기엔
 
 ⚠️ **배포 첫날 `uniqueVisits(direct)` 와 `purchases` 가 계단처럼 올라간다**(임베드 유입이 새로
 들어온다). 할인 링크 클릭이 봇 제외로 계단처럼 내려갔던 것과 같은 성질이니 운영팀에 미리 알릴 것.
+
+### 어드민 브랜드관 통계 탭 배포 (2026-08-21) — **klow_server → klow_admin**
+
+| 순서 | 그 창에서 벌어지는 일 |
+|---|---|
+| klow_server 먼저 ✅ | 새 라우트 2개가 준비된다. 아직 호출자가 없어 **동작 변화 0 · 쓰기 0**. 기존 `/admin/stats/storefront-visits` 는 같은 컨트롤러에 `@Get` 이 둘 붙었을 뿐 완전 무변경이고(`?days=all` 은 계속 400), **서비스는 한 글자도 안 바뀌어** klow_brand `/stats` 도 무영향이다. |
+| klow_admin 다음 ⚠️ | 반대로 하면 브랜드 이름 링크가 `?tab=stats` 로 들어가는데 두 요청이 **404** → 토스트 + 인라인 에러. 단 **대시보드 홈은 죽지 않는다**(링크 href 만 바뀌었고 탭이 lazy 라 클릭 전엔 요청 0) — 2026-08-19 결제 단계 배포의 하드 크래시와는 다르다. |
+
+**마이그레이션 없음 · 백필 없음 · cron 8개 불변 · 라우트 +2(296 → 298).**
+klow_web · klow_brand 는 배포 대상이 아니다. 롤백은 각 저장소 독립이며, klow_admin 만
+되돌려도 서버의 새 라우트는 호출자 0 으로 무해하게 남는다.
+
+⚠️ **운영팀 공지**: 새 탭의 "결제 N명"(요약 = 퍼널 모집단)과 결제 패널의 "N건"(주문 원장)은
+**서로 다른 숫자이며 정상**이다. 배포 직후 가장 먼저 올 문의이고, 근거는 이 문서 맨 위
+"한 화면에 모집단이 둘이다" 표다.
 
 ## 교차링크
 
