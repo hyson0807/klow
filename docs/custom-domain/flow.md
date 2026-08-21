@@ -192,27 +192,32 @@ localStorage, 국가·프로모션은 URL·모달, `visitorId` 는 클라 난수
                 ▼
      Vercel: POST /v10/projects/{id}/domains
                 │
-      ┌─────────┼──────────────┬─────────────────┐
-      │         │              │                 │
-   verified  verified=false  verified=false   409 domain_already_in_use
-   =true     verification 없음  verification 有   (row 만들지 않음 · 400)
-      │         │              │
-      ▼         ▼              ▼
-   [active]  [pending]      [verifying]
-             A/CNAME 안내    A/CNAME + 소유권 TXT 안내
-                │              │
-                └──────┬───────┘
-                       │  cron 5분 · 또는 브랜드의 "지금 확인"
-                       ▼
-              getDomainConfig → misconfigured?
-                       │ No
-                       ▼
-              POST …/domains/{d}/verify → verified?
-                       │ Yes                    │ No (7일 초과)
-                       ▼                        ▼
-                   [active]                  [error]
-                (origin 스냅샷 즉시 갱신)      (사유 표시 + 재시도)
+      ┌────────────────────────┬─────────────────┐
+      │                        │                 │
+  verification 없음      verification 有    409 domain_already_in_use
+  (충돌 없음 — 대부분)    (다른 Vercel 계정)  (row 만들지 않음)
+      │                        │
+      ▼                        ▼
+   [pending]              [verifying]
+   A/CNAME 안내           A/CNAME + 소유권 TXT 안내
+      │                        │
+      └───────────┬────────────┘
+                  │  cron 5분 · 또는 브랜드의 "지금 확인"
+                  ▼
+        getDomainConfig(host).misconfigured === false
+                  │  AND
+        getProjectDomain(host).verified === true
+                  │ 둘 다 Yes            │ 7일 초과
+                  ▼                      ▼
+              [active]                [error]
+        (origin 스냅샷 즉시 갱신)      (사유 표시 + 재시도)
 ```
+
+⚠️⚠️ **추가 직후에는 `active` 로 보내지 않는다.** Vercel 의 `verified` 는 "접속이 되는가"가 아니라
+**"소유권이 다투지 않는가"** 다 — 우리가 소유하지도 않은 도메인이 추가 즉시 `verified: true` 로 오고
+(2026-08-21 실측), 같은 시점 `getDomainConfig` 는 `misconfigured: true` 였다. `verified` 만 보고 올리면
+**DNS 를 한 줄도 안 건 도메인이 "연결 완료"** 로 표시된다([plan F29](./implementation-plan.md#9-불변식-체크리스트-착수-전-필독)).
+그래서 위 그림의 `active` 조건이 **두 API 의 AND** 다.
 
 ⚠️ `pending` 안에 **서로 다른 두 안내**가 있다 — ① A/CNAME 접속 레코드(항상) ② 소유권 TXT 챌린지
 (`verification` 이 있을 때만 = 다른 Vercel 계정이 이미 그 도메인을 쓰는 경우). 한 덩어리로 뭉치면

@@ -64,7 +64,7 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 | **핸드오프 payload** | 상태 4개(카트 id·수량 · 국가 · `promotionCode` · `visitorId`) + **복귀 host** 1개. **서명 없음**, **가격 없음** | 상태 4개는 이미 손님이 조작 가능하고 금액 정본은 서버다 → 서명은 지키는 게 0. ⚠️ **가격을 실으면 그 순간 서명이 필요해진다.** ⚠️ 복귀 host 만은 **링크로 렌더**되므로 서버 재검증(F21) |
 | **결제 후 브랜드 도메인 카트** | 성공 화면 "계속 쇼핑" 링크에 `?purchased=` 를 실어 정리. **best-effort** | 기존 `brandReturn`·`checkoutSelection`·`removeProducts` 를 잇기만 한다(새 엔드포인트·토큰 0). iframe 정리는 **storage partitioning 때문에 원천적으로 불가** → [plan §3-4](./implementation-plan.md#3-4-결제-후-브랜드-도메인-카트-정리) |
 | **데이터 모델** | `Brand` 컬럼이 아니라 **별도 `BrandDomain` 테이블** | apex 와 `www` 는 Vercel 에 각각 등록해야 하는 별개 도메인이고(레코드 타입도 A vs CNAME), 검증 상태 머신과 Vercel 챌린지 원문을 담을 곳이 필요하다 |
-| **apex 판정** | **우리가 하지 않고 Vercel `apexName` 에 위임** | `brandA.co.kr` 은 레이블 3개지만 apex 다(Public Suffix List 문제). 한국 브랜드가 주 대상이라 자체 판정하면 **첫 고객부터 잘못된 레코드를 안내**한다 |
+| **apex 판정** | **우리가 하지 않고 Vercel `apexName` 에 위임** | `brandA.co.kr` 은 레이블 3개지만 apex 다(Public Suffix List 문제). 한국 브랜드가 주 대상이라 자체 판정하면 **첫 고객부터 잘못된 레코드를 안내**한다. ✅ 2026-08-21 실측 — `dtest.co.kr` → `apexName: dtest.co.kr`(레이블 3개인데 apex), `dtest.klow.kr` → `apexName: klow.kr` |
 | **DNS 안내 값** | **하드코딩 금지** — Vercel 응답의 권장값을 저장해 그대로 표시 | `76.76.21.21` / `cname.vercel-dns.com` 은 현재값일 뿐이고 Vercel 이 리전별 타겟으로 옮겨가는 중이다 |
 | **커스텀 도메인의 로그인** | 헤더 진입점을 **숨긴다**(klow.kr 링크로 두지 않는다) | 링크로 두면 **돌아오는 길이 없다** — 손님은 카트를 브랜드 도메인에 둔 채 klow.kr 로 넘어가고, 로그인해도 그 도메인은 여전히 비로그인이라 "장바구니가 사라졌다"가 된다. 로그인은 결제 진입에서 어차피 다시 묻는다 |
 | **apex ↔ www** | 브랜드는 **호스트 하나만** 입력. apex 면 `www` 를 자동 페어(`role='redirect'`)로 붙인다 | ⚠️ **거꾸로(서브도메인 → apex 자동 등록)는 금지** — 브랜드의 기존 홈페이지를 뺏는다 |
@@ -77,8 +77,8 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 | # | 항목 | 막는 것 |
 |---|---|---|
 | **0** 🟡 | **단일 MID 로 복수 도메인에서 결제창을 호출하는 구성이 계약·심사상 허용되는가** — 아래 별도 절. 런타임 도메인 차단은 없음을 실측했고, 남은 건 심사 축이다 | **P0~P4 는 막지 않는다**(결제가 klow.kr 에서 일어난다). **[P5 풀 프록시 승격](./implementation-plan.md#6-1-풀-프록시-승격--로그인결제까지-커스텀-도메인)의 선행 조건** |
-| 1 | `GET /v6/domains/{d}/config` 응답에 권장 A/CNAME 값이 실려 오는지 | 없으면 DNS 안내 값 출처를 재설계 |
-| 2 | `domain_already_in_use` 의 정확한 HTTP status + `error.code` 문자열 | 에러 매핑 |
+| 1 ✅ | **실려 온다** (2026-08-21 실측). 단 `rank` 붙은 배열이고 IPv4 는 값이 2개 → `rank:1` 사용 + **CNAME 후행 점 제거**. 도메인을 추가하지 않아도 200 이라 등록 전 미리보기에도 쓸 수 있다 → [plan §2-3](./implementation-plan.md#2-3-vercel-클라이언트) | 해소 |
+| 2 ✅ | **HTTP 409** + `error.code = "domain_already_in_use"`. ⚠️ **같은 팀의 다른 프로젝트 충돌도 같은 코드**이고, 점유자가 `error.domain.projectId` 로 실려 온다 → [plan §2-3 에러 매핑](./implementation-plan.md#2-3-vercel-클라이언트) | 해소 |
 | 3 ✅ | **Vercel 플랜 = Pro** (2026-08-21 확인, 팀 `welkit's projects`) → 도메인 무제한(soft 100k) | 해소 |
 | 4 | Railway 엣지가 `X-Forwarded-For` 를 append 하는지 replace 하는지 + express `req.ips` semantics | **P5 승격 시에만** 필요(프록시 IP 신뢰 설계) |
 | 5 ✅ | **별도 프로젝트다** — `klow-web` / `klow-web-staging` 이 각각 존재(2026-08-21 확인). 실도메인 E2E 는 스테이징 프로젝트에 **테스트 전용 도메인**을 붙여서 한다. ⚠️ 따라서 **`VERCEL_PROJECT_ID`(§2-8)는 환경별로 다른 값**이어야 한다 — 스테이징 klow_server 가 운영 프로젝트에 도메인을 꽂으면 브랜드 도메인이 운영으로 붙는다 | 해소 |

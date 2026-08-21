@@ -185,6 +185,22 @@ klow_server/src/modules/brand-domains/
 | DNS 설정 확인 | `domains.getDomainConfig({ domain })` → `misconfigured` |
 | 제거 | `projectsRemoveProjectDomain(...)` (+ 필요 시 `domainsDeleteDomain`) |
 
+⚠️⚠️ **`verified` 는 "접속이 되는가"가 아니다 — "소유권이 다투지 않는가"다** (2026-08-21 실측).
+우리가 소유하지도 않은 `dtest.co.kr` 을 추가하니 **그 자리에서 `verified: true`** 였고
+(`POST …/verify` 도 그대로 `true`), 같은 시점 `getDomainConfig` 는 **`misconfigured: true`** 였다.
+DNS 를 한 줄도 걸지 않은 상태다.
+
+**그래서 `active` 전이 조건은 `verified === true` 만으로는 안 된다** — 그렇게 짜면 브랜드가 도메인을
+입력한 **그 순간 "연결 완료"** 로 뜨고, 정작 주소를 열면 아무 데도 닿지 않는다. 조건은 반드시:
+
+```
+active  ⟺  domain.verified === true  &&  config.misconfigured === false
+```
+
+즉 **두 API 를 모두 봐야 한다**(`projectsGetProjectDomain` + `domains.getDomainConfig`). `verified` 가
+false 인 경우는 **다른 Vercel 계정이 그 도메인을 이미 쓰는 때**뿐이고, 그때만 응답에 `verification`
+챌린지가 실린다(충돌이 없던 실측에서는 **필드 자체가 없었다**).
+
 ⚠️⚠️ **apex 판정을 우리가 하지 않는다.** `brandA.co.kr` 은 레이블 3개지만 apex 다 — 이중 TLD 는 Public
 Suffix List 문제이고, 한국 브랜드가 주 대상이라 자체 판정하면 **첫 고객부터 잘못된 레코드를 안내**한다.
 도메인 추가 응답의 **`apexName` 을 정본**으로 쓴다(`apexName === name` 이면 apex → A 레코드).
@@ -195,14 +211,47 @@ Suffix List 문제이고, 한국 브랜드가 주 대상이라 자체 판정하�
 `recordValue` 에 저장해 화면에 **그대로** 띄운다. 하드코딩하면 Vercel 이 값을 바꾼 날 신규 연결이 전부
 실패한다. (폴백 상수는 응답에 권장값이 없을 때만)
 
+**실측 응답** (2026-08-21, `GET /v6/domains/{d}/config?teamId=`):
+
+```json
+{ "misconfigured": true,
+  "recommendedIPv4":  [{"rank":1,"value":["216.150.1.1","216.150.16.1"]},
+                       {"rank":2,"value":["76.76.21.21"]}],
+  "recommendedCNAME": [{"rank":1,"value":"49f87b35b8122d1a.vercel-dns-017.com."},
+                       {"rank":2,"value":"cname.vercel-dns.com."}],
+  "nameservers": ["…"], "conflicts": [], "acceptedChallenges": [], "aValues": [], "cnames": [] }
+```
+
+⚠️ 모양이 단순 문자열이 아니다 — **`rank` 가 붙은 배열**이고 **IPv4 는 `value` 가 배열**(현재 2개)이다.
+`rank:1` 을 쓰되 **CNAME 값의 후행 점(`.`)을 제거**해야 브랜드가 그대로 복사해 넣을 수 있다.
+`rank:2` 는 legacy 폴백이므로 **화면에 같이 띄우지 않는다**(둘 중 뭘 넣어야 하냐는 문의가 생긴다).
+
+ℹ️ 이 엔드포인트는 **도메인을 프로젝트에 추가하지 않아도 200 을 준다.** 등록 전에 "이 도메인은 이런
+레코드가 필요합니다" 를 미리 보여줄 수 있다(P4 선택 사항).
+
 **에러 매핑** (Vercel 공식 코드):
 
 | Vercel | 우리 처리 | 브랜드에게 |
 |---|---|---|
-| `domain_already_in_use` | **row 를 만들지 않고 400** | "다른 Vercel 계정/프로젝트가 이미 사용 중입니다. 소유권 TXT 검증이 필요합니다" |
+| `domain_already_in_use` (**HTTP 409**) | **row 를 만들지 않고 409** | 아래 ⚠️ — 점유자가 우리 팀인지에 따라 문구가 갈린다 |
 | `invalid_domain` | 400 | 형식 오류 |
 | `forbidden` | 502 + Sentry | "일시적 오류" (서버 설정 문제) |
 | `rate_limit_exceeded` | 지수 백오프 재시도 | — |
+
+⚠️ **`domain_already_in_use` 는 400 이 아니라 409 이고, "다른 Vercel 계정" 전용이 아니다** (2026-08-21 실측).
+**같은 팀의 다른 프로젝트**와 충돌해도 같은 코드가 온다:
+
+```json
+{"error":{"code":"domain_already_in_use",
+          "projectId":"prj_…",                       // 우리가 요청한 프로젝트
+          "domain":{"name":"…","apexName":"…","projectId":"prj_…"},  // 실제 점유자
+          "message":"Cannot add … since it's already in use by one of your projects."}}
+```
+
+→ **`error.domain.projectId` 로 갈라서 안내한다.** 그 값이 우리 팀 프로젝트면 내부 충돌(운영/스테이징을
+잘못 지정했거나 이미 등록된 도메인)이고, 아니면 다른 계정이라 **소유권 TXT** 안내가 필요하다.
+⚠️ 같은 KLOW 브랜드끼리의 중복은 `BrandDomain.host @unique` 로 **Vercel 을 부르기 전에** 잡아
+`domain_taken` 으로 내린다 — 이 에러까지 오면 그건 우리 DB 밖의 충돌이다.
 
 **호스트 검증** (`domain-host.ts` + zod `BrandDomainHostField`): 소문자·punycode 정규화, 스킴/경로/포트/
 trailing dot 제거, 253자·라벨 63자 상한, **`klow.kr`·`*.klow.kr`·`*.vercel.app`·IP 리터럴·localhost
@@ -267,7 +316,7 @@ type BrandDomainDTO = {
 |---|---|---|
 | `domain_invalid` | 400 | 정규화·거부 규칙 위반(`klow.kr`/`*.vercel.app`/IP/localhost/길이) |
 | `domain_taken` | 409 | **다른 KLOW 브랜드**가 이미 연결 |
-| `domain_already_in_use` | 400 | **다른 Vercel 계정/프로젝트**가 사용 중(소유권 TXT 필요) |
+| `domain_already_in_use` | **409** | Vercel 쪽 충돌 — **다른 Vercel 계정**(소유권 TXT 필요) 또는 **우리 팀의 다른 프로젝트**. 둘은 `error.domain.projectId` 로 갈린다(§2-3) |
 | `domain_limit` | 400 | 브랜드당 3개 초과 |
 | `subscription_required` | 403 | 구독 `active` 아님 |
 | `domain_service_unavailable` | 503 | `VERCEL_*` 미설정(§2-8) |
@@ -342,8 +391,19 @@ P4 화면은 **primary 의 상태**를 크게 그리고, redirect 는 그 아래
 ### 2-7. 폴링 cron
 
 `brand-domains.cron.ts` — 5분마다 `status IN (pending, verifying)` 중 `lastCheckedAt` 오래된 것
-`take: 20`(rate limit 보호). `getDomainConfig` → `verify` → `active` 전이 + **origin 스냅샷 즉시 갱신**.
-`createdAt` 7일 초과 pending 은 `error` 로 내려 무한 폴링을 막는다.
+`take: 20`(rate limit 보호). `createdAt` 7일 초과 pending 은 `error` 로 내려 무한 폴링을 막는다.
+
+전이 판정 (⚠️ **두 API 를 모두 본다** — 위 §2-3 의 `verified` 함정):
+
+```
+getDomainConfig(host)            → misconfigured?
+getProjectDomain(host)           → verified? / verification?
+  ├ verified && !misconfigured   → active   (+ origin 스냅샷 **즉시** 갱신)
+  ├ !verified && verification 有 → verifying  (소유권 TXT 안내) → POST …/verify 재시도
+  └ 그 외                        → pending   (A/CNAME 안내 유지)
+```
+
+⚠️ `verified` 만 보고 `active` 로 올리면 **DNS 를 안 걸어도 "연결 완료"** 가 된다(F29).
 
 브랜드의 "지금 확인" 버튼은 같은 로직 1건: `POST /v1/brand/domains/:id/check` (Throttle 6/분).
 
@@ -899,6 +959,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | `test/app.e2e-spec.ts` **수정** | cron 목록에 `'brand-domain-verify'` 추가 → **8 → 9** |
 | `modules/brand-domains/__tests__/domain-host.spec.ts` **신규** | 정규화(대문자·trailing dot·스킴·포트 제거) · 거부 목록(`klow.kr`/`*.klow.kr`/`*.vercel.app`/IP 리터럴/localhost/253자·63자 초과) · punycode · **`brandA.co.kr` 을 코드가 apex 로 판정하지 않고 Vercel `apexName` 에 위임함** |
 | `modules/brand-domains/__tests__/verified-origin.spec.ts` **신규** | `active` 만 통과 / `https://` 만 / **와일드카드·서브도메인 확장 없이 정확 일치** / 삭제 즉시 반영 / 빈 스냅샷에서 false. **여기가 느슨하면 전 브랜드 도메인이 CSRF 우회로가 된다** |
+| `modules/brand-domains/__tests__/domain-status.spec.ts` **신규** | **F29** — `verified:true` + `misconfigured:true` 조합이 `active` 가 **되지 않음** / 둘 다 만족할 때만 active / `verification` 있으면 `verifying` |
 | `modules/brand-domains/__tests__/domain-pairing.spec.ts` **신규** | apex 입력 → `www` redirect 동반 생성 / **서브도메인 입력 → 페어 없음**(F28) / 페어 실패가 primary 를 롤백하지 않음 / primary 삭제 시 페어 동반 삭제 |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경으로 통과해야 한다** — 통과 안 하면 설계가 틀어진 것 |
 
@@ -1012,6 +1073,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | **F26** | 커스텀 도메인에 **로그인·내정보 진입점을 그리지 않는다**(§4-2) | klow.kr 로 편도 이탈 → 손님에게는 **"장바구니가 사라졌다"** 로 보인다 | P3 |
 | **F27** | `/v1/storefront/resolve` 에 **`@SkipThrottle()`**(그 라우트에만) | 미들웨어 호출이 Vercel IP 하나로 뭉쳐 60/분 천장에 닿고, 429 → fail-open → **전 브랜드 도메인이 동시에** KLOW 홈/503 | P1 |
 | **F28** | apex 입력에만 `www` 페어를 만든다. **서브도메인 입력 → apex 자동 등록 금지** | 브랜드의 **기존 홈페이지를 뺏는다** | P1 |
+| **F29** | `active` 전이는 **`verified && !misconfigured`** — 두 API 를 모두 본다 | Vercel `verified` 는 소유권 축이라 **DNS 를 한 줄도 안 건 도메인이 즉시 "연결 완료"** 로 표시된다(2026-08-21 실측) | P1 |
 | **F19** | `origin-exempt.spec.ts` 가 **무변경으로 통과** | 통과하지 않으면 설계가 틀어진 것 | P1 |
 | **F20** | Vercel 추가 후 DB insert 실패 시 **보상 제거** + 해지 도메인 **정리 경로** | Vercel 쿼터 누수 · orphan 누적 | P1 |
 
