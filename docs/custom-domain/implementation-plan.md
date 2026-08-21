@@ -1023,7 +1023,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 **검증 3층** (CLAUDE.md):
 1. `npm run typecheck` — `tsconfig.json` **과** `tsconfig.scripts.json` **둘 다**
 2. `npm run test:e2e` — DI 그래프 + **cron 9개**
-3. `npm run start` — env 가드 + 라우트 매핑(288 → **+4~5**)
+3. `npm run start` — env 가드 + 라우트 매핑(**298 → 303**, 실측)
 
 ⚠️⚠️ **핸드오프 로직은 전부 klow_web 에 있고 klow_web 에는 테스트 인프라가 없다**
 (`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F26 을 잠글 자동
