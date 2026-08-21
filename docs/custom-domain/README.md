@@ -3,10 +3,10 @@
 KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하면, **그 주소에서 KLOW 쇼핑 흐름
 전체**(브랜드관 → 제품 상세 → 장바구니 → 로그인 → 결제)가 동작하게 하는 기능의 설계 문서 모음.
 
-> **현재 상태: ✅ P0 완료(2026-08-21) · P1 미착수.** 기능 본체는 아직 0 — 5개 레포 어디에도
+> **현재 상태: ✅ P0 코드 완료(2026-08-21) · ⚠️ 아직 미배포 · P1 미착수.** 기능 본체는 아직 0 — 5개 레포 어디에도
 > `customDomain` / `custom_domain` / `BrandDomain` 문자열이 **0건**이고 `klow_web` 에는
-> `src/middleware.ts` 자체가 없다. P0(정지 작업) 5건만 반영됐다 →
-> [implementation-plan §1](./implementation-plan.md#1-p0--정지-작업).
+> `src/middleware.ts` 자체가 없다. P0(정지 작업) 5건이 커밋돼 있고(브랜치 `develop/custom-domain`)
+> **배포는 P1 과 함께** 한다 → [implementation-plan §1](./implementation-plan.md#1-p0--정지-작업).
 >
 > 설계·통합 지점은 실측 코드와 대조해 확정했다 → 이 문서만 보고 구현에 들어갈 수 있다.
 > ⚠️ **2026-08-20 설계 변경** — 결제·로그인을 `klow.kr` 로 넘기는 **핸드오프**로 바꿨다(원안은 결제까지
