@@ -5,7 +5,12 @@
 - **설계 정본**: [`docs/custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`flow.md`](../../custom-domain/flow.md), 결정표는 [`README.md`](../../custom-domain/README.md).
 - **관련 파일**: `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
 
-> ℹ️ **P1 단계에서는 아직 아무 프론트도 이 API 를 부르지 않는다.** 실제 서빙은 klow_web 미들웨어(P3), 브랜드 등록 UI 는 klow_brand(P4)에서 붙는다.
+> ℹ️ **소비자 3곳** (2026-08-21 P4 까지 전부 붙었다 — 아직 미배포):
+> ① klow_web `src/middleware.ts` 가 `GET /v1/storefront/resolve` 로 Host→슬러그를 해석해 서빙하고,
+> ② klow.kr `/handoff` 가 같은 라우트로 복귀 host 를 재검증하며,
+> ③ 브랜드 등록 UI 는 klow_brand **설정 > 도메인 연결**(`src/app/(authed)/settings/_components/DomainSection.tsx`)이다.
+>
+> ⚠️ 브랜드 UI 가 알아야 하는 것 세 가지: **(a) 폴링은 `GET /v1/brand/domains` 로** 한다 — `POST :id/check` 는 6회/분 상한이라 폴링하면 브랜드의 수동 클릭이 429 가 된다(cron 이 5분마다 갱신하므로 목록만 다시 읽으면 따라온다). **(b) `lastError` 는 "에러가 있다"의 신호가 아니다** — `refreshOne` 이 매번 덮어써서 정상 `pending` 에도 문구가 들어 있다(톤은 `status` 가 정한다). **(c) `recordValue` 는 빈 문자열일 수 있다** — 폴백 상수를 화면에서 채우지 말 것(F3).
 
 ## 데이터 모델 — `BrandDomain`
 

@@ -19,7 +19,7 @@
 | **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **2026-08-21 완료 · ⚠️ 미배포** | server | 없음 (아직 서빙 안 함) |
 | **P2** ✅ | **핸드오프 수신부**(klow.kr `/handoff`) — **2026-08-21 완료 · ⚠️ 미배포** | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
 | **P3** ✅ | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** — **2026-08-21 완료 · ⚠️ 미배포** | web | **커스텀 도메인이 실제로 동작** |
-| **P4** | klow_brand 설정 UI | brand | 브랜드가 직접 등록 가능 |
+| **P4** ✅ | klow_brand 설정 UI — **2026-08-21 완료 · ⚠️ 미배포** | brand | 브랜드가 직접 등록 가능 |
 | **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
 
 > ⚠️ **P2·P3·P5 는 2026-08-20 에 전면 재작성됐다.** 원래 계획은 커스텀 도메인 안에서 결제까지
@@ -1027,7 +1027,49 @@ vid 로 들어가면 `recordPurchase` 가 행을 못 찾아 **그 브랜드의 �
 
 ---
 
-## 5. P4 — klow_brand 설정 UI
+## 5. P4 — klow_brand 설정 UI ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+
+코드는 `klow_brand` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
+**어긋난 전제만 이 절에 기록한다.**
+
+### 착수 중 어긋난 전제 (다음 사람이 믿어야 할 것)
+
+| # | 계획이 가정한 것 | 실제 | 결과 |
+|---|---|---|---|
+| 1 | §5 가 `verifying` 을 **"SSL 발급 중"** 이라고 적었다 | ⚠️⚠️ **아니다.** `decideDomainStatus` 에서 `verifying` 은 `!verified && verification 有` — **다른 Vercel 계정이 그 도메인을 이미 쓰고 있어 소유권 TXT 챌린지가 필요한 상태**다. "발급 중" 으로 안내하면 브랜드가 **기다리기만 하고 TXT 를 영원히 안 넣는다** | 화면 문구를 "소유권 확인 필요"로 쓰고 `verification` 배열을 레코드 행으로 그린다. 위 본문도 정정했다 |
+| 2 | §5 "`useSlugAvailability` 를 베껴 `useDomainAvailability.ts`" | ⚠️ **서버에 도메인용 availability 엔드포인트가 없다.** 중복은 `POST` 시점 409(`domain_taken`/`domain_already_in_use`)로만 알 수 있고, P4 는 brand 단독 배포라 새로 만들 수도 없다 — 베끼면 비동기 취소 로직이 **빈 껍데기**로 남는다 | 훅 파일을 만들지 않았다. `lib/domain.ts` 의 순수 `checkDomainInput()` + **기존** `hooks/useDebounced.ts`. `CheckBadge` 는 상태 종류가 같아 그대로 재사용하되 **`CheckMessage` 는 재사용하지 않았다**(그 `switch` 가 슬러그 전용 한국어를 하드코딩하고 `storefrontLabel(slug)` 를 부른다) |
+| 3 | §5 "검증 폴링(`refetchInterval: 10s`)" — 대상이 안 적혀 있었다 | ⚠️ `POST :id/check` 는 **6회/분** 상한이고 1건이 Vercel API 를 2~3회 태운다. 10초 폴링이면 정확히 천장에 닿아 **브랜드의 수동 클릭이 429** 가 된다 | 폴링 대상은 **`GET /v1/brand/domains`**(전역 60/분). 서버 cron 이 5분마다 pending/verifying 을 다시 확인하므로 결과가 따라 들어오고, 즉시 확인은 "지금 확인" 버튼이 맡는다. `pending`·`verifying` 행이 하나도 없으면 폴링을 끈다 |
+| 4 | (언급 없음) | ⚠️⚠️ **`lastError` 는 "에러가 있다"의 신호가 아니다.** `refreshOne` 이 확인할 때마다 덮어써서 **정상 `pending` 에도** `'DNS 레코드가 아직 확인되지 않았습니다'` 가 들어 있다 | 톤은 **`status` 가 정하고** `lastError` 는 `error` 행의 사유 줄로만 쓴다. `lastError != null` 로 빨간 배너를 그리면 **갓 만든 도메인이 전부 고장난 것처럼 보인다** |
+| 5 | F3 = "Vercel 응답을 그대로 표시" | ⚠️ 그 값이 **빈 문자열일 수 있다**(`recommendedRecord` 가 rank:1 권장값이 없으면 의도적으로 `''`, 페어 실패 행도 `''`) | 복사 박스 대신 **"확인 중…"** 을 그리고 복사 버튼을 감춘다. **폴백 상수를 채우지 않는다** — 그럴듯한 옛 IP 를 띄우면 벤더가 타겟을 옮긴 날 신규 연결이 전부 조용히 실패한다 |
+| 6 | §2-5b 4번 "페어 실패는 primary 를 막지 않는다" | ⚠️ 그 외에 **`pair: null` 이 두 가지 뜻**이다 — ① 서브도메인이라 페어 없음(정상) ② apex 인데 **도메인 개수 상한을 넘겨 서버가 조용히 생략**(로그에만 남는다) | 둘을 **`domain.recordType === 'A'`** 로 가른다. ⚠️ 이건 apex 를 우리가 판정하는 게 아니라(F2) **서버가 Vercel `apexName` 으로 정한 결과를 읽는 것**이다 — 그래서 F2 를 어기지 않는다 |
+| 7 | §5 "구독 `active` 가 아니면 잠금 안내" | ⚠️ 서버 게이트는 `approved && (**어드민 생성 브랜드** \|\| 구독 active)` 인데 klow_brand `BrandDTO` 에 **`submittedById` 가 없어** 그 예외를 구분할 수 없다. 잠그면 그런 브랜드는 도메인을 붙일 **방법이 아예 없다**(어드민 도메인 UI 가 없다) | **안내만 띄우고 입력은 열어 둔다.** 최종 게이트는 서버 403 이고 그 한국어 문구를 그대로 토스트한다. (`MAX_PHONES` 가 폼을 미리 닫는 것과 다른 이유: 거긴 클라가 진실을 **정확히** 안다) |
+| 8 | (언급 없음) | ⚠️ 이 API 의 에러 본문이 **세 가지 모양**이다 — A `{code,message}` / B Nest 기본 `{statusCode,message,error}`(**502 는 message 가 Vercel 영문 디버그 문자열**, 429 는 `ThrottlerException: …`) / C zod `{error,issues}`(message 키 없음) | `extractApiError` 를 그대로 쓰면 **벤더 영문이 브랜드 화면에 뜬다.** 반대로 `describeApiError` 만 쓰면 403 `subscription_required` 의 좋은 문구가 "이 항목을 수정할 권한이 없어요" 로 뭉개진다 → **`code` 유무로 가르는** 로컬 헬퍼 하나(`domainErrorMessage`) |
+| 9 | §5 "`customDomain?` 을 세 함수에 추가" | `productLinkUrl` 은 P4 에 **호출부가 없다**(§6-2 에서 생긴다) | 호출부가 있는 **`storefrontUrl`·`storefrontLabel` 둘만** 열었다. ⚠️ 그리고 **`lib/onsite.ts` 의 `onsiteStoreUrl()` 에는 영원히 넘기면 안 된다** — 미들웨어가 커스텀 도메인에서 `?mode=onsite` 를 **떼어 내고 307** 해서 부스 QR 이 조용히 일반 모드로 떨어진다. 근거를 `storefront.ts` 주석에 박아 뒀다(§6-2 가 가장 먼저 밟을 지뢰다) |
+
+### 이 PR 이 실제로 남긴 것
+
+- 신규: `lib/domain.ts`(서버 `domain-host.ts` 의 의도된 크로스 레포 미러 — 정규화·거부·상한만,
+  **apex 판정 없음**) · `settings/_components/DomainSection.tsx`
+- 수정: `lib/api-types.ts`(`BrandDomainDTO`·`BrandDomainStatus`·`BrandDomainCreateDTO`) ·
+  `lib/api.ts`(`domains` 네임스페이스 4개) · `lib/query-keys.ts`(`brandDomains`) ·
+  `lib/storefront.ts`(선택 인자 2개 + onsite 금지 주석) · `settings/page.tsx`(1블록)
+- **서버·web·admin 무변경. 마이그레이션 없음. 신규 서버 라우트 없음. 미들웨어 무변경**
+  (`/settings/:path*` 가 이미 matcher 에 있다).
+
+**검증 결과**: `type-check` · `npx eslint <바꾼 파일>`(경고 0) · `build` 통과.
+`lib/domain.ts` 는 서버 `domain-host.spec.ts` 가 잠근 케이스(정규화 8종 · punycode 2종 ·
+거부 17종 · **over-match 금지 3종** `myklow.kr`/`klow.kr.brand.com`/`notvercel.app`)를 그대로
+돌려 **32/32 통과**를 확인했다. 라우트 4개는 실제 부팅한 klow_server 에서 매핑 확인(`GET` 401 /
+쓰기 3개는 Origin 없는 curl 이라 403 = CSRF 가드 정상).
+⚠️ **브라우저 E2E 는 아직 안 했다** — §8-2 A-1·1-1(실도메인 연결·apex 페어)과 함께 스테이징에서.
+
+### P5 로 넘기는 메모
+
+- `storefrontUrl`/`storefrontLabel` 의 `customDomain` 인자를 넘기는 곳은 지금 `DomainSection`
+  **하나뿐**이다. §6-2 에서 ShareModal·QR·인스타·프로모션 링크에 붙일 때 **`onsiteStoreUrl` 만
+  제외**할 것(위 9번).
+- 카드가 접혀 있으면 목록을 아예 안 읽으므로 **`error` 로 떨어진 도메인을 브랜드가 먼저 알
+  방법이 없다.** 알림이 필요하면 그건 카드가 아니라 스튜디오 상단 배너 쪽 일이다(구독 배너 선례).
 
 `settings/_components/DomainSection.tsx` 신설 + `settings/page.tsx` 에 **1줄**.
 근거: `AccountSection.tsx:35` 의 읽기전용 "브랜드 링크" 바로 아래 맥락이라 발견성이 좋고,
@@ -1044,21 +1086,22 @@ vid 로 들어가면 `recordPurchase` 가 행을 못 찾아 **그 브랜드의 �
   `components/auth/SlugCheck.tsx` 의 `CheckBadge`/`CheckMessage` 는 상태 타입이 같아 **그대로 import**.
   `lib/domain.ts` 는 서버 `domain-host.ts` 의 **의도된 크로스 레포 미러**(reserved-slugs 선례처럼 주석으로 못 박을 것)
 - **API 계약은 §2-4 의 표·DTO·에러코드가 정본**이다(다른 레포라 여기서 다시 정의하지 말 것).
-- **화면 상태** — 미연결(입력) / `pending` / `verifying`(SSL 발급 중, 10초 폴링) / `active`(링크 + 연결 해제) / `error`(사유 + 재시도)
+- **화면 상태** — 미연결(입력) / `pending`(A/CNAME 안내) / `verifying`(**소유권 TXT 챌린지** — ⚠️ SSL 발급 중이 **아니다**, 아래 정정 1) / `active`(링크 + 연결 해제) / `error`(사유 + 재시도). 목록을 10초 폴링한다(⚠️ `check` 가 아니다 — 정정 3)
   ⚠️ 상태는 **`role='primary'` 하나를 기준**으로 크게 그리고, `www` 페어는 그 아래 **한 줄**로 붙인다
   (§2-5b). 둘을 대등하게 그리면 "입력은 하나였는데 왜 두 개죠?" 를 매번 묻는다
-  ⚠️ **`pending` 안에 서로 다른 두 안내가 있다** — ① A/CNAME 접속 레코드(항상) ② **소유권 TXT 챌린지**
-  (`verification` 이 있을 때만). `verification` 유무로 섹션을 나눠 렌더할 것. 값은 **서버가 준 타입·값
-  그대로** 표시하고 클라에서 판정하지 않는다
+  ⚠️ **안내가 두 가지다** — ① A/CNAME 접속 레코드 ② **소유권 TXT 챌린지**. 계획은 둘 다 `pending` 안에
+  있다고 적었지만 실제로는 TXT 가 붙는 순간 status 가 **`verifying` 으로 갈린다**(둘은 동치라 지시는
+  그대로 옳고, **status 로 나누는 편이 읽기 쉽다**). 값은 **서버가 준 타입·값 그대로** 표시하고
+  클라에서 판정하지 않는다
 - 구독 `active` 가 아니면 잠금 안내. `settings/page.tsx` 에 이미 있는 `qk.subscription` 값을 prop 으로 내린다
 
 **`lib/storefront.ts`** — 링크 문자열의 단일 출처(소비처 13곳). **선택 인자를 뒤에 추가**해 기존 호출부가
 그대로 컴파일되게 한다:
 
 ```ts
-storefrontUrl(slug?, customDomain?)
-storefrontLabel(slug?, customDomain?)
-productLinkUrl(slug, productId, customDomain?)
+storefrontUrl(slug?, customDomain?)     // ✅ P4
+storefrontLabel(slug?, customDomain?)   // ✅ P4
+productLinkUrl(slug, productId)         // 무변경 — 호출부가 §6-2 에서 생긴다
 // embedScriptUrl() 은 API 호스트라 무변경
 ```
 
