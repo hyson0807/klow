@@ -15,11 +15,11 @@
 
 | PR | 내용 | 레포 | 이 단계에서 사용자에게 보이는 것 |
 |---|---|---|---|
-| **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **2026-08-21 완료** | web, server, brand | 없음 (독립 배포 가능) |
-| **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **2026-08-21 완료 · ⚠️ 미배포** | server | 없음 (아직 서빙 안 함) |
-| **P2** ✅ | **핸드오프 수신부**(klow.kr `/handoff`) — **2026-08-21 완료 · ⚠️ 미배포** | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
-| **P3** ✅ | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** — **2026-08-21 완료 · ⚠️ 미배포** | web | **커스텀 도메인이 실제로 동작** |
-| **P4** ✅ | klow_brand 설정 UI — **2026-08-21 완료 · ⚠️ 미배포** | brand | 브랜드가 직접 등록 가능 |
+| **P0** ✅ | 정지 작업(예약 슬러그·하드코딩·집계 버그) — **완료 · 스테이징 배포됨 · ⚠️ 운영 미배포** | web, server, brand | 없음 (독립 배포 가능) |
+| **P1** ✅ | 서버 기반: `BrandDomain` 모델 + Vercel 연동 + resolve + Origin 술어 — **완료 · 스테이징 배포됨 · ⚠️ 운영 미배포** | server | 없음 (아직 서빙 안 함) |
+| **P2** ✅ | **핸드오프 수신부**(klow.kr `/handoff`) — **완료 · 스테이징 배포됨 · ⚠️ 운영 미배포** | web ⚠️ **P1 의 `/v1/storefront/resolve` 에 런타임 의존** | 없음 (klow.kr 에서 불가시·무해) |
+| **P3** ✅ | klow_web 미들웨어 + 커스텀 도메인 서빙 + **핸드오프 송신부** — **완료 · 스테이징 배포됨 · ⚠️ 운영 미배포** | web | **커스텀 도메인이 실제로 동작** |
+| **P4** ✅ | klow_brand 설정 UI — **완료 · 스테이징 배포됨 · ⚠️ 운영 미배포** | brand | 브랜드가 직접 등록 가능 |
 | **P5** (선택) | **풀 프록시 승격**(로그인·결제까지 커스텀 도메인) · 링크 도메인화 · SEO index 개방 | 전부 | |
 
 > ⚠️ **P2·P3·P5 는 2026-08-20 에 전면 재작성됐다.** 원래 계획은 커스텀 도메인 안에서 결제까지
@@ -36,7 +36,7 @@
 
 ---
 
-## 1. P0 — 정지 작업 ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+## 1. P0 — 정지 작업 ✅ **코드 완료 (2026-08-21) · 스테이징 배포됨 · ⚠️ 운영 미배포**
 
 독립 배포 가능하고 되돌릴 일이 없다. 코드는 3개 레포 `develop/custom-domain` 에 커밋돼 있고,
 **배포는 P1 과 묶어서** 한다(운영 결정). 아래 §7 배포 순서를 그때 함께 볼 것.
@@ -104,7 +104,7 @@ klow_web 이 못 열거나 그 반대가 된다.
 
 ---
 
-## 2. P1 — 서버 기반 ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+## 2. P1 — 서버 기반 ✅ **코드 완료 (2026-08-21) · 스테이징 배포됨 · ⚠️ 운영 미배포**
 
 코드는 `klow_server` `develop/custom-domain` 에 있고 **배포는 P0 과 같은 창에서** 한다(§7).
 아래 절들은 착수 시점의 설계 그대로이고, **어긋난 전제만 이 절에 기록한다.**
@@ -160,6 +160,41 @@ punycode, 조회는 U-label) → `canonicalHost()` 를 쓰기·읽기가 공유�
   붙여서 P3 와 함께 한다. ⚠️ 그때 Vercel 대시보드에서 그 도메인에 **"Redirect to primary domain" 이
   붙지 않았는지** 확인할 것(붙으면 기능이 통째로 죽는다).
 
+
+### 사후 검토(2026-08-22)에서 고친 것
+
+⚠️⚠️ **§2-6 이 약속한 60일 유예가 실제로는 0일이었다.** `cleanupOrphans` 의 유예 시계가
+`BrandDomain.updatedAt` 이었는데, `active` 행은 다시 쓰이지 않는다(폴링 cron 이 `pending`/
+`verifying` 만 집고 오리진 스냅샷은 읽기다) — 즉 그 값이 **활성화된 순간에 얼어붙는다.**
+그래서 60일 넘게 잘 돌던 도메인은 구독이 `past_due` 로 떨어지는 **첫 사이클에 즉시** Vercel
+에서 제거되고 row 도 지워졌다. 유예가 막으려던 바로 그 상황("결제 실패로 잠깐 past_due 가 된
+브랜드가 재결제 후 DNS 를 처음부터 다시 설정")을 하나도 못 막은 것이다. `withdrawal_pending`
+도 같아서 30일 탈퇴 유예 중에 도메인이 먼저 사라졌고, 반대로 `pending` 행은 cron 이 매번
+`updatedAt` 을 올려 유예가 영원히 리셋됐다.
+
+→ 시계를 **원인 축의 행**으로 옮겼다(`brands/brand-selects.ts` 의 `brandUnserviceableSinceWhere`
++ JS 짝 `brandUnserviceableSince` — 그 파일의 "세 형태를 한 블록에" 규칙 그대로). 세 분기는
+`status` 로 배타적이다: 승인 축이 원인이면 `Brand.updatedAt`, 구독 축이 원인이면
+`BrandSubscription.updatedAt`, 구독 행 자체가 없으면 `Brand.updatedAt` 폴백.
+**마이그레이션 없음**(둘 다 기존 `@updatedAt` 컬럼)이고, 두 시계 모두 무관한 편집으로 늘어날
+수는 있어도 줄지 않아 **틀려도 "유예가 길어지는" 안전한 방향으로만** 틀린다. §9 **F33**.
+
+⚠️ `BRAND_NOT_SERVICEABLE_WHERE` 는 그대로 두고 유예 절을 `AND:` 로 나란히 얹었다(relation
+필터를 한 객체에 두 번 쓸 수 없다). 스텁의 참조 동일성 가드가 살아 있어야 하므로, 런타임
+날짜가 박힌 유예 절은 팩토리 옆의 `unserviceableSinceOf()` 가 되꺼내 정본 JS 짝으로 판정한다 —
+스텁이 판정을 복제하지 않는다. 회귀 케이스 4개를 `resolve-host.spec.ts` 에 추가했다(구독이
+**방금** 끊긴 오래된 도메인은 아직 정리 대상이 아니다 · 승인이 방금 취소된 경우도 마찬가지 ·
+탈퇴 완료는 유예 없이 즉시 · 기존 6종 유지). 전체 유닛 **663/663**.
+
+**고치지 않고 남긴 것**(알려진 갭):
+- `createForBrand` 의 `count`/`findUnique` → `create` 가 비트랜잭션이라, 더블 서브밋이면 상한
+  3개를 넘길 수 있고 `host @unique` P2002 가 보상 제거를 거친 뒤 **409 가 아니라 raw 500** 으로
+  나간다. 브랜드 자기 계정 안의 경합이라 피해가 자기 자신뿐이다.
+- `domain-status.ts` 의 `shouldGiveUpPending()` 은 export 되고 스펙이 잠그는데 **실행 경로에
+  없다** — `verifyDue()` 가 같은 규칙을 Prisma where 로 다시 쓴다. 공유되는 건 상수뿐이라,
+  스펙이 초록불인 채 서비스만 틀릴 수 있다(예: 대상에 `verifying` 을 넣는 실수).
+- `recommendedRecord` 가 `rank:1` IPv4 **2개 중 첫 번째만** 안내한다. 단일 A 레코드로도 동작하고
+  잃는 건 이중화뿐이다.
 
 ### 2-1. Prisma 모델
 
@@ -322,7 +357,7 @@ trailing dot 제거, 253자·라벨 63자 상한, **`klow.kr`·`*.klow.kr`·`*.v
 - `status='active'` 인 것만 해석하고, ⚠️ **`PUBLIC_BRAND_WHERE`(`modules/brands/brand-selects.ts`)와
   구독 게이트를 반드시 함께 태운다.** 안 태우면 구독이 끊긴 브랜드의 도메인만 계속 살아
   "구독이 끊기면 브랜드관이 사라진다"는 기존 불변식을 우회한다
-- `role='redirect'` 면 `redirectTo` 로 apex 를 돌려줘 미들웨어가 308 한다
+- `role='redirect'` 면 `redirectTo` 로 apex 를 돌려줘 미들웨어가 **307** 한다(§4 정정 4번 — 308·301 은 브라우저가 영구 캐시하는데 이 값은 가변 DB 상태다)
 - 응답에 `Cache-Control: public, max-age=60, s-maxage=60` (계약 명시)
 - ⚠️⚠️ **`@SkipThrottle()` 을 이 라우트 하나에만 건다.** 부르는 쪽이 손님 브라우저가 아니라 **klow_web
   미들웨어(서버 사이드)** 라, klow_server 가 보는 IP 는 **Vercel 것 하나로 뭉친다.** 전역 스로틀은
@@ -505,7 +540,7 @@ promotion 을 잃으면 브랜드가 "이 링크에 할인을 계속 줄지"를 
 
 ---
 
-## 3. P2 — 핸드오프 수신부 (klow.kr) ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+## 3. P2 — 핸드오프 수신부 (klow.kr) ✅ **코드 완료 (2026-08-21) · 스테이징 배포됨 · ⚠️ 운영 미배포**
 
 코드는 `klow_web` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
 **어긋난 전제만 이 절에 기록한다.**
@@ -758,7 +793,7 @@ klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fi
 
 ---
 
-## 4. P3 — 커스텀 도메인 서빙 (핵심) ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+## 4. P3 — 커스텀 도메인 서빙 (핵심) ✅ **코드 완료 (2026-08-21) · 스테이징 배포됨 · ⚠️ 운영 미배포**
 
 코드는 `klow_web` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
 **어긋난 전제만 이 절에 기록한다.**
@@ -777,6 +812,7 @@ klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fi
 | 8 | `?mode=onsite` 는 "커스텀 도메인 대상 아님"이라 신경 쓸 것 없다 | ⚠️ 2번을 고쳐 쿼리를 보존하는 순간 **실제로 도달한다** → `onsiteMode` 가 켜져 결제가 `/checkout/onsite`(게스트 쿠키 필요)로 분기 | 미들웨어가 그 파라미터를 **떼어 내고 307** |
 | 9 | 음성 캐시 TTL 300초 | ⚠️ 서버 응답 자체가 `max-age=60` 이다. 300초면 도메인 검증 직후 **아이솔레이트마다 404 와 정상이 뒤섞여** 브랜드가 "됐다 안 됐다"를 겪는다 | **60초**로 낮추고, **실패는 아예 캐시하지 않는다**(stale 읽기만). `Host` 는 공격자 통제 값이라 Map 에 **상한 256 + 축출**, fetch 전 **문법 검사** |
 | 10 | (언급 없음) | ⚠️ 루트 레이아웃 컴포넌트에서 `useSearchParams()` 를 쓰면 **전 페이지가 CSR 로 deopt** 된다 | `CustomDomainMount` 는 `window.location.search` 를 마운트 effect 에서 읽는다(`useCheckoutGate` 선례). 빌드 결과 정적 페이지가 전부 `○` 로 유지됨을 확인 |
+| 11 ⚠️⚠️ | (언급 없음) resolve 왕복은 "빠르다"고 암묵 가정하고 타임아웃을 1초로 잡았다 | ⚠️⚠️ **스테이징에서 기능이 통째로 죽었다** — `/v1/storefront/resolve` 실측 왕복이 **1.2~1.6초**라 미들웨어 fetch 가 **매번 abort** 됐다. `resolveHost` 가 늘 `null` 을 돌려줘 `/{seg}` 는 503, `/` 는 fail-open 으로 KLOW 홈(→`/shop`)이었고, 서버·DNS·Vercel 은 전부 정상이었다(resolve 는 200 에 slug 를 줬고 `verified:true`+`misconfigured:false`+redirect 없음). 그 1.2초 중 ~0.75초는 이 라우트가 아니라 **Railway+Neon 기본 왕복**이라 서버를 최적화해도 1초 밑으로 안 내려간다 | **3초**로 올렸다(`8d2f93b`). 타임아웃은 p50 이 아니라 **느린 쪽 왕복을 흡수할 값**이어야 한다. 대가는 API 가 진짜 죽었을 때 첫 요청이 3초 기다리는 것이고 캐시 덕에 아이솔레이트당 60초에 한 번뿐이다. **판별자는 `/{seg}` 가 404 가 아니라 503 이라는 것** — "슬러그가 없다"가 아니라 "해석 자체를 못 했다"는 신호다 → **F30 신설** |
 
 ### 이 PR 이 실제로 남긴 것
 
@@ -849,6 +885,33 @@ klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fi
 결제 완주 후 `?purchased=` 정리는 §8-2 의 스테이징 수동 항목으로 남아 있다.
 
 
+### 사후 검토(2026-08-22)에서 고친 것
+
+배포 전 문서↔코드 대조에서 **미들웨어에 두 개의 조용한 구멍**이 나와 함께 고쳤다. 둘 다
+컴파일·린트·빌드가 전부 통과하던 것들이고, 각각 F32·F31 로 §9 에 못박았다.
+
+1. ⚠️⚠️ **F11 이 뚫려 있었다 — 메타데이터 세그먼트를 `startsWith` 로 봤다.**
+   `METADATA_PREFIXES.some((m) => seg1.startsWith(m))` 라 `icon` 으로 **시작하는** 최상위
+   세그먼트가 전부 pass-through 됐다. `RESERVED_BRAND_SLUGS` 에 `icon` 이 없어 `iconic` 은
+   실제로 등록 가능한 슬러그이고, 그러면 `shop.brandA.com/iconic` 이 `[brandSlug]` 라우트에
+   그대로 걸려 **브랜드 `iconic` 의 브랜드관이 브랜드 A 도메인에 렌더**된다 — `/{seg}` rewrite
+   규칙이 유일한 방어인데 그 **앞**을 새는 경로였다. 프로모션 슬러그도 같은 길을 탄다.
+   → `METADATA_SEGMENTS` **정확 일치** + Next 가 붙이는 `-{hash}` 접미만 허용하는
+   `isMetadataSegment()` 로 교체. 실제 dotless 메타데이터 라우트는 `app/opengraph-image.tsx`
+   하나뿐이고 `icon.*.png`·`apple-icon.png`·`favicon.ico` 는 이미 `config.matcher` 가 제외한다.
+
+2. ⚠️⚠️ **서버가 받는 호스트를 web 이 영원히 못 여는 조합이 있었다 — punycode TLD.**
+   `host-classify.ts` 의 `HOST_RE` 가 마지막 라벨을 `[a-z]{2,63}` 로만 받아 `xn--3e0b707e`
+   같은 **IDN TLD 를 거부**했다. 서버 `domain-host.ts` 는 라벨마다 `/^[a-z0-9-]+$/` 라
+   통과시키고 `domain-host.spec.ts` 가 `쇼핑몰.한국 → xn--352bl7khqr.xn--3e0b707e` 를 잠근다.
+   그래서 한글 도메인은 등록돼 `active` 까지 가는데 **미들웨어가 resolve 를 아예 안 불러**
+   루트는 KLOW 홈으로 fail-open, `/{seg}` 는 404 였다. 같은 정규식을 핸드오프 `o` 도 쓰므로
+   결제 후 브랜드 도메인 카트 정리까지 함께 죽는다. 조용하고 회복되지 않는다.
+   → TLD 대안에 `xn--[a-z0-9-]{2,59}` 추가. `npm run check:handoff` 에 punycode 왕복 케이스를
+   더해 잠갔다(klow_web 에서 이 규약을 잠그는 유일한 수단이다).
+
+---
+
 ### 4-0. 왜 프록시가 아니라 핸드오프인가
 
 프록시가 필요했던 이유는 [flow.md §1-2](./flow.md#1-2-shopbrandacom-에서-깨지는-것-4가지) 의 4가지다.
@@ -891,7 +954,7 @@ klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fi
 4. **`X-Robots-Tag: noindex, follow` 부착** — 본 도메인이 아니면 **무조건**. host 해석 실패 중에
    크롤러가 중복 콘텐츠를 긁는 것까지 막는다
 
-**host 해석 캐시** — 모듈 레벨 `Map`(양성 TTL 60초 / 음성 TTL 300초). Next 의 Data Cache 는 미들웨어에서
+**host 해석 캐시** — 모듈 레벨 `Map`(양성 TTL 60초 / **음성 TTL 60초** — 정정 9번). ⚠️ **실패는 아예 캐시하지 않는다**(만료된 stale 값을 읽기만 한다). Next 의 Data Cache 는 미들웨어에서
 동작하지 않으므로 직접 관리한다.
 **fetch 실패 시 stale 값 우선** — fail-closed 로 하면 API 가 3초 흔들릴 때 전 브랜드 도메인이 동시에
 죽는다. 다만 **stale 도 없을 때의 폴백은 경로마다 다르다:**
@@ -1027,7 +1090,7 @@ vid 로 들어가면 `recordPurchase` 가 행을 못 찾아 **그 브랜드의 �
 
 ---
 
-## 5. P4 — klow_brand 설정 UI ✅ **코드 완료 (2026-08-21) · ⚠️ 미배포**
+## 5. P4 — klow_brand 설정 UI ✅ **코드 완료 (2026-08-21) · 스테이징 배포됨 · ⚠️ 운영 미배포**
 
 코드는 `klow_brand` `develop/custom-domain` 에 있다. 아래 절들은 착수 시점의 설계 그대로이고,
 **어긋난 전제만 이 절에 기록한다.**
@@ -1215,6 +1278,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | `modules/brand-domains/__tests__/verified-origin.spec.ts` **신규** | `active` 만 통과 / `https://` 만 / **와일드카드·서브도메인 확장 없이 정확 일치** / 삭제 즉시 반영 / 빈 스냅샷에서 false. **여기가 느슨하면 전 브랜드 도메인이 CSRF 우회로가 된다** |
 | `modules/brand-domains/__tests__/domain-status.spec.ts` **신규** | **F29** — `verified:true` + `misconfigured:true` 조합이 `active` 가 **되지 않음** / 둘 다 만족할 때만 active / `verification` 있으면 `verifying` |
 | `modules/brand-domains/__tests__/resolve-host.spec.ts` **신규** | **F13** — 구독 비-active·탈퇴·미승인 브랜드 미해석 / `Brand.slug` 이 null 이면 미해석 / www redirect 파생과 **오픈 리다이렉트 차단**(짝 primary 검증) / 미등록 host 는 404 가 아니라 200 |
+| `modules/brand-domains/__tests__/resolve-host.spec.ts` (2026-08-22 보강) | **F33** — 유예 시계가 `BrandDomain.updatedAt` 이 아니다: 구독이 **방금** `past_due` 가 된 브랜드의 오래된 도메인은 아직 정리 대상이 **아니고**, 승인이 방금 취소된 경우도 마찬가지이며, `withdrawn` 만 유예 없이 즉시 |
 | `modules/brand-domains/__tests__/domain-pairing.spec.ts` **신규** | apex 입력 → `www` redirect 동반 생성 / **서브도메인 입력 → 페어 없음**(F28) / 페어 실패가 primary 를 롤백하지 않음 / primary 삭제 시 페어 동반 삭제 |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경으로 통과해야 한다** — 통과 안 하면 설계가 틀어진 것 |
 
@@ -1227,20 +1291,26 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 (`package.json` scripts = dev/build/start/lint/type-check). 즉 **F1·F4~F9·F15·F16·F21~F26 을 잠글 자동
 테스트가 없다** — §8-2 의 수동 항목이 **유일한 방어선**이다. 대충 하면 안 된다.
 (`encodeHandoff`/`decodeHandoff` 는 순수 함수라 **P3 에서 가장 먼저 잠갔다** — 프레임워크 없이 tsx 로
-도는 `npm run check:handoff`(`klow_web/scripts/check-handoff.ts`). 러너를 들이면 그걸 그대로 옮기면 된다.)
+도는 `npm run check:handoff`(`klow_web/scripts/check-handoff.ts`, 10케이스 — punycode 호스트 왕복이 **F31** 을 잠근다). 러너를 들이면 그걸 그대로 옮기면 된다.)
 
 ### 8-2. 수동 E2E (스테이징)
 
 ⚠️ **핸드오프 불변식은 자동 잠금이 없다**(§8-1) — 이 목록이 유일한 방어선이다. 대충 하면 안 된다.
 
+> **진행 상황 (2026-08-22 기준)** — ✅ 는 스테이징에서 실제로 확인했다.
+> **A 블록(라우팅)은 끝났고, B·C·D 가 통째로 남아 있다.** 특히 **C(핸드오프 왕복)** 는 이
+> 기능에서 자동 잠금이 가장 얇은 구간이라(`check:handoff` 가 순수 함수만 잠근다) 운영 배포 전
+> 반드시 돌려야 한다. A-4 를 확인하는 과정에서 F30(타임아웃) 사고를 잡아냈다 — `/{seg}` 가
+> 404 가 아니라 **503** 이라는 것이 그 판별자였다.
+
 **A. 도메인 연결·라우팅**
 
-1. 테스트 서브도메인 연결 → DNS 설정 → `pending → verifying → active` 전이
+1. ✅ 테스트 서브도메인 연결 → DNS 설정 → `pending → verifying → active` 전이
 1-1. **F28** — **apex** 를 입력하면 `www` 페어가 자동 생성되고(화면엔 primary 한 줄 + www 부속 줄),
     **서브도메인**을 입력하면 페어가 **생기지 않는지**. primary 삭제 시 페어도 함께 지워지는지
-2. `https://<도메인>/` 이 브랜드관 렌더 (rewrite, **주소창 유지**)
-3. `shop.brandA.com/{다른브랜드}` → **브랜드 A 브랜드관**(남의 브랜드관이 안 뜬다) · `/{자기slug}` → 308 `/`
-4. **F11 폴백** — resolve 를 강제로 실패시킨 채(서버 중단·네트워크 차단)
+2. ✅ `https://<도메인>/` 이 브랜드관 렌더 (rewrite, **주소창 유지**)
+3. `shop.brandA.com/{다른브랜드}` → **404**(F11 — 남의 브랜드관이 뜨면 실패) · `/{자기slug}` → **307** `/`
+4. ✅ **F11 폴백** — resolve 를 강제로 실패시킨 채(서버 중단·네트워크 차단)
    `/{다른브랜드}` → **503**(브랜드 B 브랜드관이 뜨면 실패) · **`/` 는 KLOW 홈 폴백** ·
    **`/product/{id}` 는 정상 렌더**(여기까지 막으면 과잉이다)
 5. 구독 강제 해지 → 커스텀 도메인이 더 이상 서빙하지 않는지
@@ -1287,7 +1357,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 ### 8-3. 문서
 
 - `docs/server/modules/brand-domains.md` 신설 + `docs/server/README.md` 색인 (컨트롤러 변경 시 함께 갱신 — CLAUDE.md 규칙)
-- `docs/deploy-custom-domain-runbook.md` (`deploy-free-text-product-tags-runbook.md` 형식)
+- ✅ [`docs/deploy-custom-domain-runbook.md`](../deploy-custom-domain-runbook.md) — 배포 순서·env 함정(`VERCEL_PROJECT_ID` 환경별 분리)·Vercel "Redirect to primary domain" 함정·배포 후 curl 검증·롤백
 - 워크스페이스 `CLAUDE.md` Key Facts 항목 추가 — **핸드오프 경계**(브라우징·담기 = 커스텀 도메인 /
   로그인·결제 = klow.kr) · 넘기는 상태 4개 · 배포 순서(P2 → P3)
 - **릴리즈 노트/CS 가이드**: "커스텀 도메인은 **둘러보기·담기 전용**이고 **로그인·결제는 klow.kr 에서**
@@ -1298,7 +1368,7 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 ## 9. 불변식 체크리스트 (착수 전 필독)
 
 아래는 전부 **틀려도 컴파일과 테스트가 통과**한다. 각 PR 착수 전 해당 항목을 확인한다.
-⚠️ F1·F4~F9·F15·F16·F21~F26 은 **klow_web 이라 자동 테스트가 없다**(§8-1).
+⚠️ F1·F4~F9·F15·F16·F21~F26·**F30~F32** 는 **klow_web 이라 자동 테스트가 없다**(§8-1 — `check:handoff` 가 잠그는 순수 함수만 예외).
 
 | # | 불변식 | 어기면 | PR |
 |---|---|---|---|
@@ -1331,6 +1401,10 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 | **F29** | `active` 전이는 **`verified && !misconfigured`** — 두 API 를 모두 본다 | Vercel `verified` 는 소유권 축이라 **DNS 를 한 줄도 안 건 도메인이 즉시 "연결 완료"** 로 표시된다(2026-08-21 실측) | P1 |
 | **F19** | `origin-exempt.spec.ts` 가 **무변경으로 통과** | 통과하지 않으면 설계가 틀어진 것 | P1 |
 | **F20** | Vercel 추가 후 DB insert 실패 시 **보상 제거** + 해지 도메인 **정리 경로** | Vercel 쿼터 누수 · orphan 누적 | P1 |
+| **F30** ⚠️⚠️ | 미들웨어 `RESOLVE_TIMEOUT_MS` 는 **resolve 의 느린 쪽 왕복보다 커야 한다**(실측 1.2~1.6초 → 현재 3초). 서버 응답 지연을 재지 않고 이 값을 줄이지 말 것 | **커스텀 도메인이 하나도 안 뜬다** — 모든 요청이 abort 돼 `/{seg}` 503, `/` 는 KLOW 홈. 서버·DNS·Vercel 이 전부 정상이라 원인을 찾기 어렵다(2026-08-21 스테이징 실제 사고). **판별자는 `/{seg}` 가 404 가 아니라 503** | P3 |
+| **F31** ⚠️ | klow_web `HOST_RE` 는 서버 `domain-host.ts` 보다 **좁으면 안 된다** — 특히 punycode TLD(`xn--…`) | 서버가 받아 `active` 까지 간 한글 도메인을 미들웨어가 **영원히 서빙하지 못한다**(resolve 를 아예 안 부른다). 핸드오프 `o` 도 같이 버려져 결제 후 카트 정리가 죽는다 | P3 |
+| **F32** ⚠️ | 미들웨어 메타데이터 세그먼트 판정은 **정확 일치**(+`-{hash}` 접미)여야 한다. `startsWith` 금지 | `icon` 접두 매칭이면 `/iconic` 같은 실재 가능한 슬러그가 pass-through 되어 **F11 이 뚫린다**(브랜드 A 도메인에 브랜드 `iconic` 의 브랜드관) | P3 |
+| **F33** ⚠️ | 도메인 정리 유예 시계는 **원인 축의 행**(`Brand.updatedAt` / `BrandSubscription.updatedAt`)이다. `BrandDomain.updatedAt` 금지 | `active` 행은 다시 쓰이지 않아 그 값이 활성화 시점에 얼어붙는다 → 구독이 `past_due` 로 떨어지는 **첫 사이클에 즉시 삭제**되어 유예가 사실상 0이 된다(재결제 후 DNS 재설정 강요) | P1 |
 
 ---
 

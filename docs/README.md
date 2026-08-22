@@ -13,10 +13,11 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [pricing-model.md](./pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
 | [deploy-drop-logistics-markup-runbook.md](./deploy-drop-logistics-markup-runbook.md) | **판매가 물류비 분리 + 무료배송 릴리스를 prod 에 어떻게 올리나?** 마이그레이션 → 백필 → 배포 순서, 스모크, 사전 공지 |
 | [deploy-free-text-product-tags-runbook.md](./deploy-free-text-product-tags-runbook.md) | **제품 태그 자유 텍스트 전환을 prod 에 어떻게 올리나?** DROP COLUMN 8개 컷오버, 마이그레이션 → 코드 → 백필 순서와 그 이유 |
+| [deploy-custom-domain-runbook.md](./deploy-custom-domain-runbook.md) | **브랜드 커스텀 도메인을 prod 에 어떻게 올리나?** 레포 간 순서(예약 슬러그 동일 창 · P2→P3 · P4 마지막), `VERCEL_PROJECT_ID` 환경별 분리, Vercel "Redirect to primary domain" 함정, 배포 후 curl 검증, 롤백 |
 | [payment-integration.md](./payment-integration.md) | 고객 결제(Eximbay, USD)가 어떻게 흐르나? prepare→verify, 환불, 웹훅 |
 | [brand-subscription.md](./brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
 | [mcf/README.md](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고. SP-API 조사·구현 계획·플로우 (📄 문서 단계) |
-| [custom-domain/README.md](./custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) 연결 — 왜 same-origin 프록시가 필요한지, 쿠키·CSRF·결제 리턴 처리, 단계별 구현 계획 (📄 문서 단계) |
+| [custom-domain/README.md](./custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) 연결 — 둘러보기·담기는 그 도메인 / 로그인·결제는 klow.kr(**핸드오프**), 쿠키·CSRF·CORS 처리, 미들웨어 경로 규칙 (✅ P0~P4 구현 완료 · 스테이징 배포 · 운영 대기) |
 | [storefront-sales-analytics.md](./storefront-sales-analytics.md) | 브랜드 `/stats` 에 **국가·제품 수요 분석 + 현장 채널**을 어떻게 붙이나? 두 모집단(퍼널 vs 주문 원장)이 왜 다른 숫자를 내는지, 채널 탭 정의, 서버/브랜드 작업 목록 (✅ 구현 완료 · 배포 대기) |
 | [preview-pages.md](./preview-pages.md) | klow_web 디자인 프리뷰 화면은 어디에 있나? 결제 완료(`/checkout/preview`)·배송추적(`/track/preview`)·시딩(`/seed/preview*`) |
 | [archive/](./archive/README.md) | 완료된 마이그레이션/정리 노트, 스크래치 — **현행 시스템 설명 아님** |

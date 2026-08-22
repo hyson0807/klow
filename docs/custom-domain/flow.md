@@ -106,7 +106,7 @@ GET https://shop.brandA.com/
         │ Yes                                    │
         │ (즉시 next() — 트래픽 대부분)            ▼
         │                          GET api/v1/storefront/resolve?host=shop.brandA.com
-        │                                         │  (모듈 레벨 Map 캐시: 양성 60s / 음성 300s)
+        │                                         │  (모듈 레벨 Map 캐시: 양성 60s / 음성 60s · 실패는 미캐시)
         │                                         ▼
         │                                  { slug: "brandA" }
         │                                         │

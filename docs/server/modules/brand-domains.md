@@ -74,7 +74,7 @@ type BrandDomainDTO = {
 
 - **404 를 쓰지 않는다** — 미등록 host 도 200 + `slug:null` 이라 미들웨어에 상태코드 분기가 없다(`/embed/v1/resolve` 가 `{found:false}` 로 뭉갠 것과 같은 이유).
 - `redirectTo` 는 **호스트만** 담는다. 스킴·경로·쿼리는 부르는 쪽이 조립한다.
-- ⚠️ **`role='redirect'`(www) 호스트는 `slug:null` + `redirectTo:'{apex}'`** 로 나온다. 즉 "이 host 가 우리 것인가"를 `slug !== null` 로만 판정하면 www 는 거짓이 된다. P3 미들웨어는 308 로 apex 에 넘기므로 실제로 손님이 www 에 머무르는 일이 없어 **F21 의 `slug !== null` 검증은 그대로 옳다** — 다만 그 이유가 "www 가 유효하지 않아서"가 아니라 **"애초에 도달할 수 없어서"** 라는 것을 알고 있을 것.
+- ⚠️ **`role='redirect'`(www) 호스트는 `slug:null` + `redirectTo:'{apex}'`** 로 나온다. 즉 "이 host 가 우리 것인가"를 `slug !== null` 로만 판정하면 www 는 거짓이 된다. P3 미들웨어는 307 로 apex 에 넘기므로 실제로 손님이 www 에 머무르는 일이 없어 **F21 의 `slug !== null` 검증은 그대로 옳다** — 다만 그 이유가 "www 가 유효하지 않아서"가 아니라 **"애초에 도달할 수 없어서"** 라는 것을 알고 있을 것.
 - **부르는 쪽이 둘이다**: ① klow_web 미들웨어(서버 사이드, P3 — Host→슬러그 라우팅) ② klow.kr 의 `/handoff` 페이지(**브라우저**, P2 — 복귀 host 재검증 `F21`). ⚠️ `/embed/*` 의 수동 CORS(`ACAO:*`)를 **복사하지 않은 이유는 "브라우저가 안 부른다"가 아니라** ②가 `klow.kr` 오리진이라 **정적 화이트리스트로 이미 통과**하기 때문이다. **비화이트리스트 오리진(=브랜드 커스텀 도메인)은 이 라우트를 부르지 않는다** — 그 판단이 바뀌면(예: 커스텀 도메인에서 직접 호출) `ACAO` 를 붙여야 하고, 그때는 `/embed/*` 의 "영구 simple request" 하드룰이 함께 따라온다.
 - ⚠️⚠️ **`@SkipThrottle()` 이 이 라우트 하나에만** 붙는다. 부르는 쪽이 Vercel 엣지라 klow_server 가 보는 IP 가 하나로 뭉치는데 전역 스로틀은 60/분 per IP 다. 도메인이 몇 개만 붙어도 천장에 닿고, 429 가 나면 미들웨어가 fail-open 해서 **전 브랜드 도메인이 동시에** KLOW 홈(그리고 `/{seg}` 는 503)이 된다. 남용 방어는 ① 응답이 공개 정보(호스트→슬러그)뿐 ② `Cache-Control` 을 엣지가 흡수 ③ 미들웨어 캐시가 앞단에 있다는 것으로 갈음한다. (`payment/return`·`webhooks/eximbay` 가 같은 이유로 이미 SkipThrottle 이다.)
 - ⚠️ **반영 지연이 최대 2분이다** — 응답 캐시 60초 + 미들웨어 양성 캐시 60초. 즉 **구독 해지·도메인 삭제 후에도 최대 2분간 계속 서빙**된다. 엣지에 분산된 미들웨어 캐시를 밖에서 무효화할 방법이 없어 설계상 수용했고, 두 값을 짧게 유지하는 것이 그 대가다.
@@ -161,7 +161,9 @@ verified && !misconfigured        → active
 
 - 순서는 **Vercel 추가 → DB insert**. ⚠️ insert 가 실패하면 **보상으로 Vercel 에서 제거**하고, 그마저 실패하면 Sentry 로 올린다. 안 되돌리면 그 도메인은 우리 UI 어디에도 안 뜨는데 Vercel 쿼터를 먹고, 재시도하면 `domain_already_in_use` 로 영원히 막힌다.
 - 삭제 시 Vercel 제거가 실패해도 **DB 는 지운다** — 브랜드 화면에서 사라지는 게 우선이고, 남은 Vercel 등록은 정리 cron 이 최종 안전망이다.
-- `cleanupOrphans()` — 브랜드 `withdrawn` 은 즉시(이미 30일 탈퇴 유예를 거친 뒤다), 가입 브랜드의 구독 비-active 는 **60일 유예 후** Vercel 제거 + row 삭제. ⚠️ 즉시 제거하면 결제 실패로 잠깐 `past_due` 가 된 브랜드가 재결제 후 DNS 를 처음부터 다시 설정해야 한다. **유예 동안에도 서빙은 `resolveHost` 가 이미 막는다** — 남는 건 Vercel 등록뿐이다.
+- `cleanupOrphans()` — 브랜드 `withdrawn` 은 즉시(이미 30일 탈퇴 유예를 거친 뒤다), 그 밖의 서비스 불가 브랜드는 **60일 유예 후** Vercel 제거 + row 삭제. ⚠️ 즉시 제거하면 결제 실패로 잠깐 `past_due` 가 된 브랜드가 재결제 후 DNS 를 처음부터 다시 설정해야 한다. **유예 동안에도 서빙은 `resolveHost` 가 이미 막는다** — 남는 건 Vercel 등록뿐이다.
+- ⚠️⚠️ **유예 시계는 `BrandDomain.updatedAt` 이 아니다** (2026-08-22 정정 — 그전엔 그랬고, 그래서 유예가 사실상 0이었다). `active` 행은 다시 쓰이지 않으므로(폴링 cron 이 `pending`/`verifying` 만 집는다) 그 값이 **활성화된 순간에 얼어붙어**, 60일 넘게 잘 돌던 도메인이 구독이 끊기는 **첫 사이클에 즉시** 삭제됐다. 반대로 `pending` 행은 cron 이 매번 값을 올려 유예가 영원히 리셋됐다. 정본은 `brands/brand-selects.ts` 의 **`brandUnserviceableSinceWhere()` + JS 짝 `brandUnserviceableSince()`** 이고, 시계는 **원인 축의 행**이 쥔다(`status` 로 배타적인 세 분기 — 승인 축이면 `Brand.updatedAt` / 구독 축이면 `BrandSubscription.updatedAt` / 구독 행이 없으면 `Brand.updatedAt` 폴백). 두 시계 모두 무관한 편집으로 **늘어날 수는 있어도 줄지 않아** 틀려도 안전한 방향으로만 틀린다.
+- ⚠️ 유예 절은 `BRAND_NOT_SERVICEABLE_WHERE` 옆에 **`AND:` 로 얹는다**(relation 필터를 한 객체에 두 번 쓸 수 없다). 스텁의 참조 동일성 가드가 살아 있어야 하므로, 런타임 날짜가 박힌 유예 절은 팩토리 옆의 **`unserviceableSinceOf()`** 가 되꺼내 정본 JS 짝으로 판정한다 — 스텁이 판정을 복제하지 않는다.
 
 ## brand-domains.cron.ts — `@Cron('*/5 * * * *')` name `brand-domain-verify`
 
@@ -188,7 +190,7 @@ verified && !misconfigured        → active
 - `isVerifiedOrigin()` 은 **동기**다(express 미들웨어와 cors 의 origin 판정이 sync). 서비스가 `Set<string>` 스냅샷을 들고 TTL 60초로 **백그라운드 갱신**하되 현재값을 즉시 반환한다. 첫 로드 전엔 빈 Set → false(fail-closed). **생성·삭제·상태 전이는 그 자리에서 `await` 로 갱신**한다. ⚠️ TTL 시계는 **성공이 아니라 시도**에 찍는다 — 성공에만 찍으면 DB 가 흔들리는 동안 매 요청이 새 쿼리를 쏴 장애 때 부하를 더 얹는다.
 - ⚠️ 스냅샷 조회는 브랜드 게이트를 **where 로 밀어넣는다**(JS 필터가 아니라). Prisma 기본 로드 전략이 관계마다 별도 쿼리라, `brand`·`subscription` 을 select 하면 한 번 갱신에 3왕복이 된다.
 - ⚠️⚠️ **정확 일치만 한다.** 와일드카드·서브도메인 확장을 넣으면 브랜드 도메인 하나가 그 아래 전체를 CSRF 우회로로 만든다.
-- 스냅샷은 `role='primary' && status='active'` **이면서 브랜드 게이트를 통과한** 호스트의 `https://{host}` 뿐이다. redirect 는 넣지 않는다(브라우저가 308 로 즉시 빠지므로 허용해도 얻는 게 없고 표면만 넓어진다).
+- 스냅샷은 `role='primary' && status='active'` **이면서 브랜드 게이트를 통과한** 호스트의 `https://{host}` 뿐이다. redirect 는 넣지 않는다(브라우저가 307 로 즉시 빠지므로 허용해도 얻는 게 없고 표면만 넓어진다).
 - **`credentials` 를 오리진별로 가른다** — klow.kr 계열은 `credentials:true`(쿠키 세션), 브랜드 커스텀 도메인은 **`credentials:false`**. 커스텀 도메인은 설계상 세션을 쓰지 않으므로(클라가 `credentials:'omit'`), 서버가 ACAC 를 안 붙이면 실수로 `include` 를 써도 브라우저가 차단해 그 규칙이 **서버쪽에서 fail-closed** 가 된다. ⚠️ 커스텀 도메인 요청에 `Cookie` 헤더가 실린다면 설계가 어긋난 것이다.
 - 비콘 POST 가 `Content-Type: application/json` 이라 방문마다 preflight 가 붙으므로 `maxAge: 86400` 을 함께 준다(없으면 요청 수가 2배).
 - ⚠️ **`common/origin-exempt.ts` 는 손대지 않았다** — 새 예외 경로가 없다. `origin-exempt.spec.ts` 가 **무변경으로 통과해야 하고, 통과하지 않으면 설계가 틀어진 것**이다.
@@ -218,6 +220,14 @@ verified && !misconfigured        → active
 
 ℹ️ Vercel 플랜은 **Pro** 라 도메인 수 상한(soft 100k)은 걱정하지 않아도 된다.
 
+## 알려진 갭 (2026-08-22 검토 — 의도적으로 남긴 것)
+
+| 갭 | 왜 남겼나 |
+|---|---|
+| `createForBrand` 의 `count`/`findUnique` → `create` 가 **비트랜잭션** | 더블 서브밋이면 상한 3개를 넘길 수 있고, `host @unique` P2002 가 보상 제거를 거친 뒤 **409 가 아니라 raw 500** 으로 나간다. 브랜드 자기 계정 안의 경합이라 피해가 자기 자신뿐이다 |
+| `domain-status.ts` 의 **`shouldGiveUpPending()` 이 실행 경로에 없다** | export 되고 스펙이 잠그는데 `verifyDue()` 는 같은 규칙을 Prisma where 로 **다시 쓴다**. 공유되는 건 `PENDING_GIVE_UP_MS` 상수뿐이라 **스펙이 초록불인 채 서비스만 틀릴 수 있다**(예: 대상에 `verifying` 을 넣는 실수). 고칠 땐 순수 함수를 where 조각으로 바꿔 서비스가 그걸 쓰게 할 것 |
+| `recommendedRecord` 가 `rank:1` IPv4 **2개 중 첫 번째만** 안내 | 단일 A 레코드로도 동작하고 잃는 건 이중화뿐이다. 배열로 바꾸면 DTO·UI·스펙이 함께 움직인다 |
+
 ## 회귀 잠금
 
 | 스펙 | 잠그는 것 |
@@ -226,7 +236,7 @@ verified && !misconfigured        → active
 | `__tests__/domain-status.spec.ts` | **`verified:true` + `misconfigured:true` 가 active 가 되지 않음** · 둘 다 만족해야 active · `error` 로는 전이하지 않음 |
 | `__tests__/verified-origin.spec.ts` | **정확 일치**(서브도메인·접미사·포트 트릭 전부 차단) · active/primary 만 · 브랜드 구독 게이트 · 삭제 즉시 반영 · 로드 전 false |
 | `__tests__/domain-pairing.spec.ts` | apex → www 동반 생성 / **서브도메인 → 페어 없음** / 페어 실패가 primary 를 롤백하지 않음 / 페어 동반 삭제 / **Vercel 성공 + DB 실패 → 보상 제거** / 게이트 4종 |
-| `__tests__/resolve-host.spec.ts` | **F13** — 구독·탈퇴·미승인·`slug:null` 미해석 / redirect 파생과 **오픈 리다이렉트 차단** / 미등록 host 200 / **`cleanupOrphans` 후보가 서빙 게이트의 부정인지** |
+| `__tests__/resolve-host.spec.ts` | **F13** — 구독·탈퇴·미승인·`slug:null` 미해석 / redirect 파생과 **오픈 리다이렉트 차단** / 미등록 host 200 / **`cleanupOrphans` 후보가 서빙 게이트의 부정인지** / **F33** 유예 시계가 브랜드 쪽 행인지(구독이 **방금** 끊긴 오래된 도메인은 아직 정리 대상이 아니다) |
 | `common/__tests__/origin-policy.spec.ts` **(신규)** | CSRF·CORS 가 **같은 분류**를 본다 / 브랜드 도메인에 **ACAC 미부착** / 비화이트리스트에 **ACAO 미반사**(`/embed/*` 하드룰의 근거) |
 | `test/app.e2e-spec.ts` | cron 목록 **9개** |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경 통과** |
