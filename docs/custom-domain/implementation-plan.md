@@ -142,7 +142,7 @@ punycode, 조회는 U-label) → `canonicalHost()` 를 쓰기·읽기가 공유�
 
 그 밖에 오리진 분류·정책을 **`common/origin-policy.ts`** 로 빼서 스펙으로 잠갔고
 (`origin-exempt.ts` 선례 — 익명 콜백 안에서는 테스트가 닿지 않는다), 7일 폴링 포기 규칙도
-순수 함수 `shouldGiveUpPending()` 으로 빼 스펙을 붙였다.
+`domain-status.ts` 로 빼 스펙을 붙였다(현재 형태는 `pendingGiveUpWhere(now)` — 아래 사후 검토).
 
 **검증 3층 결과**: typecheck(2 tsconfig) 통과 · `test:e2e` 2/2(cron 9) · 전체 unit **659/659** · **라우트 298 → 303**.
 실측 확인: resolve 200(primary→slug / www→apex host / Host 헤더 형태 흡수) · 브랜드 도메인 오리진에
@@ -186,13 +186,25 @@ punycode, 조회는 U-label) → `canonicalHost()` 를 쓰기·읽기가 공유�
 **방금** 끊긴 오래된 도메인은 아직 정리 대상이 아니다 · 승인이 방금 취소된 경우도 마찬가지 ·
 탈퇴 완료는 유예 없이 즉시 · 기존 6종 유지). 전체 유닛 **663/663**.
 
+⚠️ **같은 날 정리 리뷰에서 2건 더 고쳤다.**
+
+① `domain-status.ts` 의 `shouldGiveUpPending()` 이 **실행 경로에 없었다** — "여기가 소유한다"는
+주석이 붙은 채 `verifyDue()` 가 같은 규칙(status + 7일)을 Prisma where 로 다시 썼고, 술어는
+스펙만 부르는 죽은 코드였다. 공유되는 건 상수뿐이라 **스펙이 초록불인 채 서비스만 틀릴 수**
+있었다(예: 대상에 `verifying` 을 넣는 실수). → 소비자가 쿼리 하나뿐이므로 술어를 지우고
+**`pendingGiveUpWhere(now)`** where 팩토리만 남겨 서비스가 그걸 그대로 쓰게 했고, 스펙도
+`verifyDue()` 를 통째로 돌리는 방식으로 바꿔 프로덕션 경로를 지나게 했다(경계 케이스가
+결정적이도록 시계 고정 — 실시간이면 seed↔실행 사이 1ms 에 랜덤 실패한다).
+
+② `rowFieldsFrom` 이 챌린지가 사라졌을 때 `verification` 에 **`undefined`** 를 써서 Prisma 가
+"이 필드를 건드리지 않음"으로 해석했다 — `verifying` 을 벗어난 행이 **옛 TXT 를 영원히** 들고
+있었고 그대로 DTO 에 실렸다. → `Prisma.DbNull`. 스텁도 두 센티널을 진짜 null 로 눕혀(`denull`)
+실제 DB 와 어긋나지 않게 했다. 회귀 케이스 2건 추가(순수 술어 케이스 3건을 대체), 전체 유닛 **663/663**.
+
 **고치지 않고 남긴 것**(알려진 갭):
 - `createForBrand` 의 `count`/`findUnique` → `create` 가 비트랜잭션이라, 더블 서브밋이면 상한
   3개를 넘길 수 있고 `host @unique` P2002 가 보상 제거를 거친 뒤 **409 가 아니라 raw 500** 으로
   나간다. 브랜드 자기 계정 안의 경합이라 피해가 자기 자신뿐이다.
-- `domain-status.ts` 의 `shouldGiveUpPending()` 은 export 되고 스펙이 잠그는데 **실행 경로에
-  없다** — `verifyDue()` 가 같은 규칙을 Prisma where 로 다시 쓴다. 공유되는 건 상수뿐이라,
-  스펙이 초록불인 채 서비스만 틀릴 수 있다(예: 대상에 `verifying` 을 넣는 실수).
 - `recommendedRecord` 가 `rank:1` IPv4 **2개 중 첫 번째만** 안내한다. 단일 A 레코드로도 동작하고
   잃는 건 이중화뿐이다.
 

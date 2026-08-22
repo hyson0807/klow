@@ -168,7 +168,7 @@ verified && !misconfigured        → active
 ## brand-domains.cron.ts — `@Cron('*/5 * * * *')` name `brand-domain-verify`
 
 - `status IN (pending, verifying)` 중 `lastCheckedAt` 오래된 순 `take: 20`(rate limit 보호), 외부 호출 동시성 cap 5.
-- `createdAt` 7일 초과 pending → `error` (무한 폴링 차단). "지금 확인"이 복구 경로다. 임계값·대상 status 는 `domain-status.ts` 의 `shouldGiveUpPending()` 이 소유하고 스펙이 잠근다. ⚠️ **`pending` 만 대상**이다 — `verifying` 을 포함시키면 소유권 확인 중인 도메인이 일주일 만에 조용히 죽는다.
+- `createdAt` 7일 초과 pending → `error` (무한 폴링 차단). "지금 확인"이 복구 경로다. 임계값·대상 status 는 `domain-status.ts` 의 **`pendingGiveUpWhere(now)`** 가 소유하고 `verifyDue()` 가 그 where 를 **그대로** 쓴다(스펙은 `verifyDue()` 를 통째로 돌려 잠근다). ⚠️ **`pending` 만 대상**이다 — `verifying` 을 포함시키면 소유권 확인 중인 도메인이 일주일 만에 조용히 죽는다.
 - ⚠️ 외부 호출은 `mapWithConcurrency`(5개씩)로 돈다. **순차로 돌리면 안 된다** — 한 건이 15초 타임아웃에 걸리면 배치 20건이 최대 5분이라 cron 주기를 넘겨 다음 사이클이 재진입 가드에 막힌다.
 - 같은 배치에서 `cleanupOrphans()` 를 겸한다.
 - **재진입 가드** `running` — 한 사이클이 Vercel API 를 최대 20건 × 2~3회 태우므로 주기를 넘길 수 있다(`payment-reconcile.cron.ts` 와 같은 가드).
@@ -222,10 +222,11 @@ verified && !misconfigured        → active
 
 ## 알려진 갭 (2026-08-22 검토 — 의도적으로 남긴 것)
 
+ℹ️ 같은 검토에서 **고친 것 2건**: ① `shouldGiveUpPending()` 이 실행 경로에 없고 `verifyDue()` 가 같은 규칙을 Prisma where 로 다시 쓰던 것(→ `pendingGiveUpWhere(now)` 하나로 합치고 스펙을 `verifyDue()` 경유로 바꿨다) ② `rowFieldsFrom` 이 챌린지가 사라졌을 때 `verification` 에 `undefined` 를 써서 Prisma 가 "건드리지 않음"으로 해석 → `verifying` 을 벗어난 행이 **옛 TXT 를 영원히** 들고 DTO 로 내보내던 것(→ `Prisma.DbNull`).
+
 | 갭 | 왜 남겼나 |
 |---|---|
 | `createForBrand` 의 `count`/`findUnique` → `create` 가 **비트랜잭션** | 더블 서브밋이면 상한 3개를 넘길 수 있고, `host @unique` P2002 가 보상 제거를 거친 뒤 **409 가 아니라 raw 500** 으로 나간다. 브랜드 자기 계정 안의 경합이라 피해가 자기 자신뿐이다 |
-| `domain-status.ts` 의 **`shouldGiveUpPending()` 이 실행 경로에 없다** | export 되고 스펙이 잠그는데 `verifyDue()` 는 같은 규칙을 Prisma where 로 **다시 쓴다**. 공유되는 건 `PENDING_GIVE_UP_MS` 상수뿐이라 **스펙이 초록불인 채 서비스만 틀릴 수 있다**(예: 대상에 `verifying` 을 넣는 실수). 고칠 땐 순수 함수를 where 조각으로 바꿔 서비스가 그걸 쓰게 할 것 |
 | `recommendedRecord` 가 `rank:1` IPv4 **2개 중 첫 번째만** 안내 | 단일 A 레코드로도 동작하고 잃는 건 이중화뿐이다. 배열로 바꾸면 DTO·UI·스펙이 함께 움직인다 |
 
 ## 회귀 잠금
