@@ -93,7 +93,7 @@
 
 ### 매출액 (`revenue`)
 
-`yearMonth` **또는** `withRevenue` 를 보내면 응답에 `revenue: { krw, paidCount, fxFallbackRate }`
+`yearMonth` **또는** `withRevenue` 를 보내면 응답에 `revenue: { usdCents, krw, paidCount, fxFallbackRate }`
 가 실린다(둘 다 미전달 시 `null` — 집계 쿼리도 fx 조회도 하지 않으므로 환불 페이지는 추가 비용이
 0 이다). 어드민 주문 목록 상단의 매출 카드 3개(매출액 / 결제 건수 / 평균 주문액)가 이걸 쓴다.
 집계 창은 목록 창을 그대로 따라간다 — `yearMonth` 면 그 달, `withRevenue` 단독이면 **전체 기간**
@@ -115,12 +115,15 @@
 - **필터를 반영한다** — `buildAdminOrderWhere()` 가 만든 **같은 `where` 객체**를 재사용한다
   (브랜드 필터가 2단계 조회라 조건을 다시 적으면 카드와 표가 조용히 갈린다). 단 **결제상태만
   `paid` 로 덮는다** — 매출 정의가 결제완료 고정이기 때문이고, 반영하면 운영자가 '환불완료'를
-  고른 순간 카드가 "환불 주문 중 결제완료" = ₩0 이 되어 오해를 만든다.
-- **환산은 `Order.fxRateSnapshot`(주문 시점 환율)**, 없는 legacy 주문만 `resolveFxRate` 라이브
-  환율로 폴백하고 그 값을 `fxFallbackRate` 로 함께 내린다(`stats.service` 와 같은 규약).
+  고른 순간 카드가 "환불 주문 중 결제완료" = $0 이 되어 오해를 만든다.
+- **화면 표시 통화는 `usdCents`(USD)** 다 — `Order.totalUsd` 단순 합이라 **환율이 개입하지
+  않는다**(PG 청구 정본 통화). 그래서 카드에 주문 시점 환율 각주가 없다. `krw` 는 같은 집합의
+  원화 환산으로 응답에 남아 대시보드 `거래액`과의 검산에 쓰인다.
+- **원화 환산은 `Order.fxRateSnapshot`(주문 시점 환율)**, 없는 legacy 주문만 `resolveFxRate`
+  라이브 환율로 폴백하고 그 값을 `fxFallbackRate` 로 함께 내린다(`stats.service` 와 같은 규약).
   라이브 환율로 통일하면 과거 달 숫자가 매일 바뀐다.
 - 집계는 `groupBy(by: ['fxRateSnapshot'], _sum: { totalUsd })` + 순수 함수
-  `order-revenue.ts foldRevenueKrw()`. `Σ(usdᵢ×fx) = fx×Σusdᵢ` 라 환율별로 묶어 곱하는 것이 행
+  `order-revenue.ts foldRevenue()`. `Σ(usdᵢ×fx) = fx×Σusdᵢ` 라 환율별로 묶어 곱하는 것이 행
   단위 곱셈과 대수적으로 동일하면서 행 수가 유한하다(원시 SQL 은 where 복제, `findMany` 는 행
   수 무제한이라 둘 다 탈락 — 자세한 근거는 그 파일 상단 주석). 반올림은 `gmvKrw` 의
   `ROUND(SUM(line))` 과 맞춰 **총합에 한 번만**. 회귀 잠금 `__tests__/order-revenue.spec.ts`.
