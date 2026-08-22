@@ -201,6 +201,39 @@ punycode, 조회는 U-label) → `canonicalHost()` 를 쓰기·읽기가 공유�
 있었고 그대로 DTO 에 실렸다. → `Prisma.DbNull`. 스텁도 두 센티널을 진짜 null 로 눕혀(`denull`)
 실제 DB 와 어긋나지 않게 했다. 회귀 케이스 2건 추가(순수 술어 케이스 3건을 대체), 전체 유닛 **663/663**.
 
+### 보안 점검(2026-08-22)에서 고친 것
+
+⚠️⚠️ **브랜드 오리진이 CSRF 허용목록에 통째로 들어가 있었다.** `allowsStateChange(c)` 가
+`c !== 'unknown'` 이라, 검증된 커스텀 도메인은 **모든** 상태변경 경로를 통과했다. 브라우저가
+브랜드 오리진에 `ACAC` 를 안 주므로 JSON preflight 는 막히지만, `application/x-www-form-urlencoded`
+같은 **simple request 는 preflight 를 안 타** 쿠키가 실린 채(운영 `SameSite=None`) 서버에
+도달한다 — 악성·침해된 브랜드 사이트가 그 도메인을 방문한 klow.kr 로그인 손님 명의로 **blind
+상태변경**을 낼 수 있었다.
+
+→ `allowsStateChange(c, path)` 로 바꾸고 `brand` 클래스에만 **경로 허용목록**을 걸었다
+(`BRAND_STATE_CHANGE_PATHS`). klow_web 호출부를 전수 확인한 결과 커스텀 도메인에서 실제로
+나가는 상태변경은 **트래킹 비콘 3개 + `/v1/orders/quote`** 가 전부다(카트 쓰기는 전부
+`syncedUserId` 게이트 뒤이고 커스텀 도메인엔 세션이 없다. 견적은 `/checkout` 전용이고 그 화면은
+즉시 핸드오프하지만 그 전에 쿼리가 한 번 나갈 수 있어 포함했다 — **부수효과 없는 순수 계산**이라
+표면이 넓어지지 않는다). 정확 일치라 `..` 로 접두 매칭을 뚫는 모양도 막힌다. **기능 손실 0.**
+
+⚠️ klow_web 미들웨어의 리다이렉트 조립도 함께 고쳤다. `new URL(pathname, base)` 는
+protocol-relative 경로에서 **호스트를 갈아탄다** — 실측 `new URL('//evil%2Ecom', 'https://klow.kr')`
+→ `https://evil.com/` 이고, 퍼센트 인코딩이 `seg1.includes('.')` 판별자까지 함께 우회한다.
+**현재는 Next 가 미들웨어보다 먼저 `//…` 를 308 로 정규화해 도달 불가**(dev 서버 실측)지만,
+오픈 리다이렉트 방어를 프레임워크 정규화에 맡길 이유가 없다. base 를 먼저 만들고 `pathname` 을
+대입하는 방식으로 바꿨고(`klowRedirect` · `redirectTo` 분기), resolve 응답의 `redirectTo` 도
+파싱 시점에 `isHostShaped` 로 검증한다.
+
+곁들여: `notFound()` 가 rewrite 라 **HTTP 200** 을 내던 것을 `{ status: 404 }` 로 고쳤고(F11
+방어가 크롤러에게도 404 로 보인다 — dev 실측 확인), 미들웨어 resolve 캐시를 삽입순 FIFO 에서
+**접근순(LRU)** 으로 바꿨다(잡음 호스트 256개로 정상 브랜드 항목을 전부 밀어낼 수 있었다).
+
+**남긴 보안 갭 3건**은 `docs/server/modules/brand-domains.md` 「알려진 갭」에 근거와 함께 적었다:
+댕글링 DNS 를 통한 브랜드 간 도메인 인계(닫으려면 항상 TXT 소유권 요구 — 제품 결정) · 미검증
+도메인 스쿼팅이 영구적(자동 회수를 넣으면 앞 항목의 인계 창구가 오히려 열린다) ·
+`/v1/storefront/resolve` 증폭 DoS(제자리가 앱이 아니라 인프라 — CDN/WAF).
+
 **고치지 않고 남긴 것**(알려진 갭):
 - `createForBrand` 의 `count`/`findUnique` → `create` 가 비트랜잭션이라, 더블 서브밋이면 상한
   3개를 넘길 수 있고 `host @unique` P2002 가 보상 제거를 거친 뒤 **409 가 아니라 raw 500** 으로
