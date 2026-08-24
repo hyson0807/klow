@@ -64,6 +64,50 @@ type BrandDomainDTO = {
 | `subscription_required` | 403 | 구독 `active` 아님 |
 | `domain_service_unavailable` | 503 | `VERCEL_*` 미설정 |
 
+## brand-domain-search.controller.ts (`@Controller('v1/brand/domains')`, `BrandGuard`)
+
+| Method | Path | Throttle | 기능 |
+|---|---|---|---|
+| GET | `/v1/brand/domains/search?q=` | **20/분** + 서버 5분 캐시 | `{ domains: [{ name }] }` — 브랜드명으로 **구매 가능한** 도메인 후보 (최대 8) |
+
+klow_brand **`/start`**(가입 직후 브랜드 주소를 정하는 화면)가 유일한 소비자다. 입력칸 아래 빈
+공간에 2열로 뿌린다 — **표시 전용**이라 클릭 동작·복사·가격이 없다.
+
+> ⚠️⚠️ **이 라우트는 `requireBrandId` 를 부르지 않는다. 부르면 기능이 죽는다.** `/start` 는
+> 브랜드가 아직 없는 계정만 보는 화면이라(klow_brand `(authed)/layout.tsx` 게이트가
+> `brandId === null` 일 때만 보낸다) 403 이 되고, 그 회귀는 **신규 가입자에게만** 나타나 늦게
+> 발견된다. 같은 이유로 `assertSubscribed` 도 없다 — 구독은커녕 브랜드도 없는 사람이다.
+> 형제 파일 `brand-domains.controller.ts` 는 정반대 불변식("전부 `requireBrandId`")을 갖고 있어
+> **파일을 나눠 물리적으로 격리**했다(같은 base path 에 컨트롤러 둘은 Nest 에서 정상, GET 에는
+> `:id` 라우트가 없어 순서 충돌도 없다). 대신 `BrandGuard`(세션)는 건다 — 공개로 열면 우리
+> Cloudflare 토큰을 태우는 검색을 세상에 무료로 여는 셈이다.
+
+| code | HTTP | 언제 |
+|---|---|---|
+| (zod) | 400 | `q` 가 슬러그 형식 위반 또는 예약 슬러그 (`BrandSlugField` 재사용 — 유료 API 앞의 공짜 가드) |
+| `domain_search_unavailable` | 503 | `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_REGISTRAR_TOKEN` 미설정 |
+
+**Cloudflare 연동 (`cloudflare-registrar.client.ts`, beta)**
+
+| 동작 | REST |
+|---|---|
+| 검색 | `GET /client/v4/accounts/{acct}/registrar/domain-search?q=&limit=` |
+
+- ⚠️⚠️ **`domain-check`·`registrations` 는 코드에 없다.** 등록은 계정 기본 결제수단에 **즉시
+  청구되고 환불이 안 된다** — 과금 가능한 경로를 만들지 않는 것이 이 클라이언트의 설계 전제다.
+  찜하기/등록을 붙이려는 사람은 그 전제부터 다시 볼 것(search 결과는 Cloudflare 스스로
+  "캐시된 비-정본"이라고 명시하므로, 등록 직전엔 `domain-check` 가 반드시 필요하다).
+- ⚠️ 자격증명은 **R2 것을 재사용할 수 없다.** `R2_ACCESS_KEY_ID`/`SECRET` 은 S3 호환 서명 키라
+  `Authorization: Bearer` 를 통과하지 못한다(별도 API 토큰 발급 필요). 계정 id 값은 `R2_ACCOUNT_ID`
+  와 같지만 **폴백을 두지 않는다** — R2 를 다른 계정으로 옮기는 날 조용히 남의 계정을 친다.
+- ⚠️ 봉투가 두 겹(`result.domains`)이고 **HTTP 200 에도 `success:false`** 가 온다. 모양이 어긋나면
+  throw 하지 않고 `[]` 로 떨어진다(beta API 변경이 `/start` 를 500 으로 만들면 안 된다).
+- ⚠️ 응답 DTO 는 **`{ name }` 뿐**이다 — `pricing`·`tier` 를 벗긴다(가격 미표시가 확정 요구사항).
+- 캐시(5분·500키, `domain-search.service.ts` 인스턴스 상태)가 있는 이유는 성능이 아니라 **비용·남용**이다. `/start` 는
+  무료 공개 가입만 하면 누구나 닿고 스로틀 키는 IP 라 계정 100개면 상한이 무의미해진다.
+- 클라 쪽 억제: 500ms 디바운스 × **슬러그 가용성 통과**(이미 남이 쓰는 이름엔 아예 안 나간다)
+  → 확정된 이름 하나당 1회. 실패는 화면이 조용히 삼킨다(`/start` 는 나갈 수 없는 게이트다).
+
 ## public-domains.controller.ts (`@Controller('v1/storefront')`, 공개)
 
 | Method | Path | Guard | Throttle |
