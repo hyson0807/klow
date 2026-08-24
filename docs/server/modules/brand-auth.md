@@ -112,7 +112,8 @@
 - **탈퇴 신청/완료 브랜드는 인증 자체가 막힌다** — 세션 발급은 403(`assertCanAuthenticate`), 기존 세션은 `me`/`getSession` 이 조회 시점에 삭제하고 null 을 돌려준다.
 - **접속 추적 (`lastSeenAt`, 2026-08)** — `getSession()` 이 세션 검증에 성공하면 `BRAND_LAST_SEEN_REFRESH_MS`(5분, `brand-session.ts`) 스로틀로 **`BrandSession.lastSeenAt` 과 `BrandUser.lastSeenAt` 두 곳에** 시각을 찍는다. `AdminSession.lastSeenAt` 과 같은 fire-and-forget 패턴이고, `BrandGuard` 가 모든 브랜드 요청마다 여기를 지나므로 스로틀이 필수다. 만료·탈퇴로 **삭제할 세션에는 기록하지 않도록** 두 삭제 분기 뒤에 놓는다.
   **두 곳에 찍는 이유**: `BrandSession` 은 만료 시 하드 삭제되고 TTL 이 7일이라 그것만으로는 "20일 전 접속"과 "한 번도 접속 안 함"이 구분되지 않는다. 계정 레벨 미러인 `BrandUser.lastSeenAt` 이 **어드민 대시보드 브랜드 활동 지표의 접속 축 정본**이다([stats](./stats.md) `/brand-activity`). 마이그레이션 `add_brand_last_seen` 은 추가 전용(롤링 안전)이지만 **과거 기록은 복구 불가 — 전진 채움만** 된다.
-- **Google `mode` 분기**: `mode=login`(LoginModal 발) 은 **신규 계정을 만들지 않고**, 미가입이면 `BRAND_FRONTEND_URL/?signup=guide` 로 보내 랜딩에서 슬러그부터 입력하게 한다. 그 외(기본 `signup`)는 `slug` 쿠키로 brand draft 까지 만든다. 두 경로 모두 `googleId` 미매칭이어도 **이메일이 같은 기존 계정이 있으면 그 계정에 `googleId` 를 링크**한다(신규 생성 아님).
+- **Google `mode` 분기**: `mode=login`(LoginModal 발) 은 **신규 계정을 만들지 않고**, 미가입이면 `BRAND_FRONTEND_URL/?signup=guide` 로 보내 랜딩에서 회원가입 모달을 띄운다. 그 외(기본 `signup`)는 신규 계정을 만든다. 두 경로 모두 `googleId` 미매칭이어도 **이메일이 같은 기존 계정이 있으면 그 계정에 `googleId` 를 링크**한다(신규 생성 아님).
+- **가입 payload 의 `slug` 는 서버에만 남은 선택 경로다 (2026-08-24)** — `BrandSignupInput.slug` / `BrandPhoneSignupInput.slug` / 구글 `?slug=` 쿠키는 그대로 살아 있고 넘어오면 여전히 가입 트랜잭션 안에서 brand draft 를 만들지만, **klow_brand 는 더 이상 아무 경로에서도 보내지 않는다.** 브랜드 주소는 가입을 마친 뒤 `/start` 페이지가 `POST /v1/brand/applications/init-draft` 로 만든다(순서가 뒤집힌 이유·게이트는 워크스페이스 `CLAUDE.md` 참고). 즉 지금은 **모든 신규 계정이 `brandId === null` 로 태어난다** — 예전엔 그게 orphan 이었지만 이제 정상 중간 상태이고, klow_brand `(authed)/layout.tsx` 가 그 상태를 `/start` 로 가둔다.
 
 ## 참고
 
