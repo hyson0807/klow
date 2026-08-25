@@ -28,7 +28,7 @@
 | Method | Path                                          | 기능                                                              |
 |--------|-----------------------------------------------|-------------------------------------------------------------------|
 | POST   | `/v1/brand/applications`                      | 신청 제출 (단일 step submit)                                      |
-| PUT    | `/v1/brand/applications`                      | 신청 내용 수정                                                    |
+| PUT    | `/v1/brand/applications`                      | 신청 내용 수정 — **전체 문서 저장**(delta 아님). 디자인 자동저장(색·폰트·`links`·`linkStyle`·`story`)이 이 라우트를 탄다 |
 | GET    | `/v1/brand/applications/me`                   | 내 신청 조회 (홈페이지/타겟국가/송화인/계좌 등 포함)              |
 | POST   | `/v1/brand/applications/init-draft`           | 드래프트 생성 (슬러그 기반 — 가입 시 brand 미생성 케이스 안전망, idempotent) |
 | POST   | `/v1/brand/applications/submit-for-review`    | 드래프트 → 검토 제출 (모든 필드 완성 확인, `pgCustomerKey` 발급)  |
@@ -67,6 +67,17 @@
 - `resolve` 가 **전 로케일을 한 요청**으로 받는 이유: 오버라이드는 로케일마다 있는데 영문 원문은 하나라, 목업(한 번에 한 나라)만으로는 브랜드가 6개국을 순회해야 정리가 끝난다.
 - `BrandApplicationsModule` 이 `ProductsModule` 을 import 한다(`ProductTranslationService` 사용). `ProductsModule` 은 `TranslationModule` 만 import 하고 그 모듈은 imports 가 없어 순환이 없다 — `SeedingModule` 이 같은 이유로 이미 같은 일을 한다.
 - 동시성: PATCH 는 jsonb read-modify-write 라 `$transaction` 으로 감싸지만 READ COMMITTED 라 **탭 두 개가 동시에 저장하면 lost update 가 가능**하다(`countryPrices` replace-all 과 같은 급의 수용된 위험 — UI 가 한 번에 한 필드만 커밋한다).
+
+### 브랜드 스토리 (2026-08-25)
+
+브랜드관 상단 정중앙의 진입 글자가 여는 소개 페이지(커버 + 챕터 N, 최대 12). 저장은 **신규 라우트 없이** `PUT /v1/brand/applications` 의 `story` 한 칸으로 한다 — 색·폰트·링크와 같은 디자인 자동저장 큐를 타는 문서라, 전용 엔드포인트를 만들면 저장 타이밍이 두 벌로 갈린다. 형식은 `common/validation/brand.ts` 의 `BrandStorySchema`, 저장은 `Brand.story Json?`([brands](./brands.md)).
+
+- `null` = 스토리를 만든 적 없음. 공개 노출 조건은 `enabled && 내용 있음`(klow_web `isBrandStoryPublic`).
+- ⚠️⚠️ **`updateApplication` 은 `dto.story === undefined` 면 update data 에서 키를 통째로 뺀다.** 이웃 Json 필드처럼 `?? Prisma.JsonNull` 로 쓰면 안 된다 — 이 PUT 은 delta 가 아니라 **전체 문서 저장**이라, story 를 안 싣는 클라이언트(배포 창에 남은 구버전 탭·브라우저 캐시·klow_brand 롤백)가 **배경색 하나만 바꿔도 저장된 스토리가 통째로 지워진다**. 리뷰어가 "옆 줄과 모양을 맞추려고" 고치기 딱 좋은 자리라 `__tests__/brand-story.spec.ts` 가 이 분기를 잠근다. 같은 이유로 zod 에도 **`.default()` 를 붙이지 않는다**.
+- ⚠️⚠️ **`chapters[].id` 는 받은 그대로 왕복해야 한다.** klow_brand 챕터 카드가 `key={chapter.id}` 로 그려져서, 서버가 id 를 새로 만들면 800ms 자동저장이 끝날 때마다 입력칸이 remount 되어 **타이핑 중 커서와 포커스가 날아간다**. 그래서 zod 에 default 가 없다.
+- ⚠️ **이 스키마의 400 은 스토리만 죽이지 않는다** — 전체 문서 PUT 의 한 칸이라 배경색·폰트·링크까지 그 브랜드는 아무것도 저장되지 않는다. 그래서 문자열 상한은 klow_brand 입력칸 `maxLength` 와 **정확히 같은 값**이고(label 24 / title 60 / subtitle 200 / heading 60 / body 1200 / chapters 12), 세 곳이 `STORY_TEXT_LIMITS` 한 표를 본다(편집 입력칸 · 클라 `normalizeBrandStory` 의 slice · 서버 zod).
+- **어드민은 story 를 다루지 않는다** — `BrandInput`/`BrandPatch` 에 없다. 편집 UI 가 없고, `patchOf` 가 미전송을 '변경 없음'으로 만들어 클로버 위험이 0 이라 넣을 이유가 없다. 나중에 어드민 편집이 필요해지면 `BrandInput` 과 `brands.service.ts` 의 `toPrismaBrandData()`(현재 `linkStyle` 만 destructure)를 **같이** 고칠 것.
+- **번역하지 않는다** — `BrandTranslation` 은 tagline/description 만 다룬다. 해외 손님은 당분간 원문을 본다.
 
 ## 참고
 
