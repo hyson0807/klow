@@ -47,6 +47,27 @@
 | PATCH  | `/v1/brand/products/:id`          | 상품 수정 (자기 brandId 확인)                                     |
 | DELETE | `/v1/brand/products/:id`          | 상품 삭제                                                         |
 
+### 브랜드 수동 번역 오버라이드 (2026-08-25)
+
+기계번역이 부정확한 자유 텍스트를 브랜드가 스튜디오 목업에서 직접 고치는 통로. 저장 모양·overlay·우선순위는 [`products.md`](./products.md) "브랜드 수동 번역 오버라이드" 절이 소유하고, 여기서는 HTTP 표면만 적는다.
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET    | `/v1/brand/products/:id/translations`          | 전 로케일 리포트 → `{productId, locales: {ja: {entries, drifted, count}, …}}` |
+| PATCH  | `/v1/brand/products/:id/translations/:locale`  | 엔트리 1건 저장. `{field, src, value}` — **`value: ''` 는 삭제**(자동번역으로 되돌리기) |
+| DELETE | `/v1/brand/products/:id/translations/:locale`  | 그 로케일 통째 초기화 |
+| POST   | `/v1/brand/products/:id/translations/resolve`  | 고아 엔트리 일괄 처리 `{items: [{locale, field, from, to?, action:'keep'\|'reset'}]}` (≤200) |
+
+- 소유권은 `requireOwnedProduct(brandUserId, productId)` 공용 헬퍼. ⚠️ 실패는 `Forbidden` 이 아니라 **`NotFound`** 다 — id 를 넣어 보며 남의 제품 존재를 열거하지 못하게(brand-reviews 와 같은 방침).
+- ⚠️⚠️ **GET 은 `localize()` 를 부르면 안 된다.** 부르면 `translateAndCache()` 가 돌아 브랜드가 제품 패널을 열 때마다 **Google 번역 과금 + 캐시 write** 가 난다. 목업의 기계번역은 klow_brand 가 이미 `POST /v1/brand/translate` 로 라이브 조회한다.
+- `@Throttle` **없음** — 넷 다 Google 을 안 부르는 순수 DB 경로다(`/translate` 와 다르다).
+- ⚠️ `:locale` 은 **`ZodValidationPipe(OverrideLocale)` 로 검증**한다. 컨트롤러 본문에서 `OverrideLocale.parse()` 를 부르면 지원하지 않는 로케일(`en` 등)이 raw ZodError 로 던져져 **400 이 아니라 500** 이 된다(실제로 그랬다).
+- ⚠️⚠️ zod 에서 **`value` 에 `EnglishText`/`isAsciiPrintable` 를 걸면 안 된다** — 정의상 일본어·중국어·태국어다. 반대로 **`src` 는 반드시 ASCII 검증**한다(영문 정본을 가리키는 키라, 한글 `src` 는 스튜디오가 blur 영문화 전 값을 보냈다는 뜻이고 그대로 받으면 영원히 매칭되지 않는 고아가 된다). 이 파일의 이웃 스키마가 전부 ASCII 전용이라 **가장 나기 쉬운 복붙 버그**다.
+- ⚠️ 번역문 길이 상한(`OVERRIDE_VALUE_MAX`)에 **영문 원문 상한을 그대로 쓰지 않는다** — ru/vi 번역은 영문보다 길어지는 게 흔해 정당한 번역이 400 으로 튕긴다. 남용 방지용으로만 넉넉히 잡는다.
+- `resolve` 가 **전 로케일을 한 요청**으로 받는 이유: 오버라이드는 로케일마다 있는데 영문 원문은 하나라, 목업(한 번에 한 나라)만으로는 브랜드가 6개국을 순회해야 정리가 끝난다.
+- `BrandApplicationsModule` 이 `ProductsModule` 을 import 한다(`ProductTranslationService` 사용). `ProductsModule` 은 `TranslationModule` 만 import 하고 그 모듈은 imports 가 없어 순환이 없다 — `SeedingModule` 이 같은 이유로 이미 같은 일을 한다.
+- 동시성: PATCH 는 jsonb read-modify-write 라 `$transaction` 으로 감싸지만 READ COMMITTED 라 **탭 두 개가 동시에 저장하면 lost update 가 가능**하다(`countryPrices` replace-all 과 같은 급의 수용된 위험 — UI 가 한 번에 한 필드만 커밋한다).
+
 ## 참고
 
 - **취급 품목 게이트**: 두 생성 경로(`POST /v1/brand/products`, `/products/bulk`)는 `Brand.category` 가 `null` 이면 `400 "제품을 등록하기 전에 브랜드 카테고리를 먼저 선택해 주세요"` 로 거부한다(`assertBrandCategoryChosen`). 품목이 EFS 통관 신고값의 정본이라 첫 제품보다 먼저 정해져야 하기 때문 — 안 그러면 첫 제품이 화장품 전제로 등록된 뒤에야 바꿀 수 있다. 품목은 `PUT /v1/brand/applications` 의 `category` 로 저장하며, klow_brand 스튜디오가 **제품 등록 진입점(빈 그리드의 "상품 추가" · "브랜드 소개서로 일괄 등록하기")에서 관문으로 한 번** 묻는다. 수정 경로(`PATCH /products/:id` 등)는 게이트하지 않는다.

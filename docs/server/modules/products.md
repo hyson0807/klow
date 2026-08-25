@@ -57,7 +57,7 @@
   ⚠️ 98은 `SeedingRate` 요율표 국가 수(= 주문 가능국 수)를 그대로 베낀 값이라 **여유가 정확히 0** 이었다.
   klow_brand 가격 탭의 "모든 국가 무료배송" 일괄 토글이 주문 가능국 전체를 한 배열로 보내므로, 요율표에
   국가가 하나만 늘거나 주문 불가국에 옛 핀이 남아 있으면 99행이 되어 **제품 저장 전체가 400** 이 됐다.
-- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이), `skin-type-presets.ts`(피부 타입 고정 사전), `category-presets.ts`(카테고리 고정 사전)
+- **관련 파일**: `products.service.ts`, `admin-products.controller.ts`, `public-products.controller.ts`, `product-selects.ts`, `product-translation.service.ts`(로케일 오버레이), `product-translation-overrides.ts`(브랜드 수동 번역), `skin-type-presets.ts`(피부 타입 고정 사전), `category-presets.ts`(카테고리 고정 사전)
 
 ## admin-products.controller.ts (`@Controller('admin/products')`)
 
@@ -89,6 +89,25 @@
   - 국가별 **할인·프로모션·무료배송은 현장에 적용하지 않는다**(현장은 배송이 없다). 현장 응답의 `freeShipping` 은 항상 `false` 다 — 소매 국가 행의 값을 흘리면 부스 화면에 엉뚱한 "무료배송" 배지가 뜬다.
   - **표시용 할인율 `Product.onsiteDiscountPct`** (2026-08-13): 브랜드가 현장 탭에서 세팅한 가격(기준가 파생 + 국가 핀)이 **이미 할인이 적용된 최종 판매가**라는 전제로, 그 위에 취소선만 역산해 보여준다 — `listPriceUsd = listPriceUsdCents(청구가, pct)`(소매 글로벌 `Product.discount` 취소선과 같은 헬퍼), `customerDiscountPercent = pct`. **`customerPriceUsd` 와 정산가는 pct 와 무관하게 불변**이고, `onsitePriceLine()` 은 이 값을 **인자로 받지도 않으며** 청구 경로(`orders.createOnsite`)의 select 에도 **없다** — "할인이 청구가를 못 건드린다"가 리뷰가 아니라 쿼리로 강제된다. 핀이 있는 국가는 취소선도 **핀 통화에서 직접** 파생해(`listPriceLocal = 핀 × 100 / (100 − pct)`) 내려보낸다 — USD 센트로 왕복하면 판매가는 정확한데 취소선만 최소단위 1 어긋난다(A$30 핀 20% → A$37.50 대신 A$37.51). ⚠️ 통화 소수자리 반올림은 서버가 하지 않는다(`PricingCtx` 에 통화코드가 없다) — klow_web 의 Intl 이 처리한다. pct 0·100↑·음수는 취소선을 만들지 않는다. 회귀 잠금은 `__tests__/onsite-pricing.spec.ts` 의 `onsiteDiscountPct` 블록.
   - **분기 위치**: 현장/일반은 `PricingCtx.onsite` 로 갈리고 판정은 `attachCustomerPricing()` **안**에서 끝난다. 호출부가 DTO 를 사후에 덮어쓰지 않는다 — 예전엔 목록·단건이 각자 `delete bag.onsitePriceUsd` 로 원본을 지웠고, 그 손으로 관리하던 목록에 새 컬럼(`onsiteSettleKrw`)이 누락돼 공개 응답으로 샜다. 지금은 현장 원본 5종(`onsitePriceUsd`/`onsiteSettleKrw`/`onsiteExcluded`/`onsiteDiscountPct`/`onsiteCountryPrices`)이 전부 선언적 `StrippedPricingKeys` 로 벗겨진다. ⚠️ 목록 select 는 명시적이라 `onsiteDiscountPct: true` 를 빠뜨리면 취소선이 PDP(include 경로)에만 뜨고 브랜드관 그리드에는 안 뜬다.
+
+## 브랜드 수동 번역 오버라이드 (2026-08-25)
+
+기계번역이 부정확한 **자유 텍스트**를 브랜드가 직접 고칠 수 있게 한 통로. 스튜디오 목업에서 국가를 고르면 이미 그 나라 언어로 보이므로, 거기서 **텍스트를 눌러 올바른 번역을 타이핑**하면 그 값이 고객 화면에 그대로 나간다. 프리셋(피부 타입·카테고리)이 값이 유한한 필드만 구제할 수 있었던 것에 대한 일반해다.
+
+- **저장은 신규 테이블 `ProductTranslationOverride`**(`@@unique([productId, locale])`, `entries Json`). ⚠️ `ProductTranslation` 에 컬럼을 붙이지 **않았다** — 그쪽은 스테일마다 upsert 로 덮이는 소모품이라 누가 재번역을 강제하려고 테이블을 비우면 사람이 쓴 원고가 사라진다. 결정적으로, **캐시 행이 없는 로케일**에 오버라이드를 넣으려면 가짜 캐시 행(`sourceUpdatedAt` 조작 + MT 컬럼 전부 null)을 지어내야 하고 그 행은 곧바로 `t.category === null` 스테일 마커에 걸린다.
+- **모양**: `{ v: 1, fields: { <필드키>: { <영문 원문>: <번역문> } } }`. ⚠️⚠️ **안쪽 키가 영문 원문 문자열인 것이 설계의 핵심**이다 — ① 태그·성분을 재정렬하거나 중간을 지워도 짝이 안 밀린다(`recommendedFor` 프리셋 overlay 가 인덱스로 짝지어 생긴 취약점을 구조적으로 회피) ② **원문을 고치면 키가 빗나가 자동으로 MT 로 폴백**한다. 즉 "원문이 바뀌면 수동 번역 서빙을 멈춘다"가 **비교 코드 0줄**로 성립하고, 스테일한 번역이 고객에게 나가는 경로가 아예 없다(fail-safe) ③ 지웠던 값을 같은 문구로 다시 넣으면 오버라이드가 저절로 되살아난다.
+- **필드 15종**은 `common/validation/product.ts` 의 `OVERRIDE_FIELDS` 가 정본이고, 이름은 klow_brand `product-form/product-fields.ts` 의 `PRODUCT_TEXT_LIMITS` 키와 **일부러 같다**(라벨 `productFieldLabel` 재사용). `keyIngredients` 는 한 행에 문자열이 2개라 `keyIngredientName`/`keyIngredientEffect` **두 키로 나눈다**(네임스페이스가 갈려야 같은 영문이 성분명이자 효과일 때 안 섞인다). ⚠️ `ingredients`(전성분 INCI)는 국제 표준 영문이라 **영구 제외**. `detailDescription`/`empathyCards` 는 목업이 렌더하지 않아 지금은 빠져 있다.
+- **우선순위 = 오버라이드 > 프리셋(피부타입·카테고리) > MT 캐시 > 영문 원문.** `localize()` overlay **맨 마지막**에 대입해 이 순서가 필드별 가드 없이 성립한다.
+- ⚠️⚠️ **MT overlay 가 덮기 전에 영문 원문을 붙잡아야 한다**(`captureSource`, 행 루프의 첫 문장). 그 시점의 `r.name`·`r.concerns`·`r.usage` 는 아직 영문이고 몇 줄 뒤 사라지는데, 그게 오버라이드 조회 키다. 오버라이드가 없는 제품은 스냅샷을 만들지 않아 비용이 0이다.
+- ⚠️ 예전의 `if (!t) continue;` 가 **`if (t) { … }`** 로 바뀌었다 — 오버라이드는 캐시 행이 아예 없어도(신규 제품 첫 조회·번역 실패) 적용돼야 한다. 카테고리 프리셋이 이미 같은 이유로 그 위에 나와 있다.
+- ⚠️ **치환을 `translateAndCache()` 에 두지 말 것** — 프리셋 2건이 못박은 규칙과 같다. 스테일에 걸린 행만 고쳐져 **이미 캐시된 로케일이 영원히 MT 를 서빙**한다.
+- ⚠️ 배열 필드는 **영문 스냅샷의 길이가 정본**이고, 이미 화면에 놓인 값(MT·프리셋)은 **길이가 정확히 같을 때만** 인덱스로 재사용한다(legacy/torn 캐시 행을 억지로 짝지으면 라벨이 한 칸 밀린다). ⚠️ `captureSource` 의 성분 배열은 **빈 값을 걸러내지 않는다** — 효과가 빈 행이 하나만 있어도 `filter(Boolean)` 을 태우면 뒤 행이 전부 밀린다.
+- ⚠️ 읽기 경로는 캐시와 오버라이드를 **`Promise.all` 로 병렬 조회**한다(목록·PDP 핫 경로라 직렬로 이으면 왕복이 더해진다). 이 쿼리를 없애겠다고 **`Product` 에 마커 컬럼을 두면 안 된다** — `@updatedAt` 이 어떤 write 에도 반응해 6개 로케일 캐시가 전부 무효화되고 재번역 폭풍이 난다. **오버라이드 읽기·쓰기 어느 쪽도 `Product` 를 쓰지 않는다**(스펙이 단언).
+- **브랜드 라우트 4개**는 brand-applications 모듈이 호스팅한다 — [`brand-applications.md`](./brand-applications.md) 참고.
+- **마이그레이션 `20260825010947_add_product_translation_override`** 는 `CREATE TABLE` + 인덱스 2개 + FK 뿐이라 **롤링 배포 안전 · 백필 없음**. 무엇보다 **스테일 마커가 이동하지 않아 재번역·Google 과금이 0**이다(`20260814123933_add_product_translation_category` 는 배포 직후 전 캐시 행 × 전 로케일을 재번역시켰다). 구 인스턴스는 새 테이블을 안 읽고, 신 인스턴스는 빈 테이블에서 overlay 가 no-op 이라 양방향 안전.
+- **알려진 갭**(이 작업이 만든 게 아님): `cart.service.ts` 는 `localize()` 를 아예 타지 않아 `product.name` 을 **영문 그대로** 내려준다. 브랜드가 일본어 제품명을 넣어도 로그인 사용자의 서버 카트에는 영문이 뜬다. 기존 MT 에서도 같았다.
+- **관련 파일**: `product-translation-overrides.ts`(순수 로직 — 파싱·병합·드리프트), `product-translation.service.ts`(overlay + 쓰기 메서드), `common/validation/product.ts`(필드·로케일·길이 정본). 회귀 잠금은 `__tests__/translation-override.spec.ts`(overlay 14케이스) + `__tests__/translation-override-shape.spec.ts`(순수 헬퍼).
+- ⚠️ `category-overlay.spec.ts`·`skin-type-overlay.spec.ts` 의 Prisma 스텁에 **`productTranslationOverride: { findMany }` 가 있어야 한다** — `localize()` 가 병렬로 읽으므로 없으면 그 스펙 전체가 TypeError 로 죽는다.
 
 ## 참고
 
