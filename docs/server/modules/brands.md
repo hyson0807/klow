@@ -50,3 +50,17 @@
 - `PATCH /admin/brands/:id` 에 `name` 이 포함되면 트랜잭션으로 비정규화 캐시 `Product.brand` 를 일괄 갱신한다. `DELETE` 는 소속 제품의 `brandId` 를 먼저 `null` 로 떼어낸 뒤 삭제(제품은 남는다).
 - ⚠️ `homepageUrl` / `targetCountries[]` 컬럼은 현재 스키마에 **없다**(과거 문서 잔재).
 - 브랜드 입점 신청 워크플로우는 [brand-applications](./brand-applications.md), 승인/구독 게이트는 [subscription](./subscription.md) 참고.
+
+## 브랜드관 수동 번역 오버라이드 (2026-08-25)
+
+브랜드가 스튜디오 **브랜드관 목업**에서 국가를 고른 채 **한 줄 소개·브랜드 태그**를 눌러 직접 고친다. 제품 쪽(`ProductTranslationOverride`)과 **같은 규칙·같은 저장 모양**이고, 판정 로직도 `common/translation-overrides.ts` **한 벌을 공유**한다(드리프트 규칙은 여러 번 다듬은 미묘한 로직이라 두 벌로 두면 반드시 갈라진다). 각 모듈은 `*-translation-overrides.ts` 에서 **필드 목록만** 바인딩한다.
+
+- 저장은 신규 테이블 `BrandTranslationOverride`(`@@unique([brandId, locale])` + `entries Json`). 테이블이 나뉜 이유는 규칙이 달라서가 아니라 FK 가 `brandId` 라 한 테이블에 담을 수 없어서다.
+- 필드는 2종 — `description`(스칼라) / `brandTag`(배열). ⚠️ **브랜드명은 번역 대상이 아니다**(`BrandTranslation` 에 컬럼이 없고 klow_web 도 고유명사로 그대로 쓴다). 넣으면 저장은 되는데 아무 데도 안 보인다.
+- ⚠️⚠️ **`brandTag` 의 조회 키는 `Brand.tagline` 인코딩 문자열 전체가 아니라 디코딩된 개별 태그**다(`__klow_brand_tags_v1__:a,b,c` → `a`/`b`/`c`). 통째로 키를 잡으면 태그 하나만 바꿔도 전체 오버라이드가 빗나간다. overlay 는 캐시의 번역 태그를 디코딩 → 영문 원문 기준으로 치환 → **같은 마커로 재인코딩**해 돌려놓는다(클라 `parseBrandTags` 가 그대로 읽어야 한다).
+- ⚠️ 태그 배열은 **영문 스냅샷 길이가 정본**이고, 캐시의 번역 태그는 **길이가 정확히 같을 때만** 인덱스로 재사용한다(제품 배열과 같은 규칙 — legacy/torn 캐시를 억지로 짝지으면 라벨이 한 칸 밀린다).
+- ⚠️ `localize()` 의 `if (!t) continue` 가 `if (t) { … }` 로 바뀌었다 — 오버라이드는 캐시 행이 없어도(신규 브랜드 첫 조회·번역 실패) 적용돼야 한다. 캐시와 오버라이드는 `Promise.all` 병렬 조회이고, **읽기 경로가 `Brand` 를 쓰지 않는다**(`@updatedAt` 이 오르면 6개 로케일이 전부 재번역).
+- 라우트는 `v1/brand/storefront-translations` 4개(GET / PATCH·DELETE `:locale` / POST `resolve`) — `brand-storefront-translations.controller.ts`. ⚠️ **경로에 브랜드 id 가 없다**(세션의 `user.brandId` 를 쓴다) → 남의 브랜드를 가리킬 방법이 구조적으로 없어 제품 라우트와 달리 소유권 조회가 필요 없다. ⚠️ GET 은 `localize()` 를 부르지 않는다(패널 열 때마다 Google 과금).
+- 태그를 지우면 원문이 없어진 엔트리는 **묻지 않고 정리**한다 — `updateApplication` 이 tagline/description 이 **실제로 달라졌을 때만** `pruneOverridesForBrand` 를 태운다(이 PUT 은 전체 문서 저장이라 색만 바꿔도 매번 호출된다). 규칙은 제품과 동일하게 `driftOf` 가 보고하지 않는 고아 = 정리 대상.
+- 마이그레이션 `20260825064047_add_brand_translation_override` 는 `CREATE TABLE` 뿐 → **롤링 배포 안전 · 백필 없음 · 재번역 0**.
+- 회귀 잠금은 `brands/__tests__/brand-translation-override.spec.ts`(11케이스 — 태그 인코딩 왕복 · 재정렬 · 길이 불일치 · 캐시 미스 · fail-safe · Brand write 없음).
