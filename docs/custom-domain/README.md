@@ -11,6 +11,10 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 > [implementation-plan §7 배포 순서](./implementation-plan.md#7-배포-순서) ·
 > [배포 런북](../deploy-custom-domain-runbook.md).
 >
+> **P6 대행 구매: 📝 계획 수립 완료(2026-08-25) · 코드 미착수** — KLOW 가 도메인을 대신 사서
+> 자동 연결하고 연 이용료를 받는다(브랜드는 DNS 를 만지지 않는다).
+> 정본은 [`purchase-plan.md`](./purchase-plan.md).
+>
 > ⚠️ 스테이징에서 **기능이 통째로 죽은 사건이 한 번 있었다** — 미들웨어 resolve 타임아웃이
 > 1초였는데 실제 왕복이 1.2~1.6초라 모든 요청이 abort 됐다(F30). 지금은 3초다.
 >
@@ -38,6 +42,7 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 |---|---|---|
 | [`flow.md`](./flow.md) | 왜 rewrite 하나로 안 되나(쿠키·CSRF·CORS·결제 리턴) · **핸드오프 경계**와 그 근거 · 요청 흐름 · 도메인 상태 머신 · 결제 왕복 · 회귀 매트릭스 | **원리·흐름** |
 | [`implementation-plan.md`](./implementation-plan.md) | P0~P5 로드맵 · Prisma 모델 · 모듈 구성 · Vercel API · 미들웨어 규칙표 · **핸드오프 규격** · 검증 · **§9 불변식 체크리스트** | **구현·스키마 정본** |
+| [`purchase-plan.md`](./purchase-plan.md) | **P6 — 대행 구매**. 왜 DNS 왕복을 없애나 · Cloudflare Registrar 계약과 한계(`.kr` 미지원) · 가격(마진 30%) · **환불 불가 상품의 결제·등록 순서와 보상** · 신규 모델 2 · cron 2 · 갱신/dunning | **구매·갱신 정본** |
 
 > **구현 시작점**: `implementation-plan.md` 의 **P0 부터 순서대로**. 각 PR 착수 전 **§9 불변식
 > 체크리스트**를 반드시 먼저 읽는다 — 거기 있는 항목은 전부 **틀려도 컴파일과 테스트가 통과**한다.

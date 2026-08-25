@@ -565,6 +565,13 @@ VERCEL_TEAM_ID=        # 팀 소속이면 필수 (team_xxx)
 "조용히 깨지고 돈이 사라지는" 경로다. 도메인은 미설정 시 브랜드가 즉시 에러를 보므로 부팅을 막을 성질이
 아니다. 대신 서비스가 `503 도메인 기능이 아직 활성화되지 않았습니다` 로 명시 거부.
 
+⚠️⚠️ **단, P6 대행 구매(§6-4)에는 이 판단이 그대로 적용되지 않는다.** 위 문장의 근거는 "미설정 시
+브랜드가 즉시 에러를 보므로 조용히 깨지지 않는다"인데 **구매 경로는 정확히 그 반대**다 — 스테이징
+서버가 운영 Cloudflare 토큰을 들고 있으면 테스트 클릭 한 번이 **되돌릴 수 없는 실제 돈**이 된다
+(바로 위 `VERCEL_PROJECT_ID` 경고와 같은 축이되, 이쪽은 회수가 불가능하다). 그래서 구매는
+`DOMAIN_PURCHASE_ENABLED` **명시 opt-in** 이고 미설정 시 `503 domain_purchase_unavailable` 이다 →
+[`purchase-plan.md` §11](./purchase-plan.md#11-라우트--zod--env).
+
 ### 2-9. 유입 경로 enum — **`custom_domain` 을 추가하지 않는다**
 
 커스텀 도메인 루트 방문은 전부 `direct` 로 잡힌다. "내 도메인 유입"을 구분하고 싶어지는데,
@@ -1291,6 +1298,29 @@ GoogleButton → https://api.klow.kr/v1/auth/google?returnTo=/&origin=https://sh
 `BrandDomain.seoCanonical Boolean @default(false)` 를 켠 브랜드만 index + self-canonical 로 전환하고,
 그때 `[brandSlug]/page.tsx` 와 `layout.tsx` **둘만** `headers()` 기반으로 바꾼다(전면 전환 아님 —
 `sitemap.ts`·`robots.ts`·`opengraph-image.tsx` 까지 dynamic 이 되면 ISR 이점을 통째로 잃는다).
+
+### 6-4. 대행 구매 — KLOW 가 사서 연결하고 연 이용료를 받는다
+
+**정본은 [`purchase-plan.md`](./purchase-plan.md) 다** (2026-08-25 계획 수립 · 코드 미착수).
+여기 요약만 둔다 — 상세를 두 곳에 쓰면 갈린다.
+
+P0~P4 는 **브랜드가 도메인을 이미 갖고 있다**는 전제 위에 있고, 그 전제의 대가가 "브랜드가
+자기 등록기관에서 DNS 를 손으로 넣는" 왕복이다. P6 은 그 왕복을 없앤다 — 우리 Cloudflare
+계정으로 사면 네임서버가 곧 Cloudflare 라 **A/CNAME 을 우리가 API 로 꽂을 수 있다.**
+
+- 진입은 스튜디오 링크바 말풍선 → 신규 `/settings/domain`. 소스는 `/start` 에서 쌓인
+  `BrandDomainWish`(지금은 다시 볼 화면이 없다) + 그 자리 검색.
+- 가격은 `domain-check` 원가 × `resolveFxRate` × **1.3(공급가)** × 1.1(VAT) → 1,000원 올림.
+  결제는 **기존 구독 `BillingKey` 즉시 청구**(`SubscriptionModule` 이 `NicepayBillingAdapter` 만 export).
+- ⚠️⚠️ **`BrandDomainStatus` 를 건드리지 않는다.** 신규 모델 2개(`BrandDomainRegistration` ·
+  `BrandDomainCharge`)로 결제·레지스트라 축을 분리해서, §8 의 도메인 스펙 5개가 **0줄 수정**이다.
+  그것들이 수정돼야 한다면 설계가 샌 것이다.
+- ⚠️⚠️ **환불 불가 상품이라 "타임아웃 ≠ 실패"** 가 최상위 규칙이다. Cloudflare 등록 요청이
+  타임아웃 나면 **결제를 취소하지 않는다**(등록은 됐는데 돈은 돌려주면 순손실 2배). 진실은
+  전용 cron 이 `registration-status` 로 확인한다.
+- ⚠️ **`.kr`·`.co.kr` 은 Cloudflare Registrar 미지원**이라 브랜드 화면에서 수작업 연결을 없애되
+  **어드민 수동 연결은 반드시 남긴다**. 그게 없으면 "이미 가진 도메인을 연결하는 방법"이 사라진다.
+- cron 이 **2개 늘어 §8 의 기대 목록이 9 → 11** 이 된다.
 
 ---
 
