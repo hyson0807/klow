@@ -30,7 +30,7 @@
 | POST   | `/v1/brand/applications`                      | 신청 제출 (단일 step submit)                                      |
 | PUT    | `/v1/brand/applications`                      | 신청 내용 수정 — **전체 문서 저장**(delta 아님). 디자인 자동저장(색·폰트·`links`·`linkStyle`·`story`)이 이 라우트를 탄다 |
 | GET    | `/v1/brand/applications/me`                   | 내 신청 조회 (홈페이지/타겟국가/송화인/계좌 등 포함)              |
-| POST   | `/v1/brand/applications/init-draft`           | 드래프트 생성 (슬러그 기반 — 가입 시 brand 미생성 케이스 안전망, idempotent) |
+| POST   | `/v1/brand/applications/init-draft`           | 드래프트 생성 — `{ slug, category? }`. klow_brand `/start` 2단계가 주소+업종을 한 번에 보낸다. idempotent (기존 brand 가 있으면 slug 불변, category 는 **비어 있을 때만** 채움) |
 | POST   | `/v1/brand/applications/submit-for-review`    | 드래프트 → 검토 제출 (모든 필드 완성 확인, `pgCustomerKey` 발급)  |
 | PATCH  | `/v1/brand/applications/operational-profile`  | 운영 프로필(송화인 4 + 계좌 3 필드) 저장 — OnboardingGate         |
 
