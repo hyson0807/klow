@@ -3,7 +3,7 @@
 - **모듈 경로**: `src/modules/brand-domains/`
 - **목적**: 브랜드가 자기 도메인(`shop.brandA.com`)으로 **브랜드관을 열게** 한다. Vercel Domains API 로 도메인을 자동 등록·검증하고, klow_web 미들웨어가 물어볼 **Host → 슬러그 해석**을 제공하며, 그 도메인이 `api.klow.kr` 를 칠 수 있도록 **CORS·CSRF Origin 을 연다**.
 - **설계 정본**: [`docs/custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`flow.md`](../../custom-domain/flow.md), 결정표는 [`README.md`](../../custom-domain/README.md).
-- **관련 파일**: `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
+- **관련 파일**: `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `brand-domain-wishes.controller.ts`·`domain-wishes.service.ts`(찜), `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
 
 > ℹ️ **소비자 3곳** (2026-08-21 P4 까지 전부 붙었다 — 아직 미배포):
 > ① klow_web `src/middleware.ts` 가 `GET /v1/storefront/resolve` 로 Host→슬러그를 해석해 서빙하고,
@@ -107,8 +107,12 @@ CTA(`브랜드 주소 생성하기`)가 도메인을 사는 것처럼 읽혔다.
 
 - ⚠️⚠️ **`domain-check`·`registrations` 는 코드에 없다.** 등록은 계정 기본 결제수단에 **즉시
   청구되고 환불이 안 된다** — 과금 가능한 경로를 만들지 않는 것이 이 클라이언트의 설계 전제다.
-  찜하기/등록을 붙이려는 사람은 그 전제부터 다시 볼 것(search 결과는 Cloudflare 스스로
-  "캐시된 비-정본"이라고 명시하므로, 등록 직전엔 `domain-check` 가 반드시 필요하다).
+  **등록(구매)을 붙이려는 사람은 그 전제부터 다시 볼 것.** search 결과는 Cloudflare 스스로
+  "캐시된 비-정본"이라고 명시하므로 **등록 직전엔 `domain-check` 가 반드시 필요하다** —
+  둘을 같이 가져와야 한다.
+  ⚠️ 이 문장이 원래 "찜하기/등록"이라고 적혀 있었지만, **찜하기(2026-08-25)는 `domain-check` 를
+  쓰지 않기로 했다** — 찜은 소유가 아니라 북마크라 저장 시점 확인의 유효기간이 0 이기 때문이다
+  (아래 wishes 절). 즉 이 요건은 **구매에만** 남아 있다.
 - ⚠️ 자격증명은 **R2 것을 재사용할 수 없다.** `R2_ACCESS_KEY_ID`/`SECRET` 은 S3 호환 서명 키라
   `Authorization: Bearer` 를 통과하지 못한다(별도 API 토큰 발급 필요). 계정 id 값은 `R2_ACCOUNT_ID`
   와 같지만 **폴백을 두지 않는다** — R2 를 다른 계정으로 옮기는 날 조용히 남의 계정을 친다.
@@ -122,6 +126,61 @@ CTA(`브랜드 주소 생성하기`)가 도메인을 사는 것처럼 읽혔다.
   실패는 화면이 조용히 삼킨다(`/start` 는 나갈 수 없는 게이트다).
   ⚠️ 카드를 오가도 재요청은 없다 — `qk.domainSearch(q)` 캐시(10분)와 모듈 레벨
   `searchUnavailable` 래치(503 이 한 번 나면 그 세션은 그만 묻는다)가 언마운트에도 살아남는다.
+
+## brand-domain-wishes.controller.ts (`@Controller('v1/brand/domain-wishes')`, `BrandGuard`)
+
+`/start` 에서 찜해 둔 도메인 후보. 지금 소비자는 klow_brand `/start` 하나이고, 나중에 스튜디오의
+"찜한 도메인" 목록이 두 번째가 된다.
+
+| Method | Path | Throttle | 응답 |
+|---|---|---|---|
+| GET | `/v1/brand/domain-wishes` | 전역(60/분) | `{ wishes: [{ id, host, createdAt }] }` — 최근 찜한 것이 먼저 |
+| POST | `/v1/brand/domain-wishes` | **30/분** | 같은 `{ wishes }` (200, **멱등**) |
+| DELETE | `/v1/brand/domain-wishes/:host` | **30/분** | 같은 `{ wishes }` (200, **멱등**) |
+
+**세 라우트 모두 응답이 갱신된 목록 전체**다 — 클라가 mutation 결과를 그대로 `setQueryData` 하면
+되므로 invalidate 왕복이 없다(brand-auth 의 전화번호 mutation 관례).
+
+> ⚠️⚠️ **이 라우트들도 `requireBrandId` 를 부르지 않는다. 부르면 기능이 죽는다.** 형제 파일
+> `brand-domain-search.controller.ts` 와 **완전히 같은 이유**이고(그쪽 경고 블록 참고), 그래서
+> 역시 **파일을 나눠** `brand-domains.controller.ts`("전부 `requireBrandId`")와 격리했다.
+> 구독 검사도 없다 — 구독은커녕 브랜드도 없는 사람이다.
+
+> ⚠️ **base path 가 `v1/brand/domains` **아래가 아니다**.** 그쪽 컨트롤러가 `DELETE :id` 를 갖고
+> 있어 `DELETE domains/wishes/:host` 가 컨트롤러 등록 순서에 따라 가려질 위험이 생긴다. base 를
+> 나누면 그 위험이 **구조적으로** 사라진다(`shipping-countries/export` 가 `@Get(':id')` 앞에
+> 있어야 했던 선례 — 순서에 기대는 안전은 다음 사람이 라우트를 추가하는 날 깨진다).
+
+### 찜은 소유가 아니라 북마크다
+
+- **저장 시점에 가용성을 확인하지 않는다.** `DomainSuggestions.tsx` 에 *"찜하기가 붙는 날
+  `POST domain-check` 를 한 번 태워야 한다"* 는 메모가 미리 있었지만 **의도적으로 따르지 않았다**:
+  오늘 비어 있어도 내일 팔리므로 저장 시점 확인은 **유효기간이 0** 이고, 진짜 판정은 구매 시점에
+  어차피 다시 해야 한다. 구매를 붙이는 사람이 그때 `domain-check` 를(그리고 과금되는
+  `registrations` 의 전제 재검토를) 함께 가져올 것.
+- 그래서 DTO 에 "지금 살 수 있음"을 뜻하는 필드가 없다. 가격도 없다(위 search 와 같은 이유).
+
+### 저장 모델 — `BrandDomainWish`
+
+`(brandUserId, host)` 복합 unique + `onDelete: Cascade`(`BrandUserPhone` 선례).
+
+- ⚠️ **`brandId` 가 아니라 `brandUserId` 로 묶는다.** `/start` 엔 Brand 가 아직 없다. 나중에
+  스튜디오에서 읽을 때도 같은 계정이라 `where: { brandUserId }` 가 그대로 동작한다 —
+  `brandId` 컬럼을 더하면 nullable→백필 문제만 생긴다.
+- ⚠️ **`host` 에 전역 `@unique` 가 없다.** `BrandDomain.host` 와 정반대인데, 거기 얹었다면 한
+  사람의 **북마크가 다른 사람의 찜을 막았을** 것이다. 소유(`BrandDomain`)와 위시(`BrandDomainWish`)를
+  다른 테이블로 나눈 이유가 이것이다.
+- 호스트 정규화·거부는 `domain-host.ts` 의 `normalizeHost`/`canonicalHost` 를 **그대로 탄다** —
+  손으로 다시 쓰면 IDNA 가 빠져 저장(punycode)과 조회(U-label)가 갈린다. 덤으로
+  `klow.kr`·`*.vercel.app`·IP 거부가 공짜로 따라온다.
+- `MAX_DOMAIN_WISHES = 20`(초과 시 400 `domain_wish_limit`). 이유는 UX 가 아니라 **남용**이다 —
+  `/start` 는 무료 공개 가입만 하면 누구나 닿는다(search 캐시가 있는 이유와 같은 축). 상한 검사와
+  create 사이 경합에 트랜잭션을 걸지 않는 것은 이 값이 정원이 아니라 남용 방지선이기 때문.
+- **`add` 는 P2002 를 삼킨다**(느린 네트워크의 더블탭이 409 가 되면 안 된다), **`remove` 는 없는
+  행에도 성공**한다(토글이라 "이미 없음"이 정상). 둘 다 `brandUserId` 스코프.
+- 마이그레이션 `20260825014535_add_brand_domain_wishes` — CREATE TABLE 뿐이라 **롤링 배포 안전 ·
+  백필 없음 · cron 불변(9개)**. 배포 순서는 **klow_server → klow_brand**(반대면 하트가 404).
+- 회귀 잠금: `__tests__/domain-wishes.spec.ts`(정규화 · 멱등 · 상한이 계정별 · remove 스코프 · 정렬).
 
 ## public-domains.controller.ts (`@Controller('v1/storefront')`, 공개)
 
