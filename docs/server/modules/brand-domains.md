@@ -518,7 +518,7 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 | `VERCEL_TEAM_ID` | 팀 소속이면 필수 (`team_xxx`) |
 | `BRAND_DOMAIN_CRON_ENABLED` | `false` 일 때만 폴링 cron 비활성 (미설정 = on) |
 | `CLOUDFLARE_ACCOUNT_ID` · `CLOUDFLARE_REGISTRAR_TOKEN` | 대행 구매. ⚠️ **Registrar Write** 가 필요하다(`.env.example` 의 "가능하면 읽기 전용" 안내는 이 기능 이후로 틀렸다) |
-| `CLOUDFLARE_DNS_TOKEN` | Zone > DNS:Edit. ⚠️ **registrar 토큰으로 폴백하지 않는다** — 폴백은 오설정을 고쳐 주는 게 아니라 안 보이게 만든다(등록은 되는데 DNS 만 안 꽂혀 영원히 misconfigured) |
+| `CLOUDFLARE_DNS_TOKEN` | ⚠️⚠️ **권한 2줄이 필요하다** — `Zone > DNS > Edit` + `Zone > Zone > Edit` (Zone Resources 는 `Include > All zones`). DNS:Edit 만 주면 레코드는 되는데 **`POST /zones`(zone 생성)가 403** 이라, 도메인은 사고 결제도 끝났는데 DNS 가 안 꽂혀 영원히 misconfigured 다(2026-08-26 실측). ⚠️ 에러 문구가 `Requires permission "com.cloudflare.api.account.zone.create"` 라 **Account 스코프 권한처럼 읽히지만 그건 오독이다** — 대시보드 Account 스코프에는 그런 항목이 아예 없고(공식 권한 목록에도 없다), 계정 범위 Zone Resources 를 가진 **Zone:Edit** 이 그 권한을 준다. ⚠️ 특정 zone 을 지정하면 **아직 없는 zone 을 만들 수 없어** 반드시 계정 전체 범위여야 한다. ⚠️ TTL(만료)을 걸지 말 것 — 그날 DNS·갱신이 조용히 멈춘다. ⚠️ **registrar 토큰으로 폴백하지 않는다** — 폴백은 오설정을 고쳐 주는 게 아니라 안 보이게 만든다 |
 | `DOMAIN_PURCHASE_ENABLED` | ⚠️⚠️ **마스터 게이트** — `'true'` 일 때만 "돈을 움직인다"(구매 + 갱신 청구). 미설정 시 구매 **503 `domain_purchase_unavailable`**. 여기엔 부팅 fail-closed 를 붙이지 않은 위 판단이 **적용되지 않는다** — 스테이징이 운영 토큰을 들면 테스트 클릭 한 번이 **되돌릴 수 없는 실제 돈**이다 |
 | `BRAND_DOMAIN_REGISTRATION_CRON_ENABLED` | `false` 일 때만 등록 폴링 cron 비활성 (미설정 = on) |
 | `SOLAPI_KAKAO_TEMPLATE_DOMAIN_*` ×4 | 알림 4종 템플릿. **전부 선택** — 미설정이면 SMS 폴백이 대신 나가므로 배포를 막지 않는다 |
