@@ -3,7 +3,8 @@
 - **모듈 경로**: `src/modules/brand-domains/`
 - **목적**: 브랜드가 자기 도메인(`shop.brandA.com`)으로 **브랜드관을 열게** 한다. Vercel Domains API 로 도메인을 자동 등록·검증하고, klow_web 미들웨어가 물어볼 **Host → 슬러그 해석**을 제공하며, 그 도메인이 `api.klow.kr` 를 칠 수 있도록 **CORS·CSRF Origin 을 연다**.
 - **설계 정본**: [`docs/custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`flow.md`](../../custom-domain/flow.md), 결정표는 [`README.md`](../../custom-domain/README.md).
-- **관련 파일**: `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `brand-domain-wishes.controller.ts`·`domain-wishes.service.ts`(찜), `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
+- **관련 파일**: (기존 축) `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `brand-domain-wishes.controller.ts`·`domain-wishes.service.ts`(찜), `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
+  · (대행 구매 축 = P6) `domain-purchase.service.ts`(구매·연결·어드민 운영), `domain-renewal.service.ts`(갱신), `domain-dns.service.ts`(zone·레코드 실행), `domain-notify.service.ts`(브랜드 알림 4종), `cloudflare-registrar.client.ts`·`cloudflare-dns.client.ts`, `domain-dns.ts`(수렴 계획 · 순수), `registration-status.ts`(상태 집합·문구 · 순수), `domain-revenue.ts`(매출 집계 · 순수), `brand-domain-purchase.controller.ts`, `admin-brand-domains.controller.ts`, `admin-domain-purchase.controller.ts`, `brand-domain-registrations.cron.ts`, 가격 커널 `src/pricing/domain-price.ts`
 
 > ℹ️ **소비자 3곳** (2026-08-21 P4 까지 전부 붙었다 — 아직 미배포):
 > ① klow_web `src/middleware.ts` 가 `GET /v1/storefront/resolve` 로 Host→슬러그를 해석해 서빙하고,
@@ -292,7 +293,158 @@ verified && !misconfigured        → active
 - 같은 배치에서 `cleanupOrphans()` 를 겸한다.
 - **재진입 가드** `running` — 한 사이클이 Vercel API 를 최대 20건 × 2~3회 태우므로 주기를 넘길 수 있다(`payment-reconcile.cron.ts` 와 같은 가드).
 - kill switch `BRAND_DOMAIN_CRON_ENABLED=false` (미설정 = on).
-- ⚠️ 이 cron 때문에 `test/app.e2e-spec.ts` 의 기대 목록이 **8 → 9개**가 됐다. `@Cron` 클래스를 모듈 providers 에 안 넣으면 **완전 무음**으로 실행되지 않는다.
+- ⚠️ 이 cron 때문에 `test/app.e2e-spec.ts` 의 기대 목록이 **8 → 9개**가 됐다(P6 가 둘을 더해 지금은 **11개**). `@Cron` 클래스를 모듈 providers 에 안 넣으면 **완전 무음**으로 실행되지 않는다.
+
+---
+
+# 대행 구매(P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
+
+> **설계 정본**: [`docs/custom-domain/purchase-plan.md`](../../custom-domain/purchase-plan.md).
+> 위 축(브랜드가 이미 가진 도메인을 연결한다)과 **파일도 상태 머신도 분리돼 있다** — 아래
+> 「왜 `BrandDomainStatus` 에 얹지 않았나」 참고.
+
+브랜드가 결제 버튼 하나를 누르면 서버가 **카드 청구 → Cloudflare 등록 → zone DNS 주입 →
+Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브랜드에게는 연 이용료를 받는다.
+
+⚠️ **`.kr`·`.co.kr` 은 Cloudflare Registrar 가 지원하지 않는다.** 그래서 어드민 수동 연결이
+선택이 아니라 **필수**다 — 그게 없으면 "이미 가진 도메인을 연결하는 방법"이 사라진다.
+
+## 데이터 모델 — `BrandDomainRegistration` · `BrandDomainCharge`
+
+| 모델 | 수명 | 담는 것 |
+|---|---|---|
+| `BrandDomainRegistration` | 도메인당 1행(영속) | 상태·`cfState`·`cfZoneId`·만료일·`autoRenew`·연결된 `brandDomainId` |
+| `BrandDomainCharge` | **돈 한 번**(최초 + 매년) | `amountKrw`(VAT 포함 실청구액) · 원가·환율·마진·공급가 **스냅샷** · PG · dunning · `periodStart/End` |
+
+- ⚠️⚠️ **`brandId` 는 nullable + `SetNull`** 이다. `DELETE /admin/brands/:id` 하드 삭제가 실재해서, `Restrict` 면 도메인을 한 번 산 브랜드를 영영 못 지우고 `Cascade` 면 회계가 증발한다. 그래서 `brandNameSnapshot` 이 함께 있다.
+- ⚠️ `host` 에 `@unique` 를 걸지 않는다 — 실패·만료 후 재구매를 영구히 막는다. "브랜드당 진행중 1건"은 DB 가 아니라 **구매 트랜잭션의 `SELECT … FOR UPDATE` 행 잠금**이 강제한다.
+- ⚠️⚠️ **`BrandDomainCharge.periodEnd` 는 nullable 이고 그 null 이 "갱신 전진 확인 대기" 마커다.** 갱신은 우리가 부르는 API 가 아니라 Cloudflare `auto_renew` 가 **만료일에** 하므로, 청구 성공 시점에는 새 만료일을 모른다. 여기서 `+1년` 을 미리 박으면 갱신이 실제로 안 됐을 때 **장부에만 1년이 늘어난다**.
+- 마이그레이션 `20260826024609_add_brand_domain_purchase` — `CREATE TYPE ×3 + CREATE TABLE ×2` 뿐이고 `BrandDomain` 은 컬럼 하나 안 바뀐다 → **롤링 배포 안전 · 백필 없음**.
+
+### 왜 `BrandDomainStatus` 에 얹지 않았나
+
+1. **행이 존재할 수 없는 시점에 상태가 필요하다.** `BrandDomain` 은 Vercel 등록 성공 **이후에만** insert 되는데 "카드 청구 성공, 등록 대기"는 그 도메인이 세상에 있기도 전이다.
+2. `decideDomainStatus` 는 Vercel 두 응답의 **순수 함수**라 결제·레지스트라 축은 입력이 아예 다르다.
+3. 그 컬럼을 읽는 곳이 넷(`refreshOriginSnapshot`·`resolveHost`·`verifyDue`·`cleanupOrphans`)이라 값을 늘리면 **넷 전부가 재검토 대상**이다.
+
+덕분에 `verified-origin`·`resolve-host`·`domain-status`·`domain-host` 스펙이 **0줄 수정**이다.
+**그것들이 수정돼야 한다면 설계가 샌 것이다.**
+
+## 가격 — `src/pricing/domain-price.ts`
+
+원가(USD) × `resolveFxRate` × **1.3(마진)** = 공급가 → ×1.1(VAT) → **1,000원 올림** = 청구가.
+
+⚠️ 마진은 **공급가 단계**에 곱한다. 원가×1.3 을 *최종 청구가*로 잡으면 공급가가 원가×1.18 이 되어
+**실마진이 20% 로 내려간다**(구독료가 전부 VAT 포함 실청구액이라 무심코 같은 기준을 쓰기 쉽다).
+⚠️ `DOMAIN_MARGIN_RATE` env 오버라이드는 **일부러 없다** — 오설정된 마진율은 상수보다 나쁘다.
+
+## brand-domain-purchase.controller.ts (`@Controller('v1/brand/domain-purchase')`, `BrandGuard`)
+
+| Method | Path | Throttle | 기능 |
+|---|---|---|---|
+| POST | `/quotes` | 6/분 | 찜/검색 목록 ≤20개에 가용성 + 1년차·2년차 가격. 5분 캐시 |
+| POST | `/purchase` | 3/분 | `{host, expectedAmountKrw, agreedNonRefundable}` — 돈이 나가는 유일한 입력 |
+| GET | `/registration` | — | 진행 상태(화면 3초 폴링) |
+
+- ⚠️⚠️ **`purchase` 의 `domain-check` 는 quotes 의 5분 캐시를 우회한다.** 같은 캐시를 타면 ① 5분 묵은 `registrable` 을 믿고 사고 ② 견적과 청구가 같은 값을 보므로 **`expectedAmountKrw` 불일치 409 가 영원히 발화하지 않는다**.
+- ⚠️ `GET /registration` 은 단수형인데 행은 브랜드당 N개다. 선택 규칙: **① 진행중(`charging|paid|registering|registered|active`) 최신 1건 → ② 없으면 최신 1건 → ③ null**. `released`·`expired` 는 ①에 넣지 않는다(종료된 자산이라 진행 패널이 영원히 열린다).
+- ⚠️⚠️ **`cfState`·`lastError` 원문을 브랜드에게 내리지 않는다** — Cloudflare/NicePay 원문엔 계정 id·내부 식별자가 섞일 수 있다. 브랜드 화면은 `registration-status.ts` 의 `phase → message` 매핑만 본다.
+- ⚠️ 경로를 `v1/brand/domains` 밑에 두지 않은 이유는 `:id` 그림자다(`domain-wishes` 가 같은 이유로 빠졌다).
+
+## 구매 오케스트레이션 — `domain-purchase.service.ts`
+
+0단계 게이트 → 1 재확인 → 2 재견적 → 3 **락 안 insert** → 4 카드 승인 → 5 `paid` → 6 등록 요청 → 7 응답(화면은 폴링).
+
+⚠️⚠️ **반드시 지킬 것 — 어기면 돈을 잃는다**
+
+| 규칙 | 이유 |
+|---|---|
+| **타임아웃에는 결제를 취소하지 않는다** (NicePay 축) | `netCancel` 은 best-effort 라 실패해도 던지지 않는다. 여기서 charge 를 `failed` 로 접으면 **카드는 승인된 채 장부만 실패**가 되고 아무도 모른다 → `pending` 을 유지하고 cron 이 `findPaymentByOrderId` 로 진실을 확정한다 |
+| **등록 요청이 불확실하면 재시도하되, 우리 계정에 그 도메인이 한 번이라도 보이면 환불하지 않는다** (Cloudflare 축) | `registrations` 는 **즉시 과금 + 환불 불가**다. 확인 없이 환불하면 순손실이 2배다 |
+| **연결이 `subscription_required` 로 실패해도 환불하지 않는다** | 구매와 연결 사이에 구독이 `past_due` 로 떨어진 것이고 도메인은 이미 우리 것이다. `failed` 로 접으면 1년치 원가를 낸 도메인이 아무 데도 안 붙은 채 버려진다 |
+| **환불 금지 판정은 계정이 아니라 registration 행 단위다** | 같은 host 로 **다른** 브랜드의 `registered|active` 행이 있으면 남의 것이므로 손실 0 → 환불. 없으면 우리 것일 수 있어 fail-closed |
+| **`action_required` 전이는 `markActionRequired` 한 곳만** | 다섯 곳이 각자 update 만 하던 구조에서는 여섯 번째 지점이 생기는 날 **브랜드에게 아무 말도 안 하고 멈춘 건**이 조용히 생긴다 |
+
+- **상한**(코드 상수, env 아님): 계정 일일 20건 · 브랜드 연 3건. ⚠️ 카운트 소스는 `BrandDomainCharge`(`pending|paid|refunded`) — registration.status 로 세면 환불건이 빠져 실패 루프가 상한을 우회하고, `pending` 을 빼면 동시 요청이 서로를 못 본다.
+- **서킷브레이커**(§18-3): "연속 N(3)건이 결제수단 사유 실패 + 최근 실패가 30분 이내" → 구매 503. ⚠️ **쿨다운 half-open 이라 스스로 풀린다** — "최근 N건"만 보면 카드를 교체해도 차단이 영원히 안 풀려 장애를 하나 더 만든다. 그래서 **리셋 라우트가 없다**(저장할 `resetAt` 이 필요해지고 담을 자리가 없다).
+
+## DNS 실행 — `domain-dns.service.ts` (+ 순수 `domain-dns.ts`)
+
+- `ensureZone`(조회 → 없으면 생성, 멱등) · `convergeDns`(원하는 상태로 **수렴**) · `releaseDnsFor`(해제) · `deleteZone`(만료 확정 시에만).
+- ⚠️⚠️ **우리가 심은 이름·타입 조합(apex `A` / `www` `CNAME`)만 건드린다.** 브랜드가 그 zone 에 MX·TXT 를 넣어 뒀을 수 있고 **메일을 죽이면 도메인 값보다 비싼 사고**다.
+- ⚠️⚠️ **"값을 아직 모른다"를 "연결 해제"로 흘려보내지 않는다.** `desiredRecordsFor` 는 빈 `recordValue` 를 빼고 돌려주므로 그것만 보면 둘 다 `[]` 로 보인다 → 호출부는 **`hasUnknownRecordValue`** 를 먼저 본다. 빈 값을 채우는 것은 `refreshOne`(기존 verify cron)이다.
+- ⚠️ 설계 문서(§18-2 b)는 이 훅을 `domain-purchase.service.ts` 가 소유한다고 적었지만 **실제로는 DI 순환**이다(구매→brand-domains 의존이 이미 있는데 `cleanupOrphans` 도 이 훅을 부른다). 문서가 지키려던 것은 이름이 아니라 *"Cloudflare 호출을 brand-domains 로직 안에 쓰지 않는다"* 이므로 훅을 **더 아래 계층**으로 내렸다. `CloudflareDnsClient` 를 `BrandDomainsService` 에 직접 주입하는 선택지는 그 규칙을 어기는 것이라 채택하지 않았다.
+
+## 종료 경로 3가지
+
+| 계기 | registration | Cloudflare `auto_renew` | DNS | zone | 브랜드관 |
+|---|---|---|---|---|---|
+| **연결 해제**(어드민) | `released` | **즉시 `false`** | 즉시 삭제 | 남긴다 | 즉시 `klow.kr/{slug}` 폴백 |
+| **구독 해지·past_due** | `active` 유지 | `true` 유지(별도 상품이다) | `cleanupOrphans` 가 Vercel 을 지울 때 함께 | 남긴다 | 60일 유예 후 Vercel 제거(서빙은 `resolveHost` 가 즉시 차단) |
+| **갱신 미납 확정** | `expired` | `false` | 만료 시 무의미 | **만료 확정 시 삭제** | 만료일까지 정상 |
+
+- ⚠️⚠️ **연결 해제는 `setAutoRenew(false)` 를 먼저 부르고, 실패하면 나머지를 진행하지 않는다.** DNS·Vercel 만 걷어내고 자동갱신이 살아 있으면 만료일에 **브랜드에겐 안 받고 우리 카드만 긁힌다** — 청구서가 브랜드 장부에 안 남아 어드민 화면에도 안 보인다.
+- ⚠️ registration 이 없는 도메인(어드민 수동 연결 — `.co.kr` 등)에는 그 단계가 **없다**. 분기는 **registration 행의 존재**로만 한다(호스트·TLD 로 넘겨짚지 말 것). 같은 이유로 브랜드 `DELETE /v1/brand/domains/:id` 는 **전면 차단이 아니라 조건부**다 — registration 이 걸리면 409 `domain_purchased`, 아니면 종전대로 브랜드가 지운다.
+- ⚠️ `cleanupOrphans` 는 **삭제 前에** registration 을 조회해야 한다(`brandDomainId` 가 `SetNull` 이라 지운 뒤엔 우리 것이었는지 알 수 없다). 그리고 그 경로는 **`registration.status` 를 건드리지 않는다** — 구독이 끊겨도 도메인은 우리 자산이고 갱신 청구는 계속한다.
+
+## 갱신 — `domain-renewal.service.ts`
+
+`RENEWAL_LEAD_DAYS = 30`(⚠️ 줄이면 안 된다 — dunning 0/1/3/7 = 최대 11일 + 여유 19일) ·
+`RENEWAL_NOTICE_LEAD_DAYS = 37`(**두 상수의 차 7일이 고지 리드타임**) ·
+`RENEWAL_PRICE_SPIKE_MAX = 2` · `ESTIMATED_GIVE_UP_DAYS = 7` · `ADVANCE_GRACE_DAYS = 7`.
+
+1. **사전 고지** — 만료 37일 전(= 청구 7일 전) 1회. 플래그 컬럼 없이 **하루짜리 창**으로 멱등을 만든다(대가: cron 이 그 하루를 통째로 거르면 고지가 빠진다 — 알림이지 게이트가 아니라 받아들였다).
+2. **청구 + dunning** — 청구 시점 `domain-check` 재조회(가격 인상·환율 자동 반영). ⚠️⚠️ **주기 식별자는 `periodStart = registration.expiresAt`** 이다. 그 덕에 "이 주기 청구가 이미 있는가"가 컬럼 없이 조회 하나로 답이 되고 재시도가 **같은 행**을 재사용해 orderId 가 안 바뀐다(이중 승인 방지). 소진(4회)이면 `setAutoRenew(false)` — ⚠️ **Cloudflare 를 먼저** 끄고 성공했을 때만 우리 행을 맞춘다. ⚠️ 카드가 없으면 조용히 건너뛰지 않고 dunning 을 태운다(건너뛰면 만료일에 우리 카드가 긁힌다). ⚠️ 직전 청구의 2배 초과는 청구하지 않고 사람에게.
+3. **⚠️⚠️ 만료일 전진 확인** — Cloudflare 에는 갱신 API 가 없어 실제 갱신이 **만료일 당일**에 일어난다. 그래서 30일 전 청구가 성공해도 `expiresAt` 은 옛 값이고, **없으면 만료 정리 절이 돈을 낸 브랜드의 `BrandDomain` 을 지운다.** 대기 집합은 컬럼이 아니라 쿼리다(`kind=renewal AND paid AND periodEnd IS NULL`). 유예를 넘겨도 전진이 없으면 사람에게 넘기되 **`BrandDomain` 은 지우지 않는다**(브랜드는 돈을 냈다). ℹ️ 이 절이 **우리 계정 카드 사망의 유일한 탐지기**이기도 하다 — 갱신은 우리가 아무 API 도 부르지 않아 실패를 볼 기회가 여기밖에 없다.
+4. **만료 정리** — ⚠️⚠️ **`autoRenew=false` 인 행에만 건다.** `true` 인데 만료가 지난 행은 "만료"가 아니라 3의 확인 대기다. `removeForBrand` 를 쓰지 않는다(브랜드 소유 검증 경로이고 `brandId` 가 nullable 이다) → `removeDomainPair` + zone 삭제. zone 삭제가 실패하면 `cfZoneId` 를 **남겨** 다음 사이클이 다시 집는다(안 그러면 계정에 zone 이 무한 누적).
+
+⚠️ `expiresAtIsEstimated=true`(벤더가 만료일을 안 줘 근사한 값)는 **2단계**다 — 30일 전엔 어드민 알림만, **7일 전까지 사람이 안 고치면 `setAutoRenew(false)`**. "알림만" 으로 끝내면 청구는 안 하는데 Cloudflare 자동갱신은 살아 있어 **우리 카드만 긁힌다.**
+
+## 브랜드 알림 4종 — `domain-notify.service.ts`
+
+구매 완료 · 갱신 사전 고지 · 갱신 결제 실패 · 사람 개입 필요. **정본은 알림톡(Solapi), 폴백은 SMS.**
+
+⚠️⚠️ **폴백이 없으면 "갱신 결제 실패"가 조용히 사라진다** — 알림톡은 템플릿마다 카카오 사전 승인이
+필요하고 채널 심사·발신프로필·템플릿 중 하나라도 안 끝나면 실발송 없이 콘솔 로그로 떨어지므로,
+승인 전 구간 전체가 무음이 된다. SMS 는 템플릿 승인이 필요 없다.
+⚠️ 수신번호는 `Brand.senderPhone ?? BrandUser.phone`, 둘 다 없으면 **warn + Sentry**(조용히 지나가지 않는다).
+⚠️ 어드민 SMS(`adminAlert`)의 수신자는 `Admin.shipmentAlertEnabled && phone != null` 을 **재사용**한다 — "장애 문자를 받는 사람" 목록이 두 벌이 되면 한쪽만 켜 둔 채 다른 쪽이 무음이 된다.
+
+## admin-brand-domains.controller.ts (`admin/brands/:brandId/domains`, `AdminGuard`)
+
+| Method | Path | 기능 |
+|---|---|---|
+| GET | `/` | 연결된 도메인 + registration N행 + 청구 이력 + **그 브랜드 합계** |
+| POST | `/` | **수동 연결**(= `createForBrand`) + 같은 host 의 `released` registration 되살리기 |
+| PATCH | `/registrations/:id/auto-renew` | Cloudflare 먼저, 성공했을 때만 우리 행 |
+| POST | `/registrations/:id/retry` | `action_required` → `paid`. ⚠️ **`submitAttempts` 를 0으로 리셋**(안 하면 3회 소진 건이 사람이 고쳐 준 뒤에도 영영 안 붙는다) |
+| PATCH | `/charges/:id/refund` | 전액 환불만. ⚠️ `cancelAmount` 를 받지 않는다 |
+| DELETE | `/:domainId` | **연결 해제 4단계**(위) |
+
+- `GET /admin/domain-purchase/circuit` — 계정 축(브랜드 축이 아니다). **조회 전용**.
+- ⚠️ 리터럴 세그먼트(`registrations`·`charges`)를 `:domainId` 보다 **먼저** 등록한다.
+- ⚠️⚠️ **`released` 재연결이 `MAX_DOMAINS_PER_BRAND`(3)에 걸릴 수 있다** — released 는 "진행중"이 아니라 그 브랜드가 새 도메인을 살 수 있고(primary+www=2), 그 뒤 재연결하면 4개가 된다. 어드민 화면이 **기존 연결을 먼저 해제하도록 안내**한다(상한을 올려 해결하지 말 것).
+
+## 매출 노출 — `domain-revenue.ts`
+
+`GET /admin/stats/kpi` 에 **`domainRevenue: {inRange, total}`**(청구액·원가·실마진·건수·환불액).
+
+- ⚠️⚠️ **`totalRevenueKrw`·`subscriptionRevenueKrw` 에 합산하지 않는다.** 그 라벨은 2026-08 개편에서 "건당 ₩1,500 시딩 이익이 섞여 있던" 것을 걷어내고 **구독매출만** 가리키도록 정정한 값이다.
+- ⚠️ 원가는 charge 가 얼려 둔 `supplyKrw / marginRate` 로 되돌린다 — **지금 환율로 다시 곱하면 과거 마진이 흔들린다**. 버킷은 `paidAt` 이고 환불은 소급 차감하지 않는다(차감하면 어제 본 숫자가 오늘 달라진다).
+- 같은 함수를 어드민 도메인 탭의 **브랜드 합계**가 쓴다 — 두 화면이 같은 값을 다르게 보여주면 둘 다 신뢰를 잃는다.
+
+## brand-domain-registrations.cron.ts — cron 2개
+
+| name | 주기 | 하는 일 | kill switch |
+|---|---|---|---|
+| `brand-domain-registration` | `*/2 * * * *` KST | `paid → registering → registered → active` + **`charge=pending` 보정** | `BRAND_DOMAIN_REGISTRATION_CRON_ENABLED=false` |
+| `brand-domain-renewal` | `30 0 * * *` KST | 사전 고지·청구·dunning·전진 확인·만료 정리 | **없다** — `DOMAIN_PURCHASE_ENABLED` 에 흡수 |
+
+- ⚠️ **등록 폴링 스위치는 마스터 게이트와 독립이어야 한다.** 사고 대응은 "신규 유입만 막고 in-flight 는 끝낸다"이므로, `DOMAIN_PURCHASE_ENABLED=false` 가 이 cron 까지 멈추면 **`paid` 로 묶인 돈이 영영 등록되지 않는다**.
+- ⚠️⚠️ **갱신에 전용 스위치를 두지 않은 것은 의도다.** "돈 나가는 cron 은 opt-in"은 이 레포 관례가 아니고(정작 `brand-subscription-billing` 에도 없다), 그 스위치는 위험을 줄이는 게 아니라 **옮긴다** — 갱신은 첫 구매 후 11개월간 due 행이 0이라 켜 두어도 무해한 반면 "1년 뒤에 켠다"를 사람 기억에 맡기면 **잊는 순간 도메인이 만료된다**.
+- 재진입 가드는 두 cron이 **각각** 갖는다(공유하면 갱신 배치가 도는 동안 등록 폴링이 멈춘다).
+
+---
 
 ## Origin 술어 — `main.ts` (§2-5)
 
@@ -334,6 +486,11 @@ verified && !misconfigured        → active
 | `VERCEL_PROJECT_ID` | ⚠️⚠️ **운영·스테이징이 서로 다른 프로젝트다**(`klow-web` / `klow-web-staging`). 스테이징 서버가 운영 project id 를 들고 있으면 **테스트로 붙인 브랜드 도메인이 운영 사이트에 꽂힌다** |
 | `VERCEL_TEAM_ID` | 팀 소속이면 필수 (`team_xxx`) |
 | `BRAND_DOMAIN_CRON_ENABLED` | `false` 일 때만 폴링 cron 비활성 (미설정 = on) |
+| `CLOUDFLARE_ACCOUNT_ID` · `CLOUDFLARE_REGISTRAR_TOKEN` | 대행 구매. ⚠️ **Registrar Write** 가 필요하다(`.env.example` 의 "가능하면 읽기 전용" 안내는 이 기능 이후로 틀렸다) |
+| `CLOUDFLARE_DNS_TOKEN` | Zone > DNS:Edit. ⚠️ **registrar 토큰으로 폴백하지 않는다** — 폴백은 오설정을 고쳐 주는 게 아니라 안 보이게 만든다(등록은 되는데 DNS 만 안 꽂혀 영원히 misconfigured) |
+| `DOMAIN_PURCHASE_ENABLED` | ⚠️⚠️ **마스터 게이트** — `'true'` 일 때만 "돈을 움직인다"(구매 + 갱신 청구). 미설정 시 구매 **503 `domain_purchase_unavailable`**. 여기엔 부팅 fail-closed 를 붙이지 않은 위 판단이 **적용되지 않는다** — 스테이징이 운영 토큰을 들면 테스트 클릭 한 번이 **되돌릴 수 없는 실제 돈**이다 |
+| `BRAND_DOMAIN_REGISTRATION_CRON_ENABLED` | `false` 일 때만 등록 폴링 cron 비활성 (미설정 = on) |
+| `SOLAPI_KAKAO_TEMPLATE_DOMAIN_*` ×4 | 알림 4종 템플릿. **전부 선택** — 미설정이면 SMS 폴백이 대신 나가므로 배포를 막지 않는다 |
 
 ⚠️ **부팅 fail-closed 가드를 붙이지 않았다.** 기존 fail-closed 3종(Eximbay·`GUEST_ORDER_SECRET`·OTP)은 "조용히 깨지고 돈이 사라지는" 경로다. 도메인은 미설정 시 브랜드가 즉시 에러를 보므로 부팅을 막을 성질이 아니다.
 
@@ -371,5 +528,13 @@ verified && !misconfigured        → active
 | `__tests__/domain-pairing.spec.ts` | apex → www 동반 생성 / **서브도메인 → 페어 없음** / 페어 실패가 primary 를 롤백하지 않음 / 페어 동반 삭제 / **Vercel 성공 + DB 실패 → 보상 제거** / 게이트 4종 |
 | `__tests__/resolve-host.spec.ts` | **F13** — 구독·탈퇴·미승인·`slug:null` 미해석 / redirect 파생과 **오픈 리다이렉트 차단** / 미등록 host 200 / **`cleanupOrphans` 후보가 서빙 게이트의 부정인지** / **F33** 유예 시계가 브랜드 쪽 행인지(구독이 **방금** 끊긴 오래된 도메인은 아직 정리 대상이 아니다) |
 | `common/__tests__/origin-policy.spec.ts` | CSRF·CORS 가 **같은 분류**를 본다 / 브랜드 도메인에 **ACAC 미부착** / 비화이트리스트에 **ACAO 미반사**(`/embed/*` 하드룰의 근거) / **브랜드 오리진의 상태변경 경로 허용목록**(비콘 3 + 견적은 통과, 그 밖 전부 403, `..` 로 접두 매칭을 뚫는 모양 포함) |
-| `test/app.e2e-spec.ts` | cron 목록 **9개** |
+| `__tests__/domain-purchase.spec.ts` | 게이트·`expectedAmountKrw` 409·`FOR UPDATE` 직렬화·확정 거절 시 Cloudflare 0회·**불확정은 `pending` 유지** |
+| `__tests__/domain-purchase-limits.spec.ts` | 상한 2종(카운트 소스가 charge 이고 `pending` 포함)·서킷 **쿨다운 half-open** |
+| `__tests__/domain-registration-poll.spec.ts` | 흐름 8~11 — 재제출·환불 판정이 **행 단위**·`subscription_required` 는 환불 금지·연결 백오프 |
+| `__tests__/domain-release.spec.ts` | **①setAutoRenew 실패 시 아무것도 안 지운다**·우리 레코드만 삭제(MX 생존)·zone 은 안 지운다·registration 없는 도메인은 ①을 건너뛴다·released 재연결·`cleanupOrphans` 가 status 를 안 건드림·어드민 운영 4종·매출 합계 |
+| `__tests__/domain-renewal.spec.ts` | 사전 고지 창·**같은 주기 이중 청구 금지**·dunning 간격·소진 시 auto_renew off·폭등 보류·**전진 확인**·⭐⭐**`autoRenew=true` 인 만료 경과 행은 건드리지 않는다**·근사 만료일 2단계 |
+| `__tests__/domain-notify.spec.ts` | `action_required` 전이가 **전부** 알림을 울린다(무음 실패 방지) |
+| `__tests__/domain-dns.spec.ts` | 수렴 계획 — 우리 이름·타입만 remove·"모른다"와 "해제"의 구분 |
+| `stats/__tests__/kpi.spec.ts` | 도메인 매출이 **총매출·구독매출에 섞이지 않는다** |
+| `test/app.e2e-spec.ts` | cron 목록 **11개** |
 | `common/__tests__/origin-exempt.spec.ts` | **무변경 통과** |

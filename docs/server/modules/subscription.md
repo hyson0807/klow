@@ -60,8 +60,29 @@
 - `400 { message, code, classification }` — NicePay 빌링 에러(`NicepayBillingError`). `classification` 은
   permanent/transient/upstream 이며 사용자 메시지 용도일 뿐, dunning 재시도 여부는 `attemptCount` 만 본다.
 
+## 모듈 경계 — `exports: [NicepayBillingAdapter]`
+
+이 모듈은 **어댑터 하나만** 밖에 내준다(2026-08, 도메인 대행 구매 P6). `SubscriptionService` 는
+export 하지 않는다 — 구독 상태 머신·dunning·승인 트랜잭션은 이 모듈이 소유한다.
+
+- 소비자는 `BrandDomainsModule` 하나다: 도메인 대행 구매·갱신이 브랜드 카드로 **일회성 즉시 청구**를
+  해야 한다. 배선은 `BrandDomainsModule → SubscriptionModule` 이고 **역방향은 순환이다** —
+  갱신 미납 시 도메인을 끄는 로직은 반드시 `brand-domains` 가 갖는다.
+- 함께 밖으로 꺼낸 순수 조각 2개(`dunning.ts` 의 `retryGap`·`throwAsHttp`)는 원래 서비스 파일의
+  **모듈 로컬 비-export 함수**였다. ⚠️ `common/` 으로 올리지 않는다 — dunning 은 배관이 아니라
+  **정책**이라 소유 모듈이 갖는 것이 규칙 3 휴리스틱에 맞다.
+  ⚠️⚠️ 두 벌이 되면 반드시 갈린다. 특히 `throwAsHttp` 는 `NicepayErrorClass → HTTP` 매핑이라
+  복제본이 생기면 같은 PG 에러가 화면에 따라 다른 코드로 나간다.
+- `billing-key-select.ts` — "이 구독의 카드로 지금 청구해도 되는가"의 **정본 술어**.
+  ⚠️ **기존 세 호출부를 정본으로 갈아끼우지 않았다.** 특히 정기청구(`runDueBilling`)에
+  `deletedAt` 을 넣으면 청구 실패가 dunning 이 아니라 **"행이 아예 안 잡힘"** 이 되어 구독이
+  `active` 인 채 만료일을 지나 **무료로 계속 서빙**된다. 일회성은 "잘못된 카드에 긁는 것"이,
+  정기청구는 "안 긁고 침묵하는 것"이 최악이라 방향이 반대다 — 그래서 갈래를 **의도로 명시**했다
+  (`RECURRING_CHARGEABLE_WHERE`).
+
 ## 관련 문서
 
 - 브랜드 입점/심사 워크플로우는 [brand-applications](./brand-applications.md) — 구독은 그 위의 결제 게이트.
 - 구독 매출 정산은 [settlement](./settlement.md).
+- 이 어댑터를 함께 쓰는 도메인 대행 구매는 [brand-domains](./brand-domains.md) 「대행 구매(P6)」.
 - 전체 결제 흐름·NicePay 교체 배경·Stage 분리 설계는 워크스페이스 문서 [`../../../docs/brand-subscription.md`](../../../docs/brand-subscription.md).

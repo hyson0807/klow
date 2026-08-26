@@ -1,6 +1,6 @@
 # 커스텀 도메인 대행 구매 (P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
 
-> **현재 상태: 🚧 서버 구현 진행 중 (2026-08-26) — §19 의 A · B · C 완료, D · E · F 미착수.**
+> **현재 상태: 🚧 서버 구현 완료 (2026-08-26) — §19 의 A · B · C · D · E 완료. 남은 것은 프론트 2개(D 어드민 화면 · F)뿐이다.**
 > 이 문서가 이 기능의 **정본**이다.
 >
 > ---
@@ -12,7 +12,7 @@
 > 머지는 전부 끝난 뒤 `cd /Users/hyson/welkit/klow/klow_server && git checkout staging &&
 > git merge --no-ff feat/domain-purchase`, 정리는 `git worktree remove`.
 >
-> ### 끝난 것 — 커밋 5개
+> ### 끝난 것 — 커밋 9개 (**klow_server 는 전부 끝났다**)
 >
 > | PR | 커밋 | 내용 |
 > |---|---|---|
@@ -21,23 +21,26 @@
 > | **C-1** | `1e7cb0f` | `subscription/dunning.ts`(`retryGap`·`throwAsHttp`) · `subscription/billing-key-select.ts` · `orderIdFrom` static 승격 · **`findPaymentByOrderId` 신규** · `SubscriptionModule.exports = [NicepayBillingAdapter]` |
 > | **C-2** | `6274dc2` | `domain-purchase.service.ts` · `registration-status.ts` · `brand-domain-purchase.controller.ts` · `brand-domain-registrations.cron.ts` · `attachPurchasedDomain` · `DELETE` 조건부 차단 · e2e cron 9→10 · env 2개 |
 > | **C-3** | `2b1fb36` | 스펙 3종(구매 24 · 폴링 19 · 상한/서킷 15) + harness 구매 축 확장 |
+> | **D-1** | `c39c4cd` | `domain-dns.service.ts` 신설 · `removeDomainPair` 추출 · `cleanupOrphans` DNS 정리 · `releaseDomain`(§18-1a 4단계) · `reviveReleasedRegistration` · 어드민 라우트 7개 · `domain-release.spec.ts` 17개 |
+> | **D-2** | `b770ae4` | `domain-revenue.ts` 분리 + `GET /admin/stats/kpi` 의 `domainRevenue`(§16-6) + kpi 스펙 2개 |
+> | **E-1** | `8c7e7c6` | `KakaoService.sendTemplate` · `domain-notify.service.ts`(알림 4종) · **`markActionRequired` 초크포인트** · `domain-notify.spec.ts` 4개 · env 4개 |
+> | **E-2** | `ea62df4` | `domain-renewal.service.ts` + `brand-domain-renewal` cron(사전 고지·청구·dunning·**만료일 전진 확인**·만료 정리) · e2e cron 10→11 · `domain-renewal.spec.ts` 17개 |
 >
-> **실측값**: 라우트 **315 → 318**, cron **9 → 10**, 유닛 **794 → 852개**(58스위트).
+> **실측값**: 라우트 **315 → 325**, cron **9 → 11**, 유닛 **794 → 892개**(61스위트).
 > 검증 3층은 매 커밋마다 통과시켰다(typecheck 2개 tsconfig · `test:e2e` · `PORT=4001 npm run start`).
 > ⚠️ 포트 4000 은 메인 체크아웃 dev 서버가 점유 중일 수 있어 **4001** 을 쓴다.
 >
-> ### 남은 것 — §19 의 D · E · F
+> ### 남은 것 — 프론트 2개
 >
 > | PR | 어디서 | 비고 |
 > |---|---|---|
-> | **D** | 서버 절반은 이 워크트리, **klow_admin 화면은 별도 repo** | §11 어드민 라우트 · §18-2 DNS/zone 정리 · §16 매출 노출 |
-> | **E** | 이 워크트리 | ⚠️⚠️ `expiresAt < now` 정리와 §9-3 전진 확인은 **반드시 같은 커밋**. cron 10 → 11 |
-> | **F** | **klow_brand (별도 repo)** | 마지막 |
+> | **D(화면)** | **klow_admin (별도 repo)** | §16 도메인 탭. 서버는 다 열렸다 — `GET/POST/DELETE admin/brands/:id/domains` · `PATCH registrations/:id/auto-renew` · `POST registrations/:id/retry` · `PATCH charges/:id/refund` · `GET admin/domain-purchase/circuit` |
+> | **F** | **klow_brand (별도 repo)** | §12~§15. 마지막 |
 >
 > ⚠️ `klow_admin`·`klow_brand` 는 **독립 repo** 라 klow_server 워크트리에 격리된 세션에서는
 > git 조작이 막힌다. 그 둘은 각 repo 에서 새 세션으로 할 것.
 >
-> ### ⚠️ 구현이 문서와 다른 곳 4가지 (전부 코드 주석에 이유가 박혀 있다. 되돌리지 말 것)
+> ### ⚠️ 구현이 문서와 다른 곳 6가지 (전부 코드 주석에 이유가 박혀 있다. 되돌리지 말 것)
 >
 > 1. **`ceilToUnitKrw()` 를 분리하고 부동소수 가드(`toPrecision(12)`)를 넣었다**(§5).
 >    `10000 * 1.1 === 11000.000000000002` 이라 순진한 `Math.ceil` 이 ₩11,000 을 ₩12,000 으로
@@ -56,6 +59,17 @@
 >    갈래를 **의도로 명시**했다(이 파일의 목적은 "통일"이 아니라 "갈라진 것을 사고가 아니라
 >    의도로 만드는 것"). ⚠️ §10 표의 `resumeWithExistingCard` 행도 부정확했다 — 거긴
 >    `pgCustomerKey` 가 없으면 **그 자리에서 발급**하므로 정본과 애초에 다르다.
+>
+> 5. **`releaseDnsFor` 의 소유자를 `domain-dns.service.ts`(신규 제공자)로 내렸다**(§18-2 b).
+>    문서대로 `domain-purchase.service.ts` 에 두면 **DI 순환**이다 — 부르는 쪽이 둘인데
+>    (어드민 연결 해제 · `cleanupOrphans`) 후자가 `BrandDomainsService` 이고
+>    `DomainPurchaseService → BrandDomainsService` 의존이 이미 있다(forwardRef 가 필요해진다).
+>    문서가 지키려던 것은 이름이 아니라 **"Cloudflare 호출을 brand-domains 로직 안에 쓰지
+>    않는다"** 이므로 훅을 더 아래 계층으로 내려 규칙을 지키면서 순환을 없앴다.
+>    (`CloudflareDnsClient` 를 그 서비스에 직접 주입하는 선택지는 정확히 그 규칙을 어긴다.)
+> 6. **`action_required` 전이를 `markActionRequired` 한 곳으로 모았다**(§9-2 4번).
+>    문서엔 알림 발화 지점이 안 적혀 있었는데, 전이가 다섯 곳에 흩어져 있어 각 자리에 알림을
+>    붙이면 **여섯 번째 지점이 생기는 날 무음으로 멈춘 건**이 생긴다.
 >
 > ### ⚠️⚠️ §0 미실측이라 보수적으로 짜고 `TODO` 로 남긴 두 분기
 >
@@ -1572,8 +1586,8 @@ env 가 아니다**(2026-08-26 정리. 근거는 §11 env 절 — 이 레포엔 
 | **B** ✅ `aedd709` | registrar 확장 + `cloudflare-dns.client.ts` + `domain-dns.ts` + 스펙 | 호출부가 없다 |
 | **C** ✅ `1e7cb0f`·`6274dc2`·`2b1fb36` | `SubscriptionModule.exports` 개방 + `dunning.ts`(`retryGap`·`throwAsHttp` **추출**) + `billing-key-select.ts`(**신설** — §10) + **`findPaymentByOrderId` 어댑터 메서드**(§7-1-E) + 구매 서비스·라우트(**`FOR UPDATE` 락 · 상한 §18-4 · 서킷브레이커 §18-3** 포함) + 등록/보정 cron + e2e cron 목록 + 스펙 3종 | `DOMAIN_PURCHASE_ENABLED` opt-in |
 | | ⚠️ **C 는 한 PR 에 안 들어가 셋으로 쪼갰다**: C-1(§10 추출·배선) → C-2(서비스·라우트·cron) → C-3(스펙 3종 + harness 확장). 다음에 비슷한 규모를 다룰 때 같은 축으로 자르면 된다 | |
-| **D** | 어드민 라우트 + klow_admin 도메인 탭(수동 연결 · **연결 해제 = §18-1a 4단계** · **서킷 조회**(§18-3, 조회 전용 — 리셋 라우트 없음)) + **DNS/zone 정리**(§18-2) + **매출 합계 노출**(§16 6번) | 운영이 먼저 눈을 갖는다. ⚠️ 연결 해제 UI 를 열기 전에 `setAutoRenew(false)` 가 반드시 배선돼 있어야 한다. ⚠️ 서킷은 쿨다운으로 스스로 풀리므로(§18-3) **어드민 화면이 늦어도 장애가 되지 않는다** |
-| **E** | 갱신 cron + dunning + auto_renew off + **만료일 전진 확인**(§9-3) + **알림 4종**(§9-2, 알림톡+SMS 폴백) + **사전 고지**(§9-1) | opt-in cron. ⚠️ 알림은 갱신보다 **먼저** 살아 있어야 의미가 있다 — 구매 완료 알림(1번)은 C 로 당겨도 된다. ⚠️⚠️ **`expiresAt < now` 정리 절과 §9-3 전진 확인은 반드시 같은 PR 이다** — 정리만 먼저 나가면 첫 갱신일에 돈 낸 브랜드의 도메인이 끊긴다 |
+| **D** ✅(서버) `c39c4cd`·`b770ae4` | 어드민 라우트 + klow_admin 도메인 탭(수동 연결 · **연결 해제 = §18-1a 4단계** · **서킷 조회**(§18-3, 조회 전용 — 리셋 라우트 없음)) + **DNS/zone 정리**(§18-2) + **매출 합계 노출**(§16 6번) | 운영이 먼저 눈을 갖는다. ⚠️ 연결 해제 UI 를 열기 전에 `setAutoRenew(false)` 가 반드시 배선돼 있어야 한다. ⚠️ 서킷은 쿨다운으로 스스로 풀리므로(§18-3) **어드민 화면이 늦어도 장애가 되지 않는다** |
+| **E** ✅ `8c7e7c6`·`ea62df4` | 갱신 cron + dunning + auto_renew off + **만료일 전진 확인**(§9-3) + **알림 4종**(§9-2, 알림톡+SMS 폴백) + **사전 고지**(§9-1) | opt-in cron. ⚠️ 알림은 갱신보다 **먼저** 살아 있어야 의미가 있다 — 구매 완료 알림(1번)은 C 로 당겨도 된다. ⚠️⚠️ **`expiresAt < now` 정리 절과 §9-3 전진 확인은 반드시 같은 PR 이다** — 정리만 먼저 나가면 첫 갱신일에 돈 낸 브랜드의 도메인이 끊긴다 |
 | **F** | klow_brand: `/settings/domain` + 말풍선 + `DomainSection` 제거 | **마지막** |
 
 **배포 순서**

@@ -1480,6 +1480,11 @@ P0~P4 는 **브랜드가 도메인을 이미 갖고 있다**는 전제 위에 �
 | **F31** ⚠️ | klow_web `HOST_RE` 는 서버 `domain-host.ts` 보다 **좁으면 안 된다** — 특히 punycode TLD(`xn--…`) | 서버가 받아 `active` 까지 간 한글 도메인을 미들웨어가 **영원히 서빙하지 못한다**(resolve 를 아예 안 부른다). 핸드오프 `o` 도 같이 버려져 결제 후 카트 정리가 죽는다 | P3 |
 | **F32** ⚠️ | 미들웨어 메타데이터 세그먼트 판정은 **정확 일치**(+`-{hash}` 접미)여야 한다. `startsWith` 금지 | `icon` 접두 매칭이면 `/iconic` 같은 실재 가능한 슬러그가 pass-through 되어 **F11 이 뚫린다**(브랜드 A 도메인에 브랜드 `iconic` 의 브랜드관) | P3 |
 | **F33** ⚠️ | 도메인 정리 유예 시계는 **원인 축의 행**(`Brand.updatedAt` / `BrandSubscription.updatedAt`)이다. `BrandDomain.updatedAt` 금지 | `active` 행은 다시 쓰이지 않아 그 값이 활성화 시점에 얼어붙는다 → 구독이 `past_due` 로 떨어지는 **첫 사이클에 즉시 삭제**되어 유예가 사실상 0이 된다(재결제 후 DNS 재설정 강요) | P1 |
+| **F34** ⚠️⚠️ | 대행 구매는 **`SELECT … FOR UPDATE`(Brand 행)로 직렬화**하고, 상한 검사와 insert 를 **락 안**에서 한다 | `BrandDomainRegistration.host` 에 `@unique` 가 없어(실패·만료 후 재구매를 막지 않으려고) DB 가 동시 구매를 안 잡는다. 락 밖에서 세면 세는 순간과 insert 사이가 그대로 경합 창이라 **환불 불가 원가**가 중복으로 나간다 | P6 |
+| **F35** ⚠️⚠️ | 카드 승인이 **불확정**(타임아웃·네트워크 순단)이면 charge 를 `failed` 로 접지 않고 **`pending` 을 유지**한다. `netCancel` 은 best-effort 라 실패해도 던지지 않는다 | 카드는 승인된 채 장부만 실패가 되고 **아무도 모른다**. 확정은 cron 이 `findPaymentByOrderId` 로 한다 | P6 |
+| **F36** ⚠️⚠️ | 등록은 끝났는데 **연결이 실패해도 환불하지 않는다**(특히 `subscription_required`). 환불 금지 판정은 계정이 아니라 **registration 행 단위**다 | Cloudflare `registrations` 는 즉시 과금 + **환불 불가**다. 확인 없이 브랜드에게 환불하면 우리는 1년치 원가를 낸 도메인을 아무 데도 못 붙인 채 버린다(순손실 2배) | P6 |
+| **F37** ⚠️⚠️ | **`autoRenew=true` 인 행은 `expiresAt` 이 지나도 정리하지 않는다.** 그건 "만료"가 아니라 **갱신 확인 대기**다 | Cloudflare 에 갱신 API 가 없어 실갱신이 만료일 당일에 일어난다 → 30일 전 청구가 성공해도 `expiresAt` 은 옛 값이고, 이 한 줄이 없으면 **정상 갱신된 도메인의 연결이 만료일에 끊긴다**(돈을 낸 브랜드에게) | P6 |
+| **F38** ⚠️⚠️ | 연결 해제·미납 확정은 **반드시 `setAutoRenew(false)` 를 먼저** 부르고, 실패하면 나머지를 진행하지 않는다 | DNS·Vercel 만 걷어내고 Cloudflare 자동갱신이 살아 있으면 만료일에 **브랜드에겐 안 받고 우리 카드만 긁힌다** — 청구서가 브랜드 장부에 안 남아 **어드민 화면에도 안 보인다** | P6 |
 
 ---
 
