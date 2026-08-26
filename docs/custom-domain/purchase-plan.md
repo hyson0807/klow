@@ -1,6 +1,6 @@
 # 커스텀 도메인 대행 구매 (P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
 
-> **현재 상태: 🚧 서버 구현 완료 (2026-08-26) — §19 의 A · B · C · D · E 완료. 남은 것은 프론트 2개(D 어드민 화면 · F)뿐이다.**
+> **현재 상태: ✅ 구현 완료 (2026-08-26) — §19 의 A · B · C · D · E · F 전부 끝났다. 남은 것은 코드가 아니라 배포·약관·§0 실측이다.**
 > 이 문서가 이 기능의 **정본**이다.
 >
 > ---
@@ -30,17 +30,55 @@
 > 검증 3층은 매 커밋마다 통과시켰다(typecheck 2개 tsconfig · `test:e2e` · `PORT=4001 npm run start`).
 > ⚠️ 포트 4000 은 메인 체크아웃 dev 서버가 점유 중일 수 있어 **4001** 을 쓴다.
 >
-> ### 남은 것 — 프론트 2개
+> ### 프론트 2개도 끝났다 (2026-08-26)
 >
-> | PR | 어디서 | 비고 |
-> |---|---|---|
-> | **D(화면)** | **klow_admin (별도 repo)** | §16 도메인 탭. 서버는 다 열렸다 — `GET/POST/DELETE admin/brands/:id/domains` · `PATCH registrations/:id/auto-renew` · `POST registrations/:id/retry` · `PATCH charges/:id/refund` · `GET admin/domain-purchase/circuit` |
-> | **F** | **klow_brand (별도 repo)** | §12~§15. 마지막 |
+> | PR | 레포 · 브랜치 | 커밋 | 내용 |
+> |---|---|---|---|
+> | **D(화면)** | `klow_admin` · `feat/domain-purchase` (워크트리 `/Users/hyson/welkit/klow-domain/klow_admin`) | `b75a365` | §16 도메인 탭 — 탭 배열 1줄 + `BrandDomainPanel` + 다이얼로그 3종 + `lib/api/brand-domains.ts` + `lib/domain-status.ts` + KPI '도메인 매출' 타일 |
+> | **F(서버)** | `klow_server` · 같은 브랜치 | `c243964` | §12 — `/me` 가 `customDomain`·`domainPending` 을 파생해 내린다 + 스펙 5케이스 |
+> | **F(화면)** | `klow_brand` · `feat/domain-purchase` (워크트리 `/Users/hyson/welkit/klow-domain/klow_brand`) | `2e3b7b9` | §13~§15 — `/settings/domain` 신설 · 스튜디오 말풍선 · `DomainSection` 삭제 |
 >
-> ⚠️ `klow_admin`·`klow_brand` 는 **독립 repo** 라 klow_server 워크트리에 격리된 세션에서는
-> git 조작이 막힌다. 그 둘은 각 repo 에서 새 세션으로 할 것.
+> **실측값**: 라우트 **325 유지**(§12 는 라우트를 안 늘린다) · cron **11** · 서버 유닛 **897개**(62스위트).
+> 세 레포 모두 typecheck · lint · build(프론트) / test:e2e · start(서버) 통과.
 >
-> ### ⚠️ 구현이 문서와 다른 곳 6가지 (전부 코드 주석에 이유가 박혀 있다. 되돌리지 말 것)
+> ### 남은 것 — 코드가 아니다
+>
+> 1. **머지** — 세 레포의 `feat/domain-purchase` 를 각각 staging 으로(§19 배포 순서는 그대로).
+> 2. **도메인 구매 약관**(§18-1, 법무) — 배포 5단계를 막는다. 구매 다이얼로그에 고지 문구는
+>    이미 있고 `/legal` 링크 자리만 `TODO` 로 비어 있다.
+> 3. **§0 실측 + 스테이징 리허설 1건**(환불 불가라 유일한 실전 검증).
+> 4. 알림톡 템플릿 4개(배포를 막지 않는다 — 미승인이면 SMS 폴백).
+>
+> ### ⚠️ 프론트에서 문서와 다르게 간 곳 3가지 (2026-08-26 · 되돌리지 말 것)
+>
+> 1. ⚠️⚠️ **§12 가 지목한 `APPLICATION_INCLUDE` 는 틀린 자리다.** 그건 **어드민 목록 전용**이고
+>    (`brand-applications.service.ts:44`, 소비자는 `:818` 하나), 스튜디오가 부르는
+>    `GET /v1/brand/applications/me` → `getMyApplication()` 은 **자체 인라인 include**
+>    (products + subscription)를 쓴다. 거기 넣지 않으면 말풍선이 영원히 안 뜬다.
+> 2. ⚠️⚠️ **자동저장이 캐시의 brand 를 통째로 갈아치우고 있었다.** `updateApplication` 은
+>    include 없이 **bare Brand** 를 돌려주는데 `useBrandAutoSave.onSuccess` 가
+>    `setQueryData(qk.brandApplication, { brand: result })` 로 **교체**한다 → 첫 자동저장
+>    이후 `products`·`subscription`(그리고 이번에 추가한 두 필드)이 다음 invalidate 까지
+>    사라져, §13 의 말풍선 조건(`subscription?.status === 'active'`)이 **영구히 false** 가 된다.
+>    → `setQueryData` 를 **병합**으로 바꿨다(`{ brand: { ...prev?.brand, ...result } }`).
+>    result 에 있는 키는 전부 result 가 이기므로 안전하고, 잠재 버그를 함께 고친 것이다.
+>    ⚠️ 대안(=`updateApplication` 에 include 추가)은 800ms 마다 나가는 응답을 무겁게 만든다.
+> 3. ⚠️ **§15 의 "`api.domains.remove` 제거"는 3차 점검과 모순이라 따르지 않았다.** §11 이
+>    브랜드 `DELETE` 를 전면 제거가 아니라 **조건부 차단**으로 바꿨고, §20 수동 E2E 10번이
+>    "어드민이 붙인 `.co.kr` 을 브랜드가 스스로 해제할 수 있는지"를 검증 항목으로 못박았다.
+>    → **`create` 만 제거하고 `remove` 는 남겼다.** 구매 도메인 카드에는 삭제 버튼 대신
+>    "연결 해제 문의" 안내를 띄워 409 를 미리 피한다.
+>
+> 그리고 문서에 없던 판단 둘:
+> - **DNS 안내는 브랜드 소유 도메인에만 그린다.** §14 는 `DomainStatusPanel` 에 "DNS 안내 없음"
+>   이라고만 적었는데, 그건 **구매 도메인에만** 참이다(우리가 Cloudflare 에서 직접 심는다).
+>   어드민이 붙여 준 브랜드 소유 도메인은 브랜드가 자기 등록기관에 직접 넣어야 하고 **그 값을
+>   알려 주는 화면이 여기 말고 없다** — 지우면 그 경로가 통째로 막힌다.
+> - **구매 확인 다이얼로그는 가격을 다시 묻는다.** 목록 견적은 서버 5분 캐시라 그대로
+>   `expectedAmountKrw` 로 보내면 409 를 자초한다. 그 409 의 재계산가를 읽으려고 klow_brand
+>   `ApiError` 에 **`payload`**(파싱된 본문 원본)를 추가했다.
+>
+> ### ⚠️ 서버 구현이 문서와 다른 곳 6가지 (전부 코드 주석에 이유가 박혀 있다. 되돌리지 말 것)
 >
 > 1. **`ceilToUnitKrw()` 를 분리하고 부동소수 가드(`toPrecision(12)`)를 넣었다**(§5).
 >    `10000 * 1.1 === 11000.000000000002` 이라 순진한 `Math.ceil` 이 ₩11,000 을 ₩12,000 으로

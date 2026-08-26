@@ -425,6 +425,26 @@ Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브�
 - ⚠️ 리터럴 세그먼트(`registrations`·`charges`)를 `:domainId` 보다 **먼저** 등록한다.
 - ⚠️⚠️ **`released` 재연결이 `MAX_DOMAINS_PER_BRAND`(3)에 걸릴 수 있다** — released 는 "진행중"이 아니라 그 브랜드가 새 도메인을 살 수 있고(primary+www=2), 그 뒤 재연결하면 4개가 된다. 어드민 화면이 **기존 연결을 먼저 해제하도록 안내**한다(상한을 올려 해결하지 말 것).
 
+## 브랜드 화면이 읽는 파생 필드 — `applications/me`
+
+스튜디오 말풍선(`klow_brand` studio 링크바 아래 한 줄)이 도메인 상태를 알아야 하는데
+**HTTP 왕복을 늘리지 않는다** — `GET /v1/brand/applications/me` 가 이미 부르는 조회에
+relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: boolean` 으로 파생하고
+원본 행은 벗긴다(`brand-applications.service.ts` 의 `DOMAIN_STATE_INCLUDE` · `withDomainState`).
+
+- ⚠️ **`Brand` 에 컬럼을 추가하지 않는다** — `BrandDomain` 이 정본이고 여기선 파생만 한다.
+- ⚠️ 진행중 판정은 `registration-status.ts` 의 **`ACTIVE_REGISTRATION_STATUSES` 를 그대로** 쓴다.
+  손으로 다시 쓰면 말풍선과 진행 화면이 서로 다른 사실을 말하고("구매 중" vs "연결하기"),
+  후자를 눌러 다시 사면 서버가 409 로 막는 막다른 길이 된다.
+- ⚠️ 설계 문서 §12 는 `APPLICATION_INCLUDE` 에 넣으라고 적었지만 **그건 어드민 목록 전용**이다.
+  스튜디오가 부르는 `getMyApplication()` 은 자체 인라인 include 를 쓴다.
+- ⚠️⚠️ **이 파생은 `/me` 에만 있다.** 자동저장 `PUT /v1/brand/applications` 는 relation 이 없는
+  bare Brand 를 돌려주므로, klow_brand 가 캐시를 **교체가 아니라 병합**해야 값이 보존된다
+  (`useBrandAutoSave.onSuccess`). 교체하면 첫 자동저장 이후 `products`·`subscription` 까지
+  다음 invalidate 까지 사라진다.
+- 회귀 잠금: `brand-applications/__tests__/domain-state.spec.ts`(정본 집합 · primary+active
+  필터 · 원본 relation 스트립).
+
 ## 매출 노출 — `domain-revenue.ts`
 
 `GET /admin/stats/kpi` 에 **`domainRevenue: {inRange, total}`**(청구액·원가·실마진·건수·환불액).
