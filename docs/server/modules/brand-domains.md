@@ -9,7 +9,7 @@
 > ℹ️ **소비자 3곳** (2026-08-21 P4 까지 전부 붙었다 — 아직 미배포):
 > ① klow_web `src/middleware.ts` 가 `GET /v1/storefront/resolve` 로 Host→슬러그를 해석해 서빙하고,
 > ② klow.kr `/handoff` 가 같은 라우트로 복귀 host 를 재검증하며,
-> ③ 브랜드 등록 UI 는 klow_brand **설정 > 도메인 연결**(`src/app/(authed)/settings/_components/DomainSection.tsx`)이다.
+> ③ 브랜드 UI 는 klow_brand **`/settings/domain`**(`src/app/(authed)/settings/domain/`)이다. ⚠️ P4 의 `settings/_components/DomainSection.tsx` 는 **P6 에서 삭제**됐다 — 설정 허브에는 진입 카드(`DomainLinkCard`)만 남는다.
 >
 > ⚠️ 브랜드 UI 가 알아야 하는 것 세 가지: **(a) 폴링은 `GET /v1/brand/domains` 로** 한다 — `POST :id/check` 는 6회/분 상한이라 폴링하면 브랜드의 수동 클릭이 429 가 된다(cron 이 5분마다 갱신하므로 목록만 다시 읽으면 따라온다). **(b) `lastError` 는 "에러가 있다"의 신호가 아니다** — `refreshOne` 이 매번 덮어써서 정상 `pending` 에도 문구가 들어 있다(톤은 `status` 가 정한다). **(c) `recordValue` 는 빈 문자열일 수 있다** — 폴백 상수를 화면에서 채우지 말 것(F3).
 
@@ -345,11 +345,22 @@ Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브�
 | POST | `/quotes` | 6/분 | 찜/검색 목록 ≤20개에 가용성 + 1년차·2년차 가격. 5분 캐시 |
 | POST | `/purchase` | 3/분 | `{host, expectedAmountKrw, agreedNonRefundable}` — 돈이 나가는 유일한 입력 |
 | GET | `/registration` | — | 진행 상태(화면 3초 폴링) |
+| PATCH | `/registration/auto-renew` | 6/분 | `{enabled}` — 브랜드가 **다음 해 갱신을 스스로 멈춘다** |
 
 - ⚠️⚠️ **`purchase` 의 `domain-check` 는 quotes 의 5분 캐시를 우회한다.** 같은 캐시를 타면 ① 5분 묵은 `registrable` 을 믿고 사고 ② 견적과 청구가 같은 값을 보므로 **`expectedAmountKrw` 불일치 409 가 영원히 발화하지 않는다**.
 - ⚠️ `GET /registration` 은 단수형인데 행은 브랜드당 N개다. 선택 규칙: **① 진행중(`charging|paid|registering|registered|active`) 최신 1건 → ② 없으면 최신 1건 → ③ null**. `released`·`expired` 는 ①에 넣지 않는다(종료된 자산이라 진행 패널이 영원히 열린다).
 - ⚠️⚠️ **`cfState`·`lastError` 원문을 브랜드에게 내리지 않는다** — Cloudflare/NicePay 원문엔 계정 id·내부 식별자가 섞일 수 있다. 브랜드 화면은 `registration-status.ts` 의 `phase → message` 매핑만 본다.
 - ⚠️ 경로를 `v1/brand/domains` 밑에 두지 않은 이유는 `:id` 그림자다(`domain-wishes` 가 같은 이유로 빠졌다).
+
+### `PATCH /registration/auto-renew` (2026-08-26)
+
+종전엔 자동갱신 토글이 **어드민 경로뿐**이라, 브랜드가 다음 해 청구를 멈추려면 사전 고지(만료 37일 전)를 받고 **7일 안에 고객센터에 연락**해야 했다. 놓치면 청구되고 그건 환불 불가다. **갱신 중단은 환불·이전과 성격이 다르다** — 아직 아무 돈도 안 움직인 미래의 청구라 브랜드가 스스로 못 끌 이유가 없다.
+
+- ⚠️⚠️ **경로에 `registrationId` 가 없다.** 세션 브랜드의 "지금 화면에 보이는" 행을 서비스가 직접 고르므로(`findDisplayRegistration` — `GET /registration` 과 **같은 함수**) 남의 등록을 가리킬 방법이 구조적으로 없고, **화면이 보여주는 행과 꺼지는 행이 어긋날 수도 없다.** 조회와 토글이 규칙을 따로 쓰면 브랜드가 화면의 도메인을 껐는데 다른 행이 꺼지고, **그 사고는 만료일까지 아무 증상이 없다.** (`storefront-translations` 가 브랜드 id 를 경로에서 뺀 것과 같은 근거. 어드민 경로는 반대로 **아무 행이나 지목해야** 하므로 id 를 받는다.)
+- ⚠️ **`active` 가 아니면 404.** 위 선택 규칙 ②가 `failed`·`released`·`expired` 행을 돌려줄 수 있는데, 끝난 자산에 토글은 의미가 없고 `released` 는 재연결 경로가 따로 있어 상태가 어긋난다.
+- ⚠️⚠️ **마스터 게이트(`DOMAIN_PURCHASE_ENABLED`)·서킷브레이커를 보지 않는다.** 둘은 *새로 돈이 나가는 것*을 막는 장치인데 이 라우트의 주된 방향은 **돈이 나가는 것을 멈추는 것**이다. 사고 대응 중이라고 갱신 중단을 막으면 그 사이 지나간 만료일은 되돌릴 수 없다.
+- ⚠️ Cloudflare 를 먼저 바꾸고 성공했을 때만 우리 행을 맞추는 순서는 공유 메서드 `setAutoRenew` 가 이미 지킨다 — **여기서 다시 구현하지 말 것**(반대로 하면 화면은 '꺼짐'인데 만료일에 우리 카드가 긁힌다). 그래서 klow_brand 도 낙관적 갱신을 **실패 시 반드시 되돌린다**.
+- ⚠️ 응답에 새 필드 **`renewalChargeAt`**(= 만료 `RENEWAL_LEAD_DAYS` 일 전 = 실제로 카드가 긁히는 날)이 함께 나간다. **클라가 `expiresAt` 에서 직접 빼서 만들지 말 것** — 상수가 갈리면 화면이 *돈 나가는 날짜*를 틀리게 말한다. ⚠️ `expiresAtIsEstimated` 면 그날 청구가 걸리지 않으므로(아래 갱신 §) **아예 싣지 않는다**(undefined).
 
 ## 구매 오케스트레이션 — `domain-purchase.service.ts`
 
@@ -393,7 +404,7 @@ Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브�
 `RENEWAL_NOTICE_LEAD_DAYS = 37`(**두 상수의 차 7일이 고지 리드타임**) ·
 `RENEWAL_PRICE_SPIKE_MAX = 2` · `ESTIMATED_GIVE_UP_DAYS = 7` · `ADVANCE_GRACE_DAYS = 7`.
 
-1. **사전 고지** — 만료 37일 전(= 청구 7일 전) 1회. 플래그 컬럼 없이 **하루짜리 창**으로 멱등을 만든다(대가: cron 이 그 하루를 통째로 거르면 고지가 빠진다 — 알림이지 게이트가 아니라 받아들였다).
+1. **사전 고지** — 만료 37일 전(= 청구 7일 전) 1회. ℹ️ 이 7일이 **브랜드가 자동갱신을 끌 수 있는 창**이다(위 `PATCH /registration/auto-renew`). 종전엔 그 창에서 할 수 있는 일이 고객센터 문의뿐이었다. 플래그 컬럼 없이 **하루짜리 창**으로 멱등을 만든다(대가: cron 이 그 하루를 통째로 거르면 고지가 빠진다 — 알림이지 게이트가 아니라 받아들였다).
 2. **청구 + dunning** — 청구 시점 `domain-check` 재조회(가격 인상·환율 자동 반영). ⚠️⚠️ **주기 식별자는 `periodStart = registration.expiresAt`** 이다. 그 덕에 "이 주기 청구가 이미 있는가"가 컬럼 없이 조회 하나로 답이 되고 재시도가 **같은 행**을 재사용해 orderId 가 안 바뀐다(이중 승인 방지). 소진(4회)이면 `setAutoRenew(false)` — ⚠️ **Cloudflare 를 먼저** 끄고 성공했을 때만 우리 행을 맞춘다. ⚠️ 카드가 없으면 조용히 건너뛰지 않고 dunning 을 태운다(건너뛰면 만료일에 우리 카드가 긁힌다). ⚠️ 직전 청구의 2배 초과는 청구하지 않고 사람에게.
 3. **⚠️⚠️ 만료일 전진 확인** — Cloudflare 에는 갱신 API 가 없어 실제 갱신이 **만료일 당일**에 일어난다. 그래서 30일 전 청구가 성공해도 `expiresAt` 은 옛 값이고, **없으면 만료 정리 절이 돈을 낸 브랜드의 `BrandDomain` 을 지운다.** 대기 집합은 컬럼이 아니라 쿼리다(`kind=renewal AND paid AND periodEnd IS NULL`). 유예를 넘겨도 전진이 없으면 사람에게 넘기되 **`BrandDomain` 은 지우지 않는다**(브랜드는 돈을 냈다). ℹ️ 이 절이 **우리 계정 카드 사망의 유일한 탐지기**이기도 하다 — 갱신은 우리가 아무 API 도 부르지 않아 실패를 볼 기회가 여기밖에 없다.
 4. **만료 정리** — ⚠️⚠️ **`autoRenew=false` 인 행에만 건다.** `true` 인데 만료가 지난 행은 "만료"가 아니라 3의 확인 대기다. `removeForBrand` 를 쓰지 않는다(브랜드 소유 검증 경로이고 `brandId` 가 nullable 이다) → `removeDomainPair` + zone 삭제. zone 삭제가 실패하면 `cfZoneId` 를 **남겨** 다음 사이클이 다시 집는다(안 그러면 계정에 zone 이 무한 누적).
@@ -553,6 +564,7 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 | `__tests__/domain-registration-poll.spec.ts` | 흐름 8~11 — 재제출·환불 판정이 **행 단위**·`subscription_required` 는 환불 금지·연결 백오프 |
 | `__tests__/domain-release.spec.ts` | **①setAutoRenew 실패 시 아무것도 안 지운다**·우리 레코드만 삭제(MX 생존)·zone 은 안 지운다·registration 없는 도메인은 ①을 건너뛴다·released 재연결·`cleanupOrphans` 가 status 를 안 건드림·어드민 운영 4종·매출 합계 |
 | `__tests__/domain-renewal.spec.ts` | 사전 고지 창·**같은 주기 이중 청구 금지**·dunning 간격·소진 시 auto_renew off·폭등 보류·**전진 확인**·⭐⭐**`autoRenew=true` 인 만료 경과 행은 건드리지 않는다**·근사 만료일 2단계 |
+| `__tests__/domain-auto-renew.spec.ts` | 브랜드 토글 — **Cloudflare 실패 시 우리 행 불변**(안 그러면 만료일에 우리 카드만 긁힌다) · **조회와 같은 행에 건다**(옛 `released` 행이 아니다) · `active` 아니면 404 + Cloudflare 0회 · 남의 브랜드 불가 · `renewalChargeAt` 이 만료 30일 전이고 **근사 만료일이면 없음** |
 | `__tests__/domain-notify.spec.ts` | `action_required` 전이가 **전부** 알림을 울린다(무음 실패 방지) |
 | `__tests__/domain-dns.spec.ts` | 수렴 계획 — 우리 이름·타입만 remove·"모른다"와 "해제"의 구분 |
 | `stats/__tests__/kpi.spec.ts` | 도메인 매출이 **총매출·구독매출에 섞이지 않는다** |
