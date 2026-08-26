@@ -1,9 +1,87 @@
 # 커스텀 도메인 대행 구매 (P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
 
-> **현재 상태: 📝 계획 수립 완료 (2026-08-25) · 코드 대조 검토 반영 (2026-08-25) ·
-> 3차 전수 점검 반영 (2026-08-26, 13건) · 코드 미착수.**
-> 이 문서가 이 기능의 **정본**이다. 착수 전 [§0 실측 항목](#0-착수-첫날-실측--여기서-답이-갈리면-7-3-이-바뀐다)
-> 을 먼저 끝낼 것 — 거기서 답이 갈리면 §7-3 의 연결 절차가 바뀐다.
+> **현재 상태: 🚧 서버 구현 진행 중 (2026-08-26) — §19 의 A · B · C 완료, D · E · F 미착수.**
+> 이 문서가 이 기능의 **정본**이다.
+>
+> ---
+>
+> ## 🚦 다음 세션이 여기부터 읽는다 — 진행 상황 (2026-08-26 갱신)
+>
+> **작업 위치**: 워크트리 `/Users/hyson/welkit/klow-domain/klow_server`,
+> 브랜치 `feat/domain-purchase` (staging 기준). 새로 만들지 말 것.
+> 머지는 전부 끝난 뒤 `cd /Users/hyson/welkit/klow/klow_server && git checkout staging &&
+> git merge --no-ff feat/domain-purchase`, 정리는 `git worktree remove`.
+>
+> ### 끝난 것 — 커밋 5개
+>
+> | PR | 커밋 | 내용 |
+> |---|---|---|
+> | **A** | `7a5dcb7` | Prisma 모델 2 + enum 3 + 역방향 relation 2줄 (마이그레이션 `20260826024609_add_brand_domain_purchase` 적용) · `src/pricing/domain-price.ts` + 배럴 + 스펙 |
+> | **B** | `aedd709` | registrar 확장(`checkDomains`·`createRegistration`·`getRegistrationStatus`·`setAutoRenew` + `CloudflareRegistrationIndeterminateError`) · `cloudflare-dns.client.ts` · `domain-dns.ts` + 스펙 18개 · §6 "전제 5곳" 전부 갱신 |
+> | **C-1** | `1e7cb0f` | `subscription/dunning.ts`(`retryGap`·`throwAsHttp`) · `subscription/billing-key-select.ts` · `orderIdFrom` static 승격 · **`findPaymentByOrderId` 신규** · `SubscriptionModule.exports = [NicepayBillingAdapter]` |
+> | **C-2** | `6274dc2` | `domain-purchase.service.ts` · `registration-status.ts` · `brand-domain-purchase.controller.ts` · `brand-domain-registrations.cron.ts` · `attachPurchasedDomain` · `DELETE` 조건부 차단 · e2e cron 9→10 · env 2개 |
+> | **C-3** | `2b1fb36` | 스펙 3종(구매 24 · 폴링 19 · 상한/서킷 15) + harness 구매 축 확장 |
+>
+> **실측값**: 라우트 **315 → 318**, cron **9 → 10**, 유닛 **794 → 852개**(58스위트).
+> 검증 3층은 매 커밋마다 통과시켰다(typecheck 2개 tsconfig · `test:e2e` · `PORT=4001 npm run start`).
+> ⚠️ 포트 4000 은 메인 체크아웃 dev 서버가 점유 중일 수 있어 **4001** 을 쓴다.
+>
+> ### 남은 것 — §19 의 D · E · F
+>
+> | PR | 어디서 | 비고 |
+> |---|---|---|
+> | **D** | 서버 절반은 이 워크트리, **klow_admin 화면은 별도 repo** | §11 어드민 라우트 · §18-2 DNS/zone 정리 · §16 매출 노출 |
+> | **E** | 이 워크트리 | ⚠️⚠️ `expiresAt < now` 정리와 §9-3 전진 확인은 **반드시 같은 커밋**. cron 10 → 11 |
+> | **F** | **klow_brand (별도 repo)** | 마지막 |
+>
+> ⚠️ `klow_admin`·`klow_brand` 는 **독립 repo** 라 klow_server 워크트리에 격리된 세션에서는
+> git 조작이 막힌다. 그 둘은 각 repo 에서 새 세션으로 할 것.
+>
+> ### ⚠️ 구현이 문서와 다른 곳 4가지 (전부 코드 주석에 이유가 박혀 있다. 되돌리지 말 것)
+>
+> 1. **`ceilToUnitKrw()` 를 분리하고 부동소수 가드(`toPrecision(12)`)를 넣었다**(§5).
+>    `10000 * 1.1 === 11000.000000000002` 이라 순진한 `Math.ceil` 이 ₩11,000 을 ₩12,000 으로
+>    만든다(공급가 200만 이하 115건). **공식 자체는 문서 그대로**다.
+> 2. **`planDnsConvergence(apexHost, desired, existing)`** — 문서 §6 서명에 `apexHost` 를 더했다.
+>    없으면 `desired = []`(연결 해제)일 때 관리 대상 이름·타입을 몰라 **아무것도 못 지운다**
+>    → §20 의 "`desired=[]` → 우리 레코드만 전부 remove" 가 성립하지 않는다.
+> 3. **`hasUnknownRecordValue()` 를 추가로 export 했다**(`domain-dns.ts`). `desiredRecordsFor` 가
+>    빈 `recordValue` 를 빼고 나면 **"값을 모른다"와 "연결 해제"가 둘 다 `[]` 로 보인다** —
+>    전자를 후자로 오독하면 §7-3 c 가 우리 레코드를 지운다. 호출부는 이걸 먼저 봐야 한다.
+> 4. **`billing-key-select.ts` 는 기존 세 호출부를 정본으로 갈아끼우지 않았다**(§10).
+>    셋 다 동작이 바뀌기 때문이다 — 특히 정기청구(`chargeReady`·`chargeOne`)에 `deletedAt` 을
+>    넣으면 청구 실패가 dunning 이 아니라 **"행이 아예 안 잡힘"** 이 되어 구독이 `active` 인 채
+>    만료일을 지나 **무료로 계속 서빙**된다. 일회성은 "잘못된 카드에 긁는 것"이, 정기청구는
+>    "안 긁고 침묵하는 것"이 최악이라 방향이 반대다. 그래서 `RECURRING_CHARGEABLE_WHERE` 로
+>    갈래를 **의도로 명시**했다(이 파일의 목적은 "통일"이 아니라 "갈라진 것을 사고가 아니라
+>    의도로 만드는 것"). ⚠️ §10 표의 `resumeWithExistingCard` 행도 부정확했다 — 거긴
+>    `pgCustomerKey` 가 없으면 **그 자리에서 발급**하므로 정본과 애초에 다르다.
+>
+> ### ⚠️⚠️ §0 미실측이라 보수적으로 짜고 `TODO` 로 남긴 두 분기
+>
+> 실측이 끝나면 **이 둘만** 손보면 된다. 코드에 `TODO(§0-6)` / `TODO(§0)` 로 표시돼 있다.
+>
+> | 위치 | 지금 동작 | 실측 후 |
+> |---|---|---|
+> | `submitRegistration` 의 `privacyMode` | **무조건 `true`.** 거절하는 TLD 면 4xx 분기로 떨어져 **전액 환불**된다(손실 0, 다만 브랜드는 이유를 모른다) | §0 6번 → (a) 구매 가능 TLD 화이트리스트 또는 (b) 그 TLD 만 `false` 로 1회 재시도. ⚠️ (b)는 재시도 **전에** 우리 계정 등록 여부를 먼저 확인할 것 |
+> | `advanceRegistering` 의 `action_required` | **전부 사람 큐**(fail-closed). 자동 환불 0건 | fee acknowledgement 필드명을 실측해 §7-4 첫 두 칸(프리미엄·미지원 TLD)만 즉시 환불로 내린다 |
+>
+> 그리고 **`findPaymentByOrderId`** — 존재하지 않는 orderId 에 NicePay 가 404 를 주는지
+> 200 + 비-0000 resultCode 를 주는지 미실측이다. 지금은 **404 만** "거래 없음" 으로 확정하고
+> 나머지는 던진다(= `charge=pending` 이 안전한 쪽으로 고착). ⚠️ 실측 없이 임의의 코드를
+> "거래 없음" 으로 매핑하지 말 것 — 승인된 결제를 미승인으로 확정하면 돈만 받고 도메인을 못 준다.
+>
+> ### 배포를 막는 코드 밖 항목
+>
+> - ⚠️⚠️ **도메인 구매 약관**(§18-1, 법무 검토) — **외부 리드타임**이고 구매 다이얼로그가
+>   링크해야 하므로 §19 배포 5단계를 막는다. 지금 착수할 것.
+> - **§0 실측** — 스테이징 자격증명으로 값싼 도메인 1개 실제 구매(환불 불가).
+> - 알림톡 템플릿 4개는 **배포를 막지 않는다**(미승인이면 SMS 폴백).
+>
+> ---
+>
+> 착수 전 [§0 실측 항목](#0-착수-첫날-실측--여기서-답이-갈리면-7-3-이-바뀐다)을 볼 것 —
+> 거기서 답이 갈리면 §7-3 의 연결 절차가 바뀐다.
 >
 > 🔎 **검토 반영분(2026-08-25)** — 초안을 코드와 대조해 고친 것들. 되돌리지 말 것:
 > **사실 오류 3** ① `DEFAULT_BILLING_KEY_WHERE` 는 **존재하지 않는다**(§10 — "추출"이 아니라 신설)
@@ -822,7 +900,10 @@ async attachPurchasedDomain(brandId, apexHost): Promise<{ok:true; …} | {ok:fal
 
 ### ⚠️ `test/app.e2e-spec.ts` — cron 9개 → **11개**
 
-**테스트 제목 문자열(`'cron 9개가 …'`)과 `expect` 배열을 둘 다** 고친다(제목만 두면 다음 사람이
+⚠️ **두 번에 나눠 는다**: PR C 에서 `brand-domain-registration` 이 붙어 **9 → 10**(✅ 반영됨),
+PR E 에서 `brand-domain-renewal` 이 붙어 **10 → 11**. E 를 할 때 제목 문자열도 같이 고칠 것.
+
+**테스트 제목 문자열(`'cron N개가 …'`)과 `expect` 배열을 둘 다** 고친다(제목만 두면 다음 사람이
 헷갈린다). 알파벳 정렬이므로 `registration` < `renewal` < `verify`:
 
 ```ts
@@ -1487,9 +1568,10 @@ env 가 아니다**(2026-08-26 정리. 근거는 §11 env 절 — 이 레포엔 
 
 | PR | 범위 | 배포 안전성 |
 |---|---|---|
-| **A** | Prisma 모델 2 + enum 3 + `pricing/domain-price.ts` + 스펙 | 읽는 코드가 없다 |
-| **B** | registrar 확장 + `cloudflare-dns.client.ts` + `domain-dns.ts` + 스펙 | 호출부가 없다 |
-| **C** | `SubscriptionModule.exports` 개방 + `dunning.ts`(`retryGap`·`throwAsHttp` **추출**) + `billing-key-select.ts`(**신설** — §10) + **`findPaymentByOrderId` 어댑터 메서드**(§7-1-E) + 구매 서비스·라우트(**`FOR UPDATE` 락 · 상한 §18-4 · 서킷브레이커 §18-3** 포함) + 등록/보정 cron + e2e cron 목록 | `DOMAIN_PURCHASE_ENABLED` opt-in |
+| **A** ✅ `7a5dcb7` | Prisma 모델 2 + enum 3 + `pricing/domain-price.ts` + 스펙 | 읽는 코드가 없다 |
+| **B** ✅ `aedd709` | registrar 확장 + `cloudflare-dns.client.ts` + `domain-dns.ts` + 스펙 | 호출부가 없다 |
+| **C** ✅ `1e7cb0f`·`6274dc2`·`2b1fb36` | `SubscriptionModule.exports` 개방 + `dunning.ts`(`retryGap`·`throwAsHttp` **추출**) + `billing-key-select.ts`(**신설** — §10) + **`findPaymentByOrderId` 어댑터 메서드**(§7-1-E) + 구매 서비스·라우트(**`FOR UPDATE` 락 · 상한 §18-4 · 서킷브레이커 §18-3** 포함) + 등록/보정 cron + e2e cron 목록 + 스펙 3종 | `DOMAIN_PURCHASE_ENABLED` opt-in |
+| | ⚠️ **C 는 한 PR 에 안 들어가 셋으로 쪼갰다**: C-1(§10 추출·배선) → C-2(서비스·라우트·cron) → C-3(스펙 3종 + harness 확장). 다음에 비슷한 규모를 다룰 때 같은 축으로 자르면 된다 | |
 | **D** | 어드민 라우트 + klow_admin 도메인 탭(수동 연결 · **연결 해제 = §18-1a 4단계** · **서킷 조회**(§18-3, 조회 전용 — 리셋 라우트 없음)) + **DNS/zone 정리**(§18-2) + **매출 합계 노출**(§16 6번) | 운영이 먼저 눈을 갖는다. ⚠️ 연결 해제 UI 를 열기 전에 `setAutoRenew(false)` 가 반드시 배선돼 있어야 한다. ⚠️ 서킷은 쿨다운으로 스스로 풀리므로(§18-3) **어드민 화면이 늦어도 장애가 되지 않는다** |
 | **E** | 갱신 cron + dunning + auto_renew off + **만료일 전진 확인**(§9-3) + **알림 4종**(§9-2, 알림톡+SMS 폴백) + **사전 고지**(§9-1) | opt-in cron. ⚠️ 알림은 갱신보다 **먼저** 살아 있어야 의미가 있다 — 구매 완료 알림(1번)은 C 로 당겨도 된다. ⚠️⚠️ **`expiresAt < now` 정리 절과 §9-3 전진 확인은 반드시 같은 PR 이다** — 정리만 먼저 나가면 첫 갱신일에 돈 낸 브랜드의 도메인이 끊긴다 |
 | **F** | klow_brand: `/settings/domain` + 말풍선 + `DomainSection` 제거 | **마지막** |
@@ -1526,21 +1608,41 @@ env 가 아니다**(2026-08-26 정리. 근거는 §11 env 절 — 이 레포엔 
 
 | 파일 | 잠그는 것 |
 |---|---|
-| `src/pricing/__tests__/domain-price.spec.ts` | 마진 1.3 · VAT 1.1 · **1,000원 올림 경계**(…999→1000, 1000→1000, 1001→2000) · `DOMAIN_FX_MIN/MAX` 밖이면 throw · `parseRegistrarCostUsdCents` 실패 시 throw(**0원 청구 금지**) |
-| `brand-domains/__tests__/domain-purchase.spec.ts` | ⭐ 결제 실패 → **Cloudflare 호출 0회** · ⭐⭐ 4xx → `cancelPayment` **1회** + charge=refunded · ⭐⭐ **타임아웃 → `cancelPayment` 0회** + reg=paid 유지 · ⭐⭐ **netCancel 분기에서 charge 가 `failed` 가 아니라 `pending`**(§7-1 E) · ⭐⭐ **동시 2요청 → registration 1건**(§7-1 D 행 잠금) · 삭제된 카드(`deletedAt`) → **청구 시도 0회** · 진행중 1건 → 409 · `expectedAmountKrw` 불일치 → 409 · 구매 시점 `domain-check` 가 **quotes 캐시를 안 탄다** |
-| `.../domain-registration-poll.spec.ts` | `paid`+404 → 3회 재시도 후 환불 · ⭐⭐ **그 재시도가 `createRegistration` 을 실제로 다시 부른다**(§7 흐름 8 — 카운터만 올리고 환불하면 실패) · **단 그 등록이 우리 것이면 환불 안 함**(§7 흐름 8번) · ⭐⭐ **같은 host 로 다른 브랜드의 `registered` 행이 있으면 → 환불한다**(§7-1-F — "계정에 보임" 으로 판정하면 이 케이스가 사람 큐로 샌다) · `in_progress→succeeded→registered` · `failed→환불` · **`action_required` 자동 환불 안 함** · `charge=pending` 10분 경과 → NicePay 재조회 후 승격/실패 확정, **금액 불일치는 비전이** · ⭐⭐ **`lastAttemptAt` 이 null 인 `charging`+`pending` 건도 `createdAt` 기준으로 집힌다**(§7 흐름 11 — 빠지면 재구매 영구 차단) · 연결 403(`subscription_required`) → **환불하지 않고 `registered` 유지** |
-| `.../domain-dns.spec.ts` | **`proxied:false` 고정** · apex=A / www=CNAME · rank1 값 사용(하드코딩 아님) · **빈 recordValue 면 주입 스킵** · **멱등**(같은 값 → create 0회 / 다른 값 → update) · ⭐⭐ **`remove` 가 우리 이름·타입만 고른다**(zone 의 MX·TXT·무관 A 레코드는 **건드리지 않음** — §18-2) · `desired=[]` → 우리 레코드만 전부 remove |
-| `.../domain-purchase-limits.spec.ts` (신규) | ⭐ 일일 계정 상한 초과 → 503 + **Cloudflare 호출 0회** · 브랜드당 연간 상한 초과 → 400 · ⭐⭐ **환불된 건도 카운트에 들어간다**(`BrandDomainCharge` 기준 — `registration.status` 로 세면 실패 루프가 상한을 우회한다) · ⭐⭐ **`pending` 도 카운트에 들어간다**(§18-4 — 빠지면 동시 요청이 상한을 통째로 통과) · ⭐ **상한 검사가 `FOR UPDATE` 락 안에서 일어난다** · 연속 실패 N건 → 서킷브레이커 차단(§18-3) · ⭐⭐ **쿨다운(30분) 경과 후 다음 1건은 통과한다**(§18-3 half-open — 이 단언이 없으면 차단이 영구화된다) · ⭐ **결제수단 사유가 아닌 실패는 streak 을 쌓지 않는다** |
+| ✅ `src/pricing/__tests__/domain-price.spec.ts` | 마진 1.3 · VAT 1.1 · **1,000원 올림 경계**(…999→1000, 1000→1000, 1001→2000) · `DOMAIN_FX_MIN/MAX` 밖이면 throw · `parseRegistrarCostUsdCents` 실패 시 throw(**0원 청구 금지**) |
+| ✅ `brand-domains/__tests__/domain-purchase.spec.ts` (24개) | ⭐ 결제 실패 → **Cloudflare 호출 0회** · ⭐⭐ 4xx → `cancelPayment` **1회** + charge=refunded · ⭐⭐ **타임아웃 → `cancelPayment` 0회** + reg=paid 유지 · ⭐⭐ **netCancel 분기에서 charge 가 `failed` 가 아니라 `pending`**(§7-1 E) · ⭐⭐ **동시 2요청 → registration 1건**(§7-1 D 행 잠금) · 삭제된 카드(`deletedAt`) → **청구 시도 0회** · 진행중 1건 → 409 · `expectedAmountKrw` 불일치 → 409 · 구매 시점 `domain-check` 가 **quotes 캐시를 안 탄다** |
+| ✅ `.../domain-registration-poll.spec.ts` (19개) | `paid`+404 → 3회 재시도 후 환불 · ⭐⭐ **그 재시도가 `createRegistration` 을 실제로 다시 부른다**(§7 흐름 8 — 카운터만 올리고 환불하면 실패) · **단 그 등록이 우리 것이면 환불 안 함**(§7 흐름 8번) · ⭐⭐ **같은 host 로 다른 브랜드의 `registered` 행이 있으면 → 환불한다**(§7-1-F — "계정에 보임" 으로 판정하면 이 케이스가 사람 큐로 샌다) · `in_progress→succeeded→registered` · `failed→환불` · **`action_required` 자동 환불 안 함** · `charge=pending` 10분 경과 → NicePay 재조회 후 승격/실패 확정, **금액 불일치는 비전이** · ⭐⭐ **`lastAttemptAt` 이 null 인 `charging`+`pending` 건도 `createdAt` 기준으로 집힌다**(§7 흐름 11 — 빠지면 재구매 영구 차단) · 연결 403(`subscription_required`) → **환불하지 않고 `registered` 유지** |
+| ✅ `.../domain-dns.spec.ts` (18개) | **`proxied:false` 고정** · apex=A / www=CNAME · rank1 값 사용(하드코딩 아님) · **빈 recordValue 면 주입 스킵** · **멱등**(같은 값 → create 0회 / 다른 값 → update) · ⭐⭐ **`remove` 가 우리 이름·타입만 고른다**(zone 의 MX·TXT·무관 A 레코드는 **건드리지 않음** — §18-2) · `desired=[]` → 우리 레코드만 전부 remove |
+| ✅ `.../domain-purchase-limits.spec.ts` (15개) | ⭐ 일일 계정 상한 초과 → 503 + **Cloudflare 호출 0회** · 브랜드당 연간 상한 초과 → 400 · ⭐⭐ **환불된 건도 카운트에 들어간다**(`BrandDomainCharge` 기준 — `registration.status` 로 세면 실패 루프가 상한을 우회한다) · ⭐⭐ **`pending` 도 카운트에 들어간다**(§18-4 — 빠지면 동시 요청이 상한을 통째로 통과) · ⭐ **상한 검사가 `FOR UPDATE` 락 안에서 일어난다** · 연속 실패 N건 → 서킷브레이커 차단(§18-3) · ⭐⭐ **쿨다운(30분) 경과 후 다음 1건은 통과한다**(§18-3 half-open — 이 단언이 없으면 차단이 영구화된다) · ⭐ **결제수단 사유가 아닌 실패는 streak 을 쌓지 않는다** |
 | `.../domain-notify.spec.ts` (신규) | ⭐⭐ **알림톡 미설정/실패 → SMS 폴백이 실제로 발송**된다(§9-2 — 폴백이 없으면 갱신 실패가 무음) · 수신번호 없음 → 발송 스킵 + warn · 사전 고지는 **만료 37일 전 1회**(중복 발송 없음) |
 | `.../domain-release.spec.ts` (신규) | ⭐⭐ **연결 해제가 `setAutoRenew(false)` 를 1회 부른다**(§18-1a — 안 부르면 만료일에 우리 카드가 긁힌다) · ⭐⭐ **그 호출이 실패하면 `BrandDomain` 을 지우지 않는다**(부분 해제 금지) · `status='released'` + `brandDomainId=null` · DNS 삭제 실패해도 해제는 완료 · `released` 도메인 재연결 시 `setAutoRenew(true)` 복구 · ⭐⭐ **registration 이 없는(브랜드 소유) 도메인 해제는 `setAutoRenew` 를 0회 부른다**(§18-1a — 부르면 안 산 도메인을 조회해 해제가 통째로 막힌다) · ⭐ **브랜드 `DELETE` 는 registration 이 걸린 행에만 409, 그 밖은 종전대로 삭제**(§11) |
 | `.../domain-renewal.spec.ts` | 리드타임 30일 · **고지 리드타임 37일이 청구보다 앞선다**(§9-1 — 두 상수가 같아지면 실패) · dunning 0/1/3/7 · 4회 소진 → `setAutoRenew(false)` · 갱신가 2배 초과 → 청구 안 함 · `expiresAtIsEstimated` → 청구 안 함 · **만료 전까지 Vercel 연결 유지** · `expired` 확정 시 **zone 삭제 + `cfZoneId=null`**(§18-2 c) · ⭐⭐ **갱신 charge=paid 후 만료일이 전진하면 `expiresAt` 이 갱신된다**(§9-3) · ⭐⭐ **`autoRenew=true` 인데 `expiresAt < now` 면 `BrandDomain` 을 지우지 않는다**(§9-3 — 이 단언이 없으면 돈 낸 브랜드의 브랜드관이 만료일에 죽는다) · ⭐ **D+GRACE 까지 전진 없음 → `action_required` + 어드민 알림, 연결은 유지** |
-| `__tests__/harness.ts` **확장** | `brandDomainRegistration`·`brandDomainCharge`·`billingKey` 인메모리 + Nicepay/Cloudflare 스텁. ⚠️ 기존 원칙대로 **스텁이 진짜보다 관대하면 스펙이 아무것도 못 잡는다** — `pgTid @unique` 와 `host @unique` 를 반드시 던지게 할 것. ⚠️⚠️ **`netCancel` 스텁은 실패해도 절대 throw 하지 않아야 한다**(진짜가 그렇다 — throw 하는 스텁을 쓰면 §7-1 E 테스트가 아무것도 못 잡은 채 통과한다). ⚠️ 동시성 테스트를 위해 `$queryRaw … FOR UPDATE` 를 **실제로 직렬화**하는 스텁이 필요하다(no-op 으로 두면 §7-1 D 가 통과해도 의미가 없다 — 차라리 락 획득 호출 여부를 단언할 것) |
+| ✅ `__tests__/harness.ts` **확장**(PR C-3 에서 구매 축까지) | `brandDomainRegistration`·`brandDomainCharge`·`billingKey` 인메모리 + Nicepay/Cloudflare 스텁. ⚠️ 기존 원칙대로 **스텁이 진짜보다 관대하면 스펙이 아무것도 못 잡는다** — `pgTid @unique` 와 `host @unique` 를 반드시 던지게 할 것. ⚠️⚠️ **`netCancel` 스텁은 실패해도 절대 throw 하지 않아야 한다**(진짜가 그렇다 — throw 하는 스텁을 쓰면 §7-1 E 테스트가 아무것도 못 잡은 채 통과한다). ⚠️ 동시성 테스트를 위해 `$queryRaw … FOR UPDATE` 를 **실제로 직렬화**하는 스텁이 필요하다(no-op 으로 두면 §7-1 D 가 통과해도 의미가 없다 — 차라리 락 획득 호출 여부를 단언할 것) |
+
+> 🧰 **D·E 를 쓰는 사람에게 — harness 에 이미 있는 것**(PR C-3, 다시 만들지 말 것):
+> `seedRegistration()` · `seedCharge()` · `purchaseService()` 팩토리 ·
+> prisma 스텁(`brandDomainRegistration`·`brandDomainCharge`·`currencyFxRate`·`$transaction`·
+> `$queryRaw`) · 벤더 스텁 4종(`registrar()`·`dnsClient()`·`nicepay()`·`config()`) ·
+> 호출 기록 배열(`registrarCalls`·`nicepayCalls`·`dnsCalls`·`lockCalls`) ·
+> 시나리오 스위치(`checkRows`·`registrarError`·`registrationStatus`·`chargeError`·
+> `payments`·`paymentLookupFails`·`fxRate`).
+> D 는 여기에 **`setAutoRenew` 호출 카운트 단언**만 얹으면 되고(스텁은 이미 기록한다),
+> E 는 `brandDomainCharge` 에 `kind='renewal'` 행을 심으면 된다.
+>
+> ⚠️ **`brand DELETE` 조건부 차단(§11)은 C-2 에서 이미 구현했다** — 스펙만 D 의
+> `domain-release.spec.ts` 에 남아 있다. 구현을 다시 하지 말 것.
 
 ### 무변경으로 통과해야 하는 것 (통과 안 하면 설계가 샌 것)
 
 `domain-pairing` · `verified-origin` · `resolve-host` · `domain-status` · `domain-host` ·
 **`domain-search`**(가격 미노출 단언) · `domain-wishes` · `origin-policy` · `origin-exempt`.
 **수정이 필요한 기존 파일은 `test/app.e2e-spec.ts`(cron 9→11) 하나뿐**이다.
+
+> ✅ **PR C 시점 실측(2026-08-26)**: 9종 전부 **스펙 파일 무변경으로 통과**한다.
+> ⚠️ 다만 PR C-2 에서 `domain-pairing`·`verified-origin` 이 **3건 빨간불이 났다** — 원인은
+> 설계 누수가 아니라 **`removeForBrand` 의 조건부 차단(§11)이 추가한 registration 조회를
+> harness 스텁이 몰라서**였다. 아래 "harness.ts 확장" 행이 예고한 그 작업이고, **스펙 파일은
+> 한 줄도 고치지 않고** 스텁에 모델을 더해 복구했다. 같은 증상이 D·E 에서 또 나면
+> **먼저 harness 를 의심할 것** — 스펙 파일을 고치는 순간이 설계가 샌 순간이다.
 
 ⚠️ 이 무변경이 성립하는 **조건이 둘** 있다 — ① `MAX_DOMAINS_PER_BRAND` 를 **3 그대로** 둔다
 (`domain-host.spec.ts:131` 이 `>= 3` 을 단언한다 — §2) ② `domain-search` 응답에 가격을 얹지
@@ -1551,7 +1653,10 @@ env 가 아니다**(2026-08-26 정리. 근거는 §11 env 절 — 이 레포엔 
 1. `npm run typecheck` — **`tsconfig.json` 과 `tsconfig.scripts.json` 둘 다**
    (`npx tsc --noEmit` 만 쓰면 `src/` 밖을 구조적으로 못 본다)
 2. `npm run test:e2e` — cron **11개** + DI 그래프(`SubscriptionModule.exports`)
-3. `npm run start` — env 가드 + 라우트 매핑(**CLAUDE.md 현재 표기는 315** → 실측값으로 갱신)
+3. `npm run start` — env 가드 + 라우트 매핑. ✅ **PR C 시점 실측 318**(315 + 구매 3개:
+   `POST quotes` · `POST purchase` · `GET registration`). D 가 어드민 라우트를 더하면 또 는다 —
+   **마지막 PR 에서 워크스페이스 `CLAUDE.md` 의 라우트 수를 실측값으로 갱신할 것.**
+   ⚠️ 포트 4000 은 메인 체크아웃 dev 서버가 점유 중일 수 있다 → `PORT=4001 npm run start`
 4. `npx eslint <바꾼 파일>` 로 좁혀 쓸 것(`npm run lint` 는 `--fix` 를 물고 있어 무관한 파일의
    포맷 부채까지 건드린다)
 
