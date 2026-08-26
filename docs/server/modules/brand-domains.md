@@ -347,6 +347,7 @@ Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브�
 | GET | `/registration` | — | 진행 상태(화면 3초 폴링) |
 | PATCH | `/registration/auto-renew` | 6/분 | `{enabled}` — 브랜드가 **다음 해 갱신을 스스로 멈춘다** |
 
+- ⚠️⚠️ **벤더 게이트는 registrar 와 DNS 를 *둘 다* 본다**(`assertVendorsConfigured` — `quotes`·`purchase` 공유). registrar 만 보던 시절엔 DNS 토큰 권한이 모자라도 **결제와 도메인 등록이 끝까지 성공한 뒤** `ensureZone` 이 조용히 `null` 을 돌려줘 `convergeDns` 가 통째로 건너뛰어졌다 — 브랜드는 돈을 냈고 도메인은 환불되지 않는데 A/CNAME 이 없어 영원히 misconfigured 다(2026-08-26 실측). `quotes` 에도 거는 이유는 견적이 503 이면 화면이 구매 버튼을 아예 안 그려(`CandidatePanels` 의 `unavailable` 분기) **막다른 클릭 자체가 사라지기** 때문이다. ⚠️ 반대로 `domain-search.service.ts` 의 검색은 이 게이트를 타지 않는다(`/start` 부가 기능이라 조용히 사라져야 하고, 검색은 DNS 를 안 쓴다). ⚠️ 이 게이트는 **"설정됨"만 보고 권한까지는 못 본다** — 그 간극은 `npm run check:domain-token` 이 메운다.
 - ⚠️⚠️ **`purchase` 의 `domain-check` 는 quotes 의 5분 캐시를 우회한다.** 같은 캐시를 타면 ① 5분 묵은 `registrable` 을 믿고 사고 ② 견적과 청구가 같은 값을 보므로 **`expectedAmountKrw` 불일치 409 가 영원히 발화하지 않는다**.
 - ⚠️ `GET /registration` 은 단수형인데 행은 브랜드당 N개다. 선택 규칙: **① 진행중(`charging|paid|registering|registered|active`) 최신 1건 → ② 없으면 최신 1건 → ③ null**. `released`·`expired` 는 ①에 넣지 않는다(종료된 자산이라 진행 패널이 영원히 열린다).
 - ⚠️⚠️ **`cfState`·`lastError` 원문을 브랜드에게 내리지 않는다** — Cloudflare/NicePay 원문엔 계정 id·내부 식별자가 섞일 수 있다. 브랜드 화면은 `registration-status.ts` 의 `phase → message` 매핑만 본다.
@@ -464,6 +465,15 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 - ⚠️ 원가는 charge 가 얼려 둔 `supplyKrw / marginRate` 로 되돌린다 — **지금 환율로 다시 곱하면 과거 마진이 흔들린다**. 버킷은 `paidAt` 이고 환불은 소급 차감하지 않는다(차감하면 어제 본 숫자가 오늘 달라진다).
 - 같은 함수를 어드민 도메인 탭의 **브랜드 합계**가 쓴다 — 두 화면이 같은 값을 다르게 보여주면 둘 다 신뢰를 잃는다.
 
+### 연결 고착 escalation (2026-08-26)
+
+`connectRegistered` 에 **상한이 없어** `registered` 행이 1년 내내 조용히 재시도만 했다. 브랜드 화면엔 "브랜드관에 연결하는 중입니다" 가 계속 떠 있고 어드민 알림도 `action_required` 전이도 없어, **아무도 모르는 채로 돈만 나간 상태**가 유지됐다. 이제 `CONNECT_STUCK_AFTER_MS = 24h` 를 넘기면 `escalateStuckConnect` 가 `action_required` + 어드민 알림 + Sentry 로 넘긴다.
+
+- ⚠️⚠️ **구독 대기는 이 시계를 타지 않는다.** `subscription_required` 로 false 가 도는 건 고장이 아니라 **설계된 대기**다(도메인은 이미 우리 것이라 환불하지 않고, 구독이 복구되면 다음 사이클에 저절로 붙는다). 사고로 올리면 결제가 밀린 브랜드마다 알림이 쌓이고 **자동 복구 경로가 끊긴다**.
+- ⚠️ 판정을 **`lastError` 문자열 비교로 하지 않는다** — 문구 한 글자에 깨지는 제어흐름은 이 레포가 이미 데인 방식이다(`ShipmentsAlreadyIssuedException` 이 그래서 생겼다). `canServeStorefront` 로 **구조적으로** 다시 본다.
+- ⚠️ **전이 자체가 멱등 마커다** — `action_required` 는 `findMany(status=registered)` 에 더는 안 걸려 알림이 한 번만 나간다(새 컬럼이 필요 없는 이유). 사람이 원인을 고치면 어드민 **재시도**(`retryRegistration`)가 흐름에 되돌린다.
+- ℹ️ Vercel 등록 *실패*(`attach_failed`)는 여기 오기 전에 `connectDomain` 이 **첫 시도에** 이미 `action_required` 로 올린다. 이 escalation 이 노리는 건 **아무 표시도 남기지 않고 false 로만 도는** 경로다(DNS 미주입 → misconfigured → active 안 됨).
+
 ## brand-domain-registrations.cron.ts — cron 2개
 
 | name | 주기 | 하는 일 | kill switch |
@@ -523,6 +533,8 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 | `BRAND_DOMAIN_REGISTRATION_CRON_ENABLED` | `false` 일 때만 등록 폴링 cron 비활성 (미설정 = on) |
 | `SOLAPI_KAKAO_TEMPLATE_DOMAIN_*` ×4 | 알림 4종 템플릿. **전부 선택** — 미설정이면 SMS 폴백이 대신 나가므로 배포를 막지 않는다 |
 
+ℹ️ **`npm run check:domain-token`** — Cloudflare 자격 사전 점검(`scripts/check-domain-token.ts`). 토큰 유효 → zone 조회 → **zone 생성** → 레코드 CRUD → zone 삭제를 실제로 한 바퀴 돈다(버릴 이름으로 만들고 반드시 지운다 — zone 생성은 무료라 **돈을 쓰지 않는다**). 위 게이트는 "설정됨"만 보고 권한까지는 못 보므로, **런북의 "스테이징 리허설 1건"(환불 불가) 앞에서 공짜로** 돌릴 것. 토큰 회전·권한 변경 뒤에도 마찬가지.
+
 ⚠️ **부팅 fail-closed 가드를 붙이지 않았다.** 기존 fail-closed 3종(Eximbay·`GUEST_ORDER_SECRET`·OTP)은 "조용히 깨지고 돈이 사라지는" 경로다. 도메인은 미설정 시 브랜드가 즉시 에러를 보므로 부팅을 막을 성질이 아니다.
 
 ℹ️ Vercel 플랜은 **Pro** 라 도메인 수 상한(soft 100k)은 걱정하지 않아도 된다.
@@ -564,6 +576,7 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 | `__tests__/domain-registration-poll.spec.ts` | 흐름 8~11 — 재제출·환불 판정이 **행 단위**·`subscription_required` 는 환불 금지·연결 백오프 |
 | `__tests__/domain-release.spec.ts` | **①setAutoRenew 실패 시 아무것도 안 지운다**·우리 레코드만 삭제(MX 생존)·zone 은 안 지운다·registration 없는 도메인은 ①을 건너뛴다·released 재연결·`cleanupOrphans` 가 status 를 안 건드림·어드민 운영 4종·매출 합계 |
 | `__tests__/domain-renewal.spec.ts` | 사전 고지 창·**같은 주기 이중 청구 금지**·dunning 간격·소진 시 auto_renew off·폭등 보류·**전진 확인**·⭐⭐**`autoRenew=true` 인 만료 경과 행은 건드리지 않는다**·근사 만료일 2단계 |
+| `__tests__/domain-vendor-gate.spec.ts` | **DNS 토큰이 없으면 구매·견적이 503 이고 벤더를 한 번도 안 부른다**(등록·결제 0건) · 연결 24h 고착 → `action_required` + 어드민 알림 **한 번만** · **구독 대기는 아무리 오래돼도 안 넘긴다** · 24h 안이면 재시도가 본선 |
 | `__tests__/domain-auto-renew.spec.ts` | 브랜드 토글 — **Cloudflare 실패 시 우리 행 불변**(안 그러면 만료일에 우리 카드만 긁힌다) · **조회와 같은 행에 건다**(옛 `released` 행이 아니다) · `active` 아니면 404 + Cloudflare 0회 · 남의 브랜드 불가 · `renewalChargeAt` 이 만료 30일 전이고 **근사 만료일이면 없음** |
 | `__tests__/domain-notify.spec.ts` | `action_required` 전이가 **전부** 알림을 울린다(무음 실패 방지) |
 | `__tests__/domain-dns.spec.ts` | 수렴 계획 — 우리 이름·타입만 remove·"모른다"와 "해제"의 구분 |
