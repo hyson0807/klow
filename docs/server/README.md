@@ -52,6 +52,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [contact](./modules/contact.md)                                       | 랜딩 "상담 문의" 폼 → 운영팀 문의함 메일 (저장 없음)     |
 | **마케팅** | [promotions](./modules/promotions.md)                                  | 인플루언서 할인가 브랜드관 링크(제품×국가 세일가) + 유입 추적 |
 |            | [brand-domains](./modules/brand-domains.md)                          | 브랜드 커스텀 도메인 연결 (Vercel Domains API + Host→슬러그 resolve + Origin 술어) |
+|            | [brand-crm](./modules/brand-crm.md)                                  | 브랜드 고객 관리(CRM) + 메일 발송 (주문에서 파생하는 고객 목록 · 태그/메모 · 템플릿 · 큐 발송 · 수신거부) |
 |            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
