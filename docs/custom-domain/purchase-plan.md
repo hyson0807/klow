@@ -325,6 +325,19 @@ ccTLD 는 `.uk`(`.co.uk`) · `.co` · `.mx` · `.nz` · `.ca` 정도이고 나�
    레코드가 만들어져도 응답하지 않을 수 있다. 이 값이 **c 단계 재시도 주기의 유일한 근거**다 —
    측정하지 않으면 "레코드는 심었는데 `refreshOne` 이 계속 `misconfigured`" 를 버그로 오진한다.
 2. `registration-status` 응답에 **만료일이 실려 오는가** — `expiresAtIsEstimated` 컬럼의 존재 이유다.
+   ✅ **실측 완료(2026-08-27): 안 온다. 이 엔드포인트는 `expires_at` 을 절대 싣지 않는다**
+   (대시보드엔 만료일이 보이는데 응답은 계속 null 이었다). 만료일의 정본은 **다른 엔드포인트**인
+   `GET .../registrar/registrations/{domain}` 이고 거기엔 `expires_at`·`auto_renew`·`status`·
+   `locked` 가 있다(문서: *"Present when the registration is ready; may be null only while
+   status is registration_pending"*).
+   ⚠️⚠️ 이걸 모르고 `registration-status` 에서 만료일을 읽던 동안 **두 곳이 조용히 망가져 있었다**:
+   ① 모든 구매가 `expiresAtIsEstimated:true` 로 시작 → §9 갱신 고지·청구가 그 필터에 걸려
+   통째로 건너뛰어지고 만료 7일 전 자동갱신이 꺼진다(= **1년 뒤 도메인 소멸**)
+   ② §9-3 의 만료일 전진 비교가 **영원히 거짓** → 정상 갱신까지 전부 `action_required` 로 떨어져,
+   "우리 계정 카드 사망 탐지기" 가 오경보만 내는 장치가 된다.
+   ⚠️ **`registration-status` 를 이걸로 대체하지 말 것** — 우리 상태 머신은 `failed`·
+   `action_required`·`blocked` 로 갈리는데 이쪽 `status` 에는 그 값들이 없다. 역할이 다르다:
+   진행 판정은 `registration-status`, 레지스트리 사실은 `registrations/{domain}`.
 3. **토큰 스코프.** 지금 `CLOUDFLARE_REGISTRAR_TOKEN` 은 `.env.example` 이 *"가능하면 읽기 전용으로
    — write 토큰은 도메인을 등록해 돈을 쓸 수 있다"* 라 안내해 발급됐을 가능성이 높다.
    **Registrar Write** 가 필요하고, **Zone DNS:Edit 는 별도 토큰**(`CLOUDFLARE_DNS_TOKEN`, §6)이다.
@@ -342,7 +355,7 @@ ccTLD 는 `.uk`(`.co.uk`) · `.co` · `.mx` · `.nz` · `.ca` 정도이고 나�
    **금지**하는 TLD 가 있고, 그런 곳에 무조건 true 를 보내면 §7 6단계에서 **4xx 확정 거절 → 환불**로
    떨어져 브랜드는 이유를 모른 채 실패를 본다(§7 6단계). 거절 응답의 모양을 확인하고, 판별이
    불가능하면 **구매 가능 TLD 화이트리스트**를 두는 편이 낫다.
-7. ⚠️⚠️ **`auto_renew` 로 실제 갱신이 일어난 뒤 `registration-status` 의 만료일이 언제 전진하는가.**
+7. ⚠️⚠️ **`auto_renew` 로 실제 갱신이 일어난 뒤 `registrations/{domain}` 의 만료일이 언제 전진하는가.**
    갱신 API 가 없어(위) 이 전진값이 **"갱신이 실제로 됐다"는 유일한 신호**다. 관측 시점(만료일
    당일인지 며칠 전후인지)이 §9-2a 유예창의 근거이므로, 첫 구매 도메인 1개는 **만료까지 살려 두고
    1년 뒤에 이 항목만 다시 측정**한다(§19 배포 6단계와 같은 캘린더에 등록).
@@ -431,7 +444,8 @@ model BrandDomainRegistration {
   /// ⚠️ 단 우리 계정에서 그 도메인이 한 번이라도 보였다면 환불하지 않고 action_required (§7 흐름 8번).
   submitAttempts Int      @default(0)
 
-  /// 레지스트리 만료일. 정본은 Cloudflare registration-status 응답.
+  /// 레지스트리 만료일. 정본은 Cloudflare `GET registrar/registrations/{domain}` 의 `expires_at`
+  /// (⚠️ `registration-status` 가 **아니다** — 거긴 안 실려 온다. §0 2번 실측).
   expiresAt DateTime?
   /// ⚠️ true = Cloudflare 가 만료일을 안 줘서 paidAt+1년으로 **근사**한 값.
   ///    근사값으로 자동 갱신 청구를 걸면 안 된다 — cron 이 어드민 알림만 남기고 건너뛴다.
@@ -1101,7 +1115,7 @@ SMS 는 템플릿 승인이 필요 없다). ⚠️ **폴백을 안 두면 "갱�
 
 ```
 갱신 청구 성공(charge=paid, kind=renewal, periodEnd=null)   ← ★ 이 null 이 "확인 대기" 마커다
-  → 만료일 D-1 부터 registration-status 재폴링 (하루 1회면 충분 — 벤더 갱신은 당일 이벤트다)
+  → 만료일 D-1 부터 registrations/{domain} 재폴링 (하루 1회면 충분 — 벤더 갱신은 당일 이벤트다)
       ├ 만료일이 전진했다 → registration.expiresAt 갱신 · charge.periodEnd = 새 만료일 · 확인 완료
       └ D+GRACE 까지 전진 없음 → ★ registration.action_required + 어드민 SMS.
                                   ⚠️ BrandDomain 은 **지우지 않는다**(브랜드는 돈을 냈다)
