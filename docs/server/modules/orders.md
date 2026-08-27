@@ -50,7 +50,7 @@
 
 | Method | Path                          | 기능                                                |
 |--------|-------------------------------|-----------------------------------------------------|
-| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `brandId` / `yearMonth`(`YYYY-MM`) / `withRevenue`(bool) / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal, revenue }` — `pendingTotal` 은 **status/type/brand 필터와 무관한 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다). ⚠️ 단 **`yearMonth` 창은 따라간다** — 배너가 "클릭하면 보이는 건수"를 약속하는데 클릭이 설정하는 건 `paymentStatus` 뿐이고 월 창은 그대로 남으므로, 무시하면 "12건 숨겨져 있음"을 눌러 3건만 보이는 상태가 된다. `revenue` 는 `yearMonth` 또는 `withRevenue` 를 보냈을 때만 채워지는 **매출액**(아래 항목) |
+| GET    | `/admin/orders`               | 주문 목록 — 쿼리 `status` / `paymentStatus` / `excludePaymentStatus`(CSV) / `type` / `excludeZeroTotal`(bool) / `brandId` / `yearMonth`(`YYYY-MM`) / `withRevenue`(bool) / `take`(1~200, 기본 100) / `skip`. 정렬 `createdAt desc, id desc`. 응답 `{ data, total, pendingTotal, revenue }` — `pendingTotal` 은 **status/type/brand 필터와 무관한 미결제 건수**로, 어드민이 미결제를 기본 숨김하므로 "숨겨진 N건" 배너에 쓴다(같은 `$transaction` 에 얹어 별도 왕복이 없다). ⚠️ 단 **`yearMonth` 창은 따라간다** — 배너가 "클릭하면 보이는 건수"를 약속하는데 클릭이 설정하는 건 `paymentStatus` 뿐이고 월 창은 그대로 남으므로, 무시하면 "12건 숨겨져 있음"을 눌러 3건만 보이는 상태가 된다. `revenue` 는 `yearMonth` 또는 `withRevenue` 를 보냈을 때만 채워지는 **매출액**(아래 항목) |
 | GET    | `/admin/orders/:id`           | 주문 상세                                           |
 
 > ⚠️ 위 두 조회만 `ADMIN_ORDER_INCLUDE`(= `items` + `seedingClaim`)를 쓴다. `seedingClaim` 은 **고객 선택 시딩의 표시 제품명**용이다 — `OrderItem.productName` 이 실제 제품명이 아니라 발급 시 동결된 영문 통관 품명이라, 어드민 화면이 바이어가 고른 제품으로 갈아끼우려면 필요하다(→ [seeding](./seeding.md), 클라 미러는 `klow_admin/src/lib/seeding-display.ts`). 공용 `ORDER_INCLUDE` 를 넓히지 않은 이유는 그게 create/quote/고객 조회까지 공유해 결제 경로에 불필요한 조인이 얹히기 때문이다.
@@ -80,6 +80,15 @@
   ⚠️ 감추는 축은 `paymentStatus` 뿐이고 **`status='pending'`(대기중)은 감추지 않는다** — 일반
   주문은 결제에 성공해도 발송 전까지 `status` 가 `pending` 이라(위 **상태** 항목) 그걸 감추면
   "결제완료·미발송" 처리 큐가 통째로 사라진다.
+- **`excludeZeroTotal`** (bool) — 청구액이 `$0` 인 주문(`Order.totalUsd = 0`)을 뺀다. 대부분은
+  **브랜드 결제(무료) 시딩 링크의 신청 건**이라 고객 청구가 애초에 0인데, 그게 처리해야 할 유상
+  주문 사이에 섞여 목록을 덮는다. 어드민 주문 목록의 **`주문금액` 필터** 전용이다.
+  ⚠️ `where` 를 목록·총건수·매출 집계가 공유하므로 **매출 카드의 `결제 건수`·`평균 주문액`도
+  같은 모집단으로 함께 좁혀진다** — 표에서 검산하는 관계가 유지된다(합계는 어차피 불변).
+  ⚠️ **`pendingTotal` 도 따라간다** — 아래 `yearMonth` 와 같은 이유다. 배너 클릭이 바꾸는 건
+  `paymentStatus` 뿐이라 금액 필터가 그대로 남고, 무시하면 배너 건수와 실제로 보이는 건수가 갈린다.
+  ⚠️ **`.default()` 금지** + zod 가 `z.coerce.boolean()` 이라 **`excludeZeroTotal=false` 도 `true`**
+  다(아래 `withRevenue` 와 같은 함정). 끄려면 파라미터를 **보내지 않는다**.
 - **`yearMonth`** (`YYYY-MM`, KST 캘린더월) — 어드민 목록의 월 선택기. zod 프리미티브
   `KstYearMonth`(`common/validation/shared.ts`)가 `parseKstYearMonth` 로 달력 유효성까지 본다.
   ⚠️ **`.default()` 를 주지 않는다** — 기본값을 주면 `yearMonth` 를 안 보내는 환불 페이지가 조용히
