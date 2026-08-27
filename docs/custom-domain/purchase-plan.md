@@ -778,7 +778,19 @@ partial unique index(`WHERE status IN (…)`)는 애초에 선택지가 아니�
 `payment-reconcile.cron.ts` 가 존재하는 이유가 정확히 이 병(`pending` 고착)이다. 같은 모양을 쓴다 —
 등록 폴링 cron 이 `charge.status='pending' AND lastAttemptAt < now−10분` 행을 함께 집어(§7 흐름 11번)
 NicePay 를 조회하고, 승인돼 있으면 `charge=paid` + `reg=paid` 로 **정상 등록 경로에 합류**시킨다.
-⚠️ **금액 불일치는 자동 확정하지 않는다** — 사람이 판단한다.
+
+⚠️⚠️ **"거래가 조회된다" 를 "승인됐다" 로 읽으면 안 된다.** 이 분기는 바로 앞에서 `netCancel` 을
+불렀으므로, 되조회에서 **가장 흔하게 만나는 상태가 오히려 취소된 거래**다. `status` 를 안 보고
+확정하면 브랜드는 한 푼도 안 냈는데 우리는 환불 불가능한 도메인 원가를 지불한다(초안 구현이
+정확히 그랬다 — 이 문장의 "승인돼 있으면" 을 느슨하게 읽은 결과다). 판정 정본은
+`classifyNicepayPaymentStatus`(subscription 어댑터)이고 **`approved` 일 때만** 확정한다:
+`void`(취소·만료·거절)는 돈이 안 나갔으므로 `failed` 확정, **모르는 값과 부분취소는
+`action_required`**(fail-closed — 모르는 값을 `void` 로 폴백하면 NicePay 가 상태를 추가하는 날
+승인된 결제를 미승인으로 확정한다).
+
+⚠️ **금액 불일치는 자동 확정하지 않는다** — 사람이 판단한다. ⚠️⚠️ **금액을 못 읽은 것(`null`)도
+같은 칸이다** — "확인 불가"를 "확인 통과"로 흘려보내면 금액 검증이 통째로 사라진다
+(Eximbay 의 `parseFloat("132,000")===132` 선례).
 
 ⚠️⚠️ **그 "재조회"를 할 메서드가 지금 없다.** `NicepayBillingAdapter` 의 public 표면은
 `registerBillingKey` · `chargeBilling` · `resolveInterestFree` · `listInterestFree` ·
