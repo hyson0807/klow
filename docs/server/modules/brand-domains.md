@@ -4,7 +4,7 @@
 - **목적**: 브랜드가 자기 도메인(`shop.brandA.com`)으로 **브랜드관을 열게** 한다. Vercel Domains API 로 도메인을 자동 등록·검증하고, klow_web 미들웨어가 물어볼 **Host → 슬러그 해석**을 제공하며, 그 도메인이 `api.klow.kr` 를 칠 수 있도록 **CORS·CSRF Origin 을 연다**.
 - **설계 정본**: [`docs/custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`flow.md`](../../custom-domain/flow.md), 결정표는 [`README.md`](../../custom-domain/README.md).
 - **관련 파일**: (기존 축) `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `brand-domain-wishes.controller.ts`·`domain-wishes.service.ts`(찜), `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
-  · (대행 구매 축 = P6) `domain-purchase.service.ts`(구매·연결·어드민 운영), `domain-renewal.service.ts`(갱신), `domain-dns.service.ts`(zone·레코드 실행), `domain-notify.service.ts`(브랜드 알림 4종), `cloudflare-registrar.client.ts`·`cloudflare-dns.client.ts`, `domain-dns.ts`(수렴 계획 · 순수), `registration-status.ts`(상태 집합·문구 · 순수), `domain-revenue.ts`(매출 집계 · 순수), `brand-domain-purchase.controller.ts`, `admin-brand-domains.controller.ts`, `admin-domain-purchase.controller.ts`, `brand-domain-registrations.cron.ts`, 가격 커널 `src/pricing/domain-price.ts`
+  · (대행 구매 축 = P6) `domain-purchase.service.ts`(구매·연결·어드민 운영), `domain-renewal.service.ts`(갱신), `domain-dns.service.ts`(zone·레코드 실행), `domain-notify.service.ts`(브랜드 알림 4종), `cloudflare-registrar.client.ts`·`cloudflare-dns.client.ts`, `domain-dns.ts`(수렴 계획 · 순수), `registration-status.ts`(상태 집합·문구 · 순수), `registration-transitions.ts`(`action_required` 전이 + 브랜드 알림 · **구매/갱신 공유**), `domain-revenue.ts`(매출 집계 · 순수), `cloudflare-api.ts`(두 Cloudflare 클라이언트의 공용 전송 계층 · 순수), `ttl-cache.ts`·`error-text.ts`(검색/견적 캐시 · 예외 문자열 · 순수), `brand-domain-purchase.controller.ts`, `admin-brand-domains.controller.ts`, `admin-domain-purchase.controller.ts`, `brand-domain-registrations.cron.ts`, 가격 커널 `src/pricing/domain-price.ts`
 
 > ℹ️ **소비자 3곳** (2026-08-21 P4 까지 전부 붙었다 — 아직 미배포):
 > ① klow_web `src/middleware.ts` 가 `GET /v1/storefront/resolve` 로 Host→슬러그를 해석해 서빙하고,
@@ -375,7 +375,7 @@ Vercel 연결 → 검증**까지 한다. 도메인은 **KLOW 소유**이고 브�
 | **등록 요청이 불확실하면 재시도하되, 우리 계정에 그 도메인이 한 번이라도 보이면 환불하지 않는다** (Cloudflare 축) | `registrations` 는 **즉시 과금 + 환불 불가**다. 확인 없이 환불하면 순손실이 2배다 |
 | **연결이 `subscription_required` 로 실패해도 환불하지 않는다** | 구매와 연결 사이에 구독이 `past_due` 로 떨어진 것이고 도메인은 이미 우리 것이다. `failed` 로 접으면 1년치 원가를 낸 도메인이 아무 데도 안 붙은 채 버려진다 |
 | **환불 금지 판정은 계정이 아니라 registration 행 단위다** | 같은 host 로 **다른** 브랜드의 `registered|active` 행이 있으면 남의 것이므로 손실 0 → 환불. 없으면 우리 것일 수 있어 fail-closed |
-| **`action_required` 전이는 `markActionRequired` 한 곳만** | 다섯 곳이 각자 update 만 하던 구조에서는 여섯 번째 지점이 생기는 날 **브랜드에게 아무 말도 안 하고 멈춘 건**이 조용히 생긴다 |
+| **`action_required` 전이는 `registration-transitions.ts` 한 곳만** | 각자 update 만 하는 구조에서는 **브랜드에게 아무 말도 안 하고 멈춘 건**이 조용히 생긴다. ⚠️ 실제로 그랬다 — 구매 서비스에만 헬퍼가 있고 갱신 서비스는 세 곳에서 손으로 전이했으며, 그중 만료일 미전진(§9-3)은 **브랜드 알림이 아예 없었다**. 그래서 헬퍼를 두 서비스가 공유하는 파일로 내렸고, `lastError` 의 `VarChar(300)` 절단도 거기서 한다 (자르지 않으면 동적 사유가 길어지는 날 **전이 자체가 예외로 죽어** 건이 이전 상태에 갇힌다) |
 
 - **상한**(코드 상수, env 아님): 계정 일일 20건 · 브랜드 연 3건. ⚠️ 카운트 소스는 `BrandDomainCharge`(`pending|paid|refunded`) — registration.status 로 세면 환불건이 빠져 실패 루프가 상한을 우회하고, `pending` 을 빼면 동시 요청이 서로를 못 본다.
 - **서킷브레이커**(§18-3): "연속 N(3)건이 결제수단 사유 실패 + 최근 실패가 30분 이내" → 구매 503. ⚠️ **쿨다운 half-open 이라 스스로 풀린다** — "최근 N건"만 보면 카드를 교체해도 차단이 영원히 안 풀려 장애를 하나 더 만든다. 그래서 **리셋 라우트가 없다**(저장할 `resetAt` 이 필요해지고 담을 자리가 없다).
