@@ -1396,7 +1396,7 @@ middleware matcher **무변경**(`/settings/:path*` 가 이미 있다). `setting
 | 컴포넌트 | 역할 |
 |---|---|
 | `DomainStatusPanel` | 연결됨: 호스트 · 만료일 · 자동갱신 · "브랜드관 열기". **DNS 안내 없음** |
-| `PurchaseProgressPanel` | `charging\|paid\|registering` → 3초 폴링. ⚠️ **`registered` 도 폴링 대상**이다 — 등록은 끝났는데 연결이 아직인 구간이고, 구독이 끊겼으면 **여기서 오래 머문다**(§7-3). 그때는 "구독이 확인되면 자동으로 연결됩니다" 안내(막다른 길처럼 보이면 안 된다). `action_required`·`failed` → 운영팀 연락 안내 |
+| `PurchaseProgressPanel` | `charging\|paid\|registering` → 3초 폴링. ⚠️ **`registered` 도 폴링 대상**이다 — 등록은 끝났는데 연결이 아직인 구간이고, 구독이 끊겼으면 **여기서 오래 머문다**(§7-3). 그때는 "구독이 확인되면 자동으로 연결됩니다" 안내(막다른 길처럼 보이면 안 된다). `action_required` → 운영팀 연락 안내. ⚠️⚠️ **`failed` 는 이 패널이 담당하지 않는다** — 환불까지 끝난 종료 상태라 브랜드가 **다시 사야** 하는데, 여기서 그리면 검색 패널이 닫혀 화면에서 할 수 있는 일이 하나도 없어진다(초안이 그랬다). 서버도 같은 판단이다 — `ACTIVE_REGISTRATION_STATUSES` 가 `failed` 를 일부러 뺐다. 검색 패널 **위 한 줄 안내**(`PurchaseFailedNotice`)로만 남기고, "담당자가 확인하고 있어요" 를 쓰지 않는다(아무도 안 보고 있는 상태다 — 그렇게 안내하면 브랜드가 연락을 기다리며 재시도를 안 한다). 구매 차단 판정의 단일 출처는 `blocksNewPurchase` 다 |
 | `WishListPanel` | `domainWishes.list()` + `POST quotes` 병합. 팔린 도메인은 회색 + "이미 판매됨" + 찜 해제 |
 | `DomainSearchPanel` | 찜이 없거나 다 팔렸을 때 직접 검색 |
 | `PurchaseDialog` | 공급가/VAT/합계 + **2년차 예상가 병기**(§9-1) + `****1234` + **환불 불가 · 이전 불가 고지 체크박스**(§18-1 — 두 고지를 **같은 칸**에). ⚠️ `BillingKey.cardLast4` 는 **null 일 수 있다**(`nicepay-billing.adapter.ts:303` — 빌키 발급 응답엔 카드번호가 없어 **첫 결제 응답에서** 채운다) → `카드 정보 확인 중` 폴백 |
