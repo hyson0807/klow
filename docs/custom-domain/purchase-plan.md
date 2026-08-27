@@ -160,7 +160,7 @@
 > ⓔ §5 는 "env 오버라이드 없음"인데 §11 env 목록에 `DOMAIN_MARGIN_RATE` 가 남아 모순(§11)
 > ⓕ 만료 정리가 **`removeForBrand`(brandId 필수·소유검증)** 를 부르는데 brandId 가 nullable 이 됐다(§9)
 > ⓖ `registered` 재시도에 **백오프·상한이 없어** 1년 내내 2분마다 Vercel 을 친다(§7-3)
-> ⓗ `privacy_mode`·`years`·`goodsName` 미결정(§7 6·4단계).
+> ⓗ `privacy_mode`·`years`·`goodsName` 미결정(§7 6·4단계). → **전부 확정(2026-08-27)**: §0 3번 표(필드 타입) + §7 4단계(바이트 상한).
 > 그 밖에 상호참조 5건(§0→§9 · §6→§7-1 · §7 흐름10→§7-3 · §7-2→§7-4 · §3→§7-4/§18-1)과
 > env 6개 누락을 고쳤다.
 >
@@ -712,6 +712,10 @@ export function planDnsConvergence(desired, existing): { create; update; remove;
            **락 안에서 재검사** → Registration(charging) + Charge(pending) insert → 커밋
            (락 구간은 이 세 문장뿐. PG·Cloudflare 왕복은 **반드시 락 밖**이다 — §7-1-D)
 4 청구     chargeBilling({ bid, amountKrw, orderId: orderIdFrom(charge.id), goodsName })
+           ⚠️⚠️ goodsName 은 **40바이트 상한**(매뉴얼 확인. buyerName 30 · buyerTel 20 ·
+           buyerEmail 60 · orderId 64, 전부 **문자 수가 아니라 UTF-8 바이트**다). 호스트가
+           최대 253자라 길이가 외부 입력에 달려 있어 **어댑터가 잘라 준다** — 안 자르면
+           "긴 도메인을 산 브랜드만 결제가 안 되는" 재현 어려운 실패가 된다.
            ⚠️ goodsName 에 **도메인명을 넣는다**(예: `KLOW 도메인 shop.example.com`) — 카드 명세서에
               그대로 찍히고, 구독료와 구분이 안 되면 그 자체가 문의·이의제기 사유다
            ├ NicepayBillingError → charge=failed / reg=failed → throwAsHttp(400). 돈 안 나감.
@@ -779,6 +783,7 @@ export function planDnsConvergence(desired, existing): { create; update; remove;
 |---|---|---|
 | **A** | ⚠️⚠️ **타임아웃 ≠ 실패.** `registrations` 타임아웃·5xx 에 `cancelPayment` 를 **부르지 않는다** | Cloudflare 는 등록했는데(환불 불가) 브랜드 돈은 돌려줌 → **순손실 2배**. 전용 예외 타입 `CloudflareRegistrationIndeterminateError` 로 이 분기를 타입으로 강제 |
 | **B** | charge 행을 청구 **전에** 만들고 `orderId = orderIdFrom(charge.id)` | 구독 정기청구가 `invoice.id` 를 seed 로 쓰는 것과 같은 근거 — 재시도가 같은 orderId 를 못 쓰면 **이중 승인** |
+| **B'** | ⚠️⚠️ **취소(환불) 축은 정반대다 — seed 에 난수를 섞어 매번 다른 orderId 를 쓴다** | 매뉴얼이 *"결제된 orderId 로는 재호출이 불가"* 라고 못박아, 취소에 같은 주문번호를 재사용하면 **첫 시도가 실패한 뒤 재시도가 영구히 막힌다**(= 브랜드가 돈을 못 돌려받는다). 취소의 이중 실행은 NicePay 가 tid 상태로 이미 막으므로 멱등이 필요 없다. ⚠️ `Date.now()` 로는 부족하다 — 같은 밀리초 안의 두 번째 시도가 충돌한다(스펙이 실제로 잡았다) |
 | **C** | `pgTid @unique` (SubscriptionInvoice 미러) | 같은 승인이 두 행에 들어가면 회계가 갈린다 |
 | **D** | ⚠️⚠️ 동시성은 **`SELECT id FROM "Brand" WHERE id = $1 FOR UPDATE` 행 잠금**으로 막는다. `@Throttle({limit:3, ttl:60_000})` 은 보조일 뿐 **직렬화를 하지 않는다** | 연타 = **환불 불가 도메인 2개 구매.** 아래 §7-1-D |
 | **E** | ⚠️⚠️ **`netCancel` 은 실패해도 throw 하지 않는다**(`nicepay-billing.adapter.ts:506` — `logger.warn` 만 남기고 리턴). 그 분기의 charge 는 `failed` 가 아니라 **`pending` 유지** | netCancel 이 실패하면 **카드는 승인된 채 장부만 실패**가 되고 아무도 모른다. 구독은 다음날 재청구가 자연 복구책이지만 **도메인은 일회성이라 복구 경로가 없다.** 아래 §7-1-E |
