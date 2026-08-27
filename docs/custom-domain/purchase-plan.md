@@ -115,7 +115,7 @@
 >
 > | 위치 | 지금 동작 | 실측 후 |
 > |---|---|---|
-> | `submitRegistration` 의 `privacyMode` | **무조건 `true`.** 거절하는 TLD 면 4xx 분기로 떨어져 **전액 환불**된다(손실 0, 다만 브랜드는 이유를 모른다) | §0 6번 → (a) 구매 가능 TLD 화이트리스트 또는 (b) 그 TLD 만 `false` 로 1회 재시도. ⚠️ (b)는 재시도 **전에** 우리 계정 등록 여부를 먼저 확인할 것 |
+> | `submitRegistration` 의 `privacyMode` | **무조건 `'redaction'`.** 거절하는 TLD 면 4xx 분기로 떨어져 **전액 환불**된다(손실 0, 다만 브랜드는 이유를 모른다) | §0 6번 → (a) 구매 가능 TLD 화이트리스트 또는 (b) 그 TLD 만 `'off'` 로 1회 재시도. ⚠️ (b)는 재시도 **전에** 우리 계정 등록 여부를 먼저 확인할 것 |
 > | `advanceRegistering` 의 `action_required` | **전부 사람 큐**(fail-closed). 자동 환불 0건 | fee acknowledgement 필드명을 실측해 §7-4 첫 두 칸(프리미엄·미지원 TLD)만 즉시 환불로 내린다 |
 >
 > 그리고 **`findPaymentByOrderId`** — 존재하지 않는 orderId 에 NicePay 가 404 를 주는지
@@ -331,8 +331,14 @@ ccTLD 는 `.uk`(`.co.uk`) · `.co` · `.mx` · `.nz` · `.ca` 정도이고 나�
    ⚠️ 스테이징·운영 토큰을 **반드시 분리**한다 — §11 의 `DOMAIN_PURCHASE_ENABLED` opt-in 이 있어도
    토큰이 같으면 실수 한 번이 실제 돈이다.
 4. 계정 **default registrant contact** 설정 여부(없으면 `registrations` 가 거절된다).
+   ✅ **실측 완료(2026-08-27)** — 없으면 `400 No registrant contact provided and no default address
+   book entry found for this account.` 로 확정 거절된다. 해결은 코드가 아니라 대시보드
+   **Domains → Registrations → Create default contact**(주소록 기본 항목)다. ⚠️ 등록자는 전 브랜드
+   공통 **KLOW 법인 정보**여야 한다(도메인은 KLOW 자산 · 소유권 이전 없음 — §18-1a). ⚠️⚠️ 이메일은
+   개인 주소가 아니라 **팀 공용 주소**로 — ICANN 규정상 등록자 이메일로 연례 검증 메일이 오고
+   기한 내 미응답이면 **도메인이 정지된다**(WHOIS privacy 를 켜도 이 메일은 실제 주소로 온다).
 5. `registrations` 가 동기로 `succeeded` 를 주는 비율과 `in_progress` 의 실제 소요 — 폴링 주기의 근거.
-6. ⚠️ **`privacy_mode: true` 를 거절하는 TLD 가 있는가.** `.us` 처럼 레지스트리가 WHOIS privacy 를
+6. ⚠️ **`privacy_mode: 'redaction'` 을 거절하는 TLD 가 있는가.** `.us` 처럼 레지스트리가 WHOIS privacy 를
    **금지**하는 TLD 가 있고, 그런 곳에 무조건 true 를 보내면 §7 6단계에서 **4xx 확정 거절 → 환불**로
    떨어져 브랜드는 이유를 모른 채 실패를 본다(§7 6단계). 거절 응답의 모양을 확인하고, 판별이
    불가능하면 **구매 가능 TLD 화이트리스트**를 두는 편이 낫다.
@@ -346,6 +352,12 @@ ccTLD 는 `.uk`(`.co.uk`) · `.co` · `.mx` · `.nz` · `.ca` 정도이고 나�
 - `POST /accounts/{id}/registrar/domain-check` — ≤20개/요청, 레지스트리 직조회.
   `{name, registrable, tier, pricing:{currency, registration_cost, renewal_cost}, reason?}`
 - `POST /accounts/{id}/registrar/registrations` — `{domain_name, years?, auto_renew?, privacy_mode?}`.
+  ✅ **필드 타입 확정(2026-08-27, 공식 API 문서)**: `domain_name` string · `years` **number**(1~10) ·
+  `auto_renew` **boolean**(기본 `false`) · `privacy_mode` **문자열 enum `'off' | 'redaction'`**(기본
+  `'redaction'`). ⚠️⚠️ `privacy_mode` 만 불리언이 아니다 — `true` 를 보내면
+  `400 value at /privacy_mode is not a string` 으로 **확정 거절**된다(실측으로 전 구매가 막혔다).
+  `auto_renew`·`years` 는 지금 값이 맞으니 **같이 문자열로 바꾸지 말 것**. 그 밖에 `contacts` ·
+  `contact_extensions`(`.us` nexus 등) · `acknowledgements` 가 선택 필드로 있다.
   **201/202** + `state: in_progress|succeeded|failed|action_required|blocked`.
   ⚠️ **계정 기본 결제수단에 즉시 청구되고 환불이 안 된다.**
   ⚠️ **`auto_renew` 기본이 `false`** — 명시하지 않으면 1년 뒤 도메인이 소멸한다(문서는 false,
@@ -692,8 +704,9 @@ export function planDnsConvergence(desired, existing): { create; update; remove;
            └ 타임아웃·네트워크 → netCancel(orderId) → ★ charge 는 **pending 유지**(failed 아님)
              + lastError + Sentry → 502. cron 이 진실을 확인한다 (§7-1-E)
 5 DB      charge=paid(pgTid) / reg=paid        ← ★ "돈은 받았고 등록은 아직" 의 정본 상태
-6 등록     createRegistration({ domain_name, years:1, auto_renew:true, privacy_mode:true })
-           ⚠️ **privacy_mode 를 명시 전달한다** — 등록자가 KLOW 라 끄면 우리 회사 연락처가 WHOIS 에
+6 등록     createRegistration({ domain_name, years:1, auto_renew:true, privacy_mode:'redaction' })
+           ⚠️⚠️ **privacy_mode 는 불리언이 아니라 문자열 enum 이다**('off' | 'redaction').
+           ⚠️ **명시 전달한다** — 등록자가 KLOW 라 끄면 우리 회사 연락처가 WHOIS 에
               공개되어 스팸·피싱 표적이 된다. Cloudflare 는 무료 제공이고, 기본값을 믿지 말 것
               (auto_renew 가 기본 false 인 것과 같은 이유 — beta 문서가 갈려 있다)
            ⚠️ years 는 **1 고정**이다. 다년 구매는 지원하지 않는다 — 연 이용료 모델이라 2년을 사면
@@ -702,7 +715,7 @@ export function planDnsConvergence(desired, existing): { create; update; remove;
               그 4xx 는 "도메인을 못 산다"가 아니라 **"이 옵션을 못 쓴다"** 인데, 아래 분기가
               무조건 환불로 접으면 브랜드는 살 수 있는 도메인을 이유도 모른 채 못 산다.
               → §0 6번 실측 결과에 따라 (a) 구매 가능 TLD 화이트리스트로 **애초에 못 고르게** 하거나
-              (b) privacy 거절이 판별 가능하면 그 TLD 만 `privacy_mode:false` 로 1회 재시도한다.
+              (b) privacy 거절이 판별 가능하면 그 TLD 만 `privacy_mode:'off'` 로 1회 재시도한다.
               ⚠️ (b) 를 택하면 **재시도 전에 우리 계정 등록 여부를 먼저 확인**할 것 — 첫 요청이
                  이미 등록을 만들었다면 재시도가 두 번째 과금이다(§7-1 A 와 같은 축)
            ├ 201/202 → reg=registering (cfState 저장)
