@@ -129,8 +129,8 @@ id 가 겹치지 않게 한다.
 | PATCH  | `/templates/:tid`             | 템플릿 수정 |
 | DELETE | `/templates/:tid`             | 템플릿 삭제 |
 | POST   | `/emails`                     | 발송 (1~200명) — `THROTTLE_TIGHT` 5회/분 |
-| GET    | `/emails?customerId=`         | 발송 이력 |
-| GET    | `/customers/:id`              | 고객 상세 + 타임라인 |
+| GET    | `/emails/:eid`                | 보낸 메일 한 통의 발송본(제목·본문·받는 사람·상태) |
+| GET    | `/customers/:id`              | 고객 상세 + 타임라인(발송 이력 포함) |
 | PATCH  | `/customers/:id`              | 태그·메모 저장(lazy upsert) |
 
 ⚠️ 정적 라우트(`tags`·`templates`·`emails`)를 `customers/:id` **앞에** 선언한다
@@ -193,6 +193,26 @@ OTP·주문확인 메일의 도달률까지 끌어내린다.** `CRM_EMAIL_FROM_A
 - ⚠️ 본문은 **평문만** 받는다. HTML 을 허용하면 KLOW 소유 발신 도메인 + 브랜드 임의 마크업이 곧 피싱
   벡터가 된다. 렌더는 `치환 → escapeHtml → nl2br` 순서이고 이 순서가 스펙으로 잠겨 있다.
 
+### 발송 이력 열람
+
+발송 이력은 **별도 목록 라우트가 아니라** `GET /customers/:id` 의 타임라인에 주문과 함께 섞여
+내려간다(최근 50통, `createdAt desc`). 각 메일 줄은 `emailId` + `emailStatus` 를 달고 오고,
+화면은 그걸 눌러 `GET /emails/:eid` 로 본문 한 통을 받는다.
+
+- 타임라인에 **본문을 싣지 않는다** — 50통 × 최대 5000자면 고객 상세 응답 하나가 수백 KB 다.
+- `emailStatus` 는 예전에 DB 에서 select 해 놓고 매핑에서 버리던 값이다. 그래서 **실패한 메일이
+  성공한 것과 화면에서 구분되지 않았다.**
+
+⚠️⚠️ **`buildHtml()` 결과를 브랜드에게 돌려주면 안 된다.** 그 HTML 푸터에는
+`unsubscribeUrl(brandId, toEmail)` 로 서명된 **살아 있는** 수신거부 링크가 박혀 있어서, 브랜드가
+미리보기에서 그걸 누르면 **자기 고객이 실제로 수신거부된다**(`public-crm.controller.ts` 의 POST 는
+가드 없이 HMAC 서명만 본다). 그래서 응답은 `bodyRendered` **평문**만 싣고, klow_brand 는
+`whitespace-pre-wrap` 으로 그린다 — `dangerouslySetInnerHTML` 경로가 아예 생기지 않는다.
+회귀 스펙이 응답 키 목록을 통째로 잠가 이 결정이 조용히 뒤집히지 않게 한다.
+
+⚠️ 소유 검증은 `findFirst({ where: { id, brandId } })` 뿐이고 실패는 `Forbidden` 이 아니라
+**`NotFound`** 다(id 를 넣어 보며 남의 브랜드 메일 존재를 열거하지 못하게).
+
 ### 수신거부
 
 - 모든 CRM 메일 하단에 링크 자동 삽입 + RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` 헤더.
@@ -230,14 +250,19 @@ CRM_EMAIL_CRON_ENABLED=                     # 'false' 로만 비활성(기본 on
 `20260827083149_add_brand_crm` — `CREATE TABLE ×4` + `CREATE INDEX ×7` + `ADD FK ×4` +
 `OrderItem.@@index([brandId])`. **추가 전용 → 롤링 배포 안전 · 백필 없음.**
 
-- 라우트 **315 → 327**, cron **9 → 10**(`brand-crm-email-dispatch`).
+- 라우트 **315 → 325**, cron **9 → 10**(`brand-crm-email-dispatch`).
+  (2026-08-28 발송본 열람 라우트가 붙어 지금은 **326**. ⚠️ 예전에 이 줄이 327 이라고 적혀
+  있었는데 부팅 실측과 어긋나 실측값으로 정정했다.)
 - **배포 전 선행**: Resend 콘솔에 `mail.klow.kr` 도메인 추가 + DNS 등록. 안 하면 발송이 전부 실패한다.
 - 배포 순서: **klow_server → klow_brand**(반대면 `/crm` 이 404).
 
 ## 회귀 잠금
 
 `brand-crm/__tests__/` — `customer-key.spec.ts`(19) · `crm-template.spec.ts`(20, 수기 연락처 추출 포함) ·
-`unsubscribe-token.spec.ts`(8) · `crm-email-queue.spec.ts`(7).
+`unsubscribe-token.spec.ts`(8) · `crm-email-queue.spec.ts`(7) ·
+`crm-email-detail.spec.ts`(7 — brandId 스코프 · batchSize · **응답에 발송 HTML/수신거부 링크 없음**).
+⚠️ 마지막 스펙의 prisma 스텁은 `where` 와 `select` 를 **둘 다 실제로 적용한다** — 하나라도
+무시하면 유출 가드가 아무것도 잡지 못한 채 통과한다.
 `common/__tests__/origin-exempt.spec.ts` 에 `/v1/crm/unsubscribe` 케이스 추가.
 
 ## 알려진 갭
