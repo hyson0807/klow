@@ -159,9 +159,37 @@
 | POST   | `/v1/orders/lookup`                 | public (TIGHT)   | 비회원 주문 조회 — `orderId`(cuid) + `email` 매칭                              |
 | POST   | `/v1/orders/guest-cancel/request-otp` | public (TIGHT) | 비회원 취소 1단계 — 주문/이메일 매칭 시에만 OTP 발송. 응답은 항상 `{ ok: true }`(존재 oracle 차단) |
 | POST   | `/v1/orders/guest-cancel`           | public (TIGHT)   | 비회원 취소 2단계 — 주문 바인딩 OTP 검증 후 취소/환불                          |
-| GET    | `/v1/orders/:id/tracking`           | OptionalUser     | 고객용 배송추적 — 결제완료 메일 서명 토큰(`?t=`) / 회원 세션 / 게스트 쿠키 중 하나로 인증, 캐시된 추적 데이터 반환. 고객 선택 시딩 주문은 표시 제품명을 `SeedingClaim.selectedSkus` 로 파생(→ [seeding](./seeding.md) 고객 대면 제품명). ⚠️ `shipmentTrackingStatus` 는 **국내 자체배송(`carrier='DOMESTIC'`)에 별도 분기**가 있다 — EFS 송장번호가 영영 없어 기본 `!trackingNumber → preparing` 규칙을 그대로 태우면 발송 후에도 "배송 준비 중"에 갇힌다 |
+| GET    | `/v1/orders/:id/tracking`           | OptionalUser     | 고객용 배송추적 — 결제완료 메일 서명 토큰(`?t=`) / 회원 세션 / 게스트 쿠키 중 하나로 인증, 캐시된 추적 데이터 반환. 시딩 주문은 표시 제품명을 `seedingItemNames()` 로 파생한다(customer→`SeedingClaim.selectedSkus` / brand→`SeedingLink.itemNames`, → [seeding](./seeding.md) 표시 제품명) + 제품명 라벨로 `Product` 를 조인해 **썸네일**까지 채운다(`resolveProductsByLabel`, ⚠️ 이름이 없으면 쿼리를 아예 안 돌린다 — 일반 주문에 조인 비용이 얹히면 안 된다). ⚠️ `shipmentTrackingStatus` 는 **국내 자체배송(`carrier='DOMESTIC'`)에 별도 분기**가 있다 — EFS 송장번호가 영영 없어 기본 `!trackingNumber → preparing` 규칙을 그대로 태우면 발송 후에도 "배송 준비 중"에 갇힌다 |
 | GET    | `/v1/orders/:id`                    | User             | 주문 상세 (본인 ownership 확인)                                               |
 | PATCH  | `/v1/orders/:id/cancel`             | User             | 주문 취소 — `paid` 면 Eximbay 환불 후 `refunded`, `pending` 이면 `cancelled`. `shipped`/`completed`/`cancelled` 는 400(반품 절차로) |
+
+### `GET /v1/orders/:id/tracking` — 라스트마일(현지) 추적 링크 (2026-08-31)
+
+화면에 뜨던 `trackingNumber` 는 **EFS 내부 송장번호**(`EFS1005255611`)라 고객이 어디서도
+조회할 수 없다. 실제 조회 가능한 번호(`Shipment.localTrackingNumber` — 프로덕션 428건 중
+339건 채워짐)는 DB 에 있었는데 **공개 DTO 가 select 조차 안 하고 있었다**. `OrderTrackingGroup`
+에 3필드를 추가한다:
+
+| 필드 | 의미 |
+|---|---|
+| `localTrackingNumber` | 실제 조회 가능한 번호. 픽업 전(EFS 가 아직 안 줌)·국내 자체배송은 `null` |
+| `localTrackingUrl` | **서버가 계산한 완성 URL** |
+| `localCarrier` | 업체 키 — `usps`/`gofo`/`singpost`/`dhl`/`sagawa`/`raf`/`ems`/`ems_premium` |
+
+판정 단일 출처는 `shipments/local-tracking.ts` 의 `localTrackingLink()` 이고, 회귀 잠금은
+`shipments/__tests__/local-tracking.spec.ts`(프로덕션 실측 번호로 사다리를 고정).
+
+- ⚠️ **URL 을 서버가 만드는 이유**는 판정 입력(`carrier` enum · `localCarrierName` ·
+  `trackingCarrier` · `Order.countryCode`)이 **공개 응답에 없어야** 하기 때문이다. 원시 필드를
+  내리면 klow_web 이 파생할 수 있지만 그만큼 내부 표면이 넓어진다.
+- ⚠️ **라벨은 서버가 만들지 않는다** — 고객 화면은 다국어라 한국어 라벨을 박으면 안 된다.
+  키만 내리고 표시명은 klow_web `src/lib/local-carrier.ts` 가 정한다(전부 고유명사라 i18n 제외).
+  같은 이유로 어드민/브랜드의 `localTrackingLabel()`(한국어)은 옮기지 않았다.
+- ⚠️ **`localCarrier` 는 `carrier` 표시도 대체한다** — 종전엔 EFS 회신 원문이 그대로 나가
+  고객이 `USCOS` 같은 내부 코드를 봤다. klow_web 이 판정된 표시명을 우선하고 원문은 폴백.
+- ⚠️ 취소된 송장에도 값을 그대로 내린다 — 숨김은 종전처럼 klow_web 이 판단한다.
+- ℹ️ 같은 판정 사다리의 클라 사본이 `klow_admin`/`klow_brand` `src/lib/tracking-url.ts` 에
+  **둘 더 있다**(한국어 라벨 포함). 규칙을 고치면 세 곳을 같이 고쳐야 한다.
 
 ### `POST /v1/orders` 국가별 필수 필드 (`CreateOrderInput` refine)
 
