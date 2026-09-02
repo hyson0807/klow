@@ -234,6 +234,60 @@ OTP·주문확인 메일의 도달률까지 끌어내린다.** `CRM_EMAIL_FROM_A
 raw SQL 을 쓰지 않는다. 이 레포의 `$queryRaw` 는 차트/집계 전용 + `FOR UPDATE` 락 2건뿐이고 CRM 목록은
 둘 다 아니다. Prisma-only 선례가 `orders.service.ts:204`·`settlement.service.ts:252` 에 이미 있다.
 
+### 병목은 CPU 가 아니라 **직렬 왕복 수**다 (2026-09-02)
+
+전량 로드라는 말 때문에 오해하기 쉬운데, **N+1 은 없다** — 요청당 Prisma 호출 수는 고객 수와
+무관하게 고정이고 루프 안에서 DB 를 치는 곳은 0건이다. 실측 규모(주문 686건·송장 431건, 전 브랜드
+합)에서 그룹핑 CPU 는 1ms 미만이다. 지배적인 것은 Neon(싱가포르) **왕복 단계 수**다.
+
+⚠️ Prisma 는 `relationJoins` 프리뷰가 꺼져 있어 `order.findMany` 하나가 **부모 SELECT → `items`
+∥ `seedingClaim`** 으로 쪼개진다. 즉 "Prisma 호출 6회"는 왕복 수가 아니다.
+
+`loadBrandScope()` 가 그 단계를 **2단으로 묶는다.** `productIds` 에 의존하는 건 주문 조회 하나뿐이라
+나머지(수기기록·노트·수신거부·국가명)를 전부 1단에 몰아넣었다:
+
+```
+1단: product ∥ manualSeedingRecord ∥ brandCrmNote ∥ brandCrmOptOut ∥ shippingCountry
+2단: order  (→ 엔진이 items ∥ seedingClaim 을 뒤이어 발사)
+상세만 3단: brandCrmEmail  (customerKey 를 알아야 해서 구조적으로 뒤다)
+```
+
+- ⚠️ **`decorate()` 는 DB 를 치지 않는 순수 함수다.** 거기에 `await` 를 하나라도 되돌리면 왕복이
+  한 단 늘고, 상세처럼 acc 가 1개인 경로에서도 브랜드 전 노트를 다시 읽게 된다.
+- ⚠️ **`shippingCountry` 는 `iso2 in (...)` 없이 전량을 읽는다.** `in` 절은 주문 결과에 의존해서
+  왕복을 한 단 강제했다. 233행 × 2컬럼(≈6KB)이라 그 한 단을 없애는 값이 훨씬 크다.
+- ⚠️ **`ORDER_SELECT.items` 에 브랜드 필터가 걸린다**(`orderSelect()` 팩토리). 예전엔 없어서
+  멀티브랜드 주문의 남의 라인까지 받아 놓고 앱에서 버렸다. 앱단 `isBrandOwnedItem` 필터는
+  **그대로 둔다** — 같은 헬퍼(`orders/item-brands.ts`)를 쓰므로 규칙이 갈릴 수 없다.
+
+### 상세 조회는 **대상 고객의 타임라인만** 만든다
+
+예전엔 `loadCustomers(brandId, { timeline: true })` 라 게이트가 불리언이었다. 그래서 고객 한 명을
+보려고 **브랜드 전 고객**의 타임라인 객체를 만든 뒤 1명분만 남기고 버렸다(최대 1만 건 × 객체 할당).
+
+지금 게이트는 **`opts.timelineFor: ReadonlySet<공개 id>`** 이고, `touch()` 가 고객이 처음 등장할 때
+`customerIdOf` 를 **1회만** 계산해 `Acc.id` 에 들고 있다가 그 집합과 대조한다.
+
+- 부수 효과로 `decorate`·`resolveRecipients` 의 sha256 **재계산이 사라졌다**(같은 값을 두 번 돌렸다).
+- ⚠️ **불리언 플래그로 되돌리지 말 것.** 회귀 잠금은 `__tests__/crm-scan-shape.spec.ts` 다.
+
+### 아직 안 한 것 (규모가 커지면)
+
+- **브랜드 스캔 스냅샷의 인메모리 TTL 캐시.** 선례는 `brand-domains/domain-search.service.ts:21-70`.
+  ⚠️ 캐시 대상은 **주문 파생분만**이다 — `BrandCrmOptOut`·`BrandCrmNote` 를 캐시하면 안 된다
+  (수신거부가 stale 이면 브랜드가 "보낼 수 있다"고 본 200명 중 일부가 발송 응답에서 `opted_out` 으로
+  튕겨 나오고, 태그가 stale 이면 방금 저장한 태그로 필터했는데 안 나온다). 게다가 그 둘은 이미 위
+  1단 안이라 **캐시해도 왕복이 안 줄어든다 = 이득 0, 리스크 >0.**
+  ⚠️ 레플리카가 2 이상이면 캐시가 인스턴스마다 갈려 `updateNote`/`resolveRecipients` 가 방금 뜬
+  고객을 404·`not_found` 로 놓칠 수 있다(fail-closed 라 잘못 쓰지는 않는다). 도입 전 레플리카 수 확인.
+- **`BrandCrmNote.customerId`(정방향 해시) 컬럼 + 인덱스** — `updateNote` 의 전량 노트 로드 +
+  앱 해시 비교가 단일 조회가 된다. 추가 전용 마이그레이션. 지금은 노트 행이 적어 이득이 1왕복 미만.
+- **인덱스 추가는 하지 않았다.** 686건 테이블에서는 어떤 인덱스가 있어도 플래너가 seq scan 을 고르고
+  ms 안에 끝난다. 추가 트리거를 대신 못박는다: `pg_stat_statements` 의 `mean_exec_time` 이 20ms 를
+  넘거나 브랜드 하나의 주문이 수만 건이 될 때. 후보는 `ManualSeedingRecord(brandId, createdAt)`
+  (정렬 제거 효과가 명확)이고, `Order(paymentStatus, status, createdAt)` 은 `paid` 선택도가 낮고
+  `status <> cancelled` 가 부정 조건이라 **효과가 의심스럽다 — EXPLAIN before/after 없이 넣지 말 것.**
+
 ---
 
 ## 환경변수
@@ -260,7 +314,12 @@ CRM_EMAIL_CRON_ENABLED=                     # 'false' 로만 비활성(기본 on
 
 `brand-crm/__tests__/` — `customer-key.spec.ts`(19) · `crm-template.spec.ts`(20, 수기 연락처 추출 포함) ·
 `unsubscribe-token.spec.ts`(8) · `crm-email-queue.spec.ts`(7) ·
-`crm-email-detail.spec.ts`(7 — brandId 스코프 · batchSize · **응답에 발송 HTML/수신거부 링크 없음**).
+`crm-email-detail.spec.ts`(7 — brandId 스코프 · batchSize · **응답에 발송 HTML/수신거부 링크 없음**) ·
+`crm-scan-shape.spec.ts`(6 — 스캔의 *모양*: 상세 타임라인이 대상 1명분만 · 목록에 timeline 없음 ·
+facets 단일 순회 동치 · **왕복 2단**(product 를 붙잡아 두고 나머지 넷이 이미 발사됐는지 단언) ·
+`shippingCountry` 에 `where` 없음 · `items` 브랜드 필터).
+⚠️ 왕복 스펙이 없으면 `await` 하나를 되돌려 놓아도 타입도 응답도 그대로라 **아무것도 안 잡힌다** —
+느려질 뿐이다.
 ⚠️ 마지막 스펙의 prisma 스텁은 `where` 와 `select` 를 **둘 다 실제로 적용한다** — 하나라도
 무시하면 유출 가드가 아무것도 잡지 못한 채 통과한다.
 `common/__tests__/origin-exempt.spec.ts` 에 `/v1/crm/unsubscribe` 케이스 추가.
