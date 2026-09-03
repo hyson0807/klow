@@ -19,42 +19,53 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 하드코딩돼 있어 일반주문 HAWB 가 전부 `extraInFile` 로 잡혀 **업로드 적용이 막혔다**. 지금은 둘 다
 받고 행마다 `kind`(`general`|`seeding`)로 구분한다.
 
-### ⚠️ 청구 산식이 구분마다 다르다
+### 청구 산식은 하나다 — 실비 + 수수료 전액
 
 | 구분 | 청구액 |
 |---|---|
-| 시딩 · 바이어 결제(`paymentBy='customer'`) | **청구 제외** — 바이어가 배송비를 이미 다 냈다 |
+| 시딩 · 바이어 결제(`paymentBy='customer'`) | `EFS실비 + 국가별 수수료` |
 | 시딩 · 브랜드 결제 | `EFS실비 + 국가별 수수료` |
-| 일반주문 | `max(0, EFS실비 + 수수료 − **고객 선결제**)` |
+| 일반주문 | `EFS실비 + 국가별 수수료` |
 
-일반주문은 고객이 체크아웃에서 배송비(요율표 500g 요율, 브랜드당 1회)를 **이미 선결제**했다.
-빼지 않으면 이중청구가 된다. 무료배송(**배송지 국가별** — `ProductCountryPrice.freeShipping`)이면 선결제가
-0 이라 자동으로 전액 청구되고, 실측이 선결제보다 싸면 0원(청구 없음)이 된다 — klow_brand 국가별 판매가
-모달이 보여주는 "무료배송 vs 고객 부담" 부담액과 같은 규칙이다. **여기서 무료배송 플래그를 직접 읽지는
-않는다** — 그 브랜드의 `perBrandShareUsd` 가 0 으로 스냅샷돼 있어 자동으로 전액이 된다.
+⚠️⚠️ **2026-09 전환 — 되돌리지 말 것.** 예전엔 산식이 셋이었다: 바이어 결제 시딩은 **청구 제외**,
+일반주문은 **`max(0, 실비 + 수수료 − 고객 선결제)`**. 그 시절엔 고객이 낸 배송비를 KLOW 가
+보유했으므로 브랜드 청구에서 빼 주는 게 맞았다. 지금은 **고객이 낸 배송비가 브랜드 정산으로 전액
+지급된다**([settlement](./settlement.md)). 여기서 또 깎아 주면 KLOW 가 같은 돈을 두 번 잃는다.
+요율표(고객 청구)와 EFS 실비의 차액은 이제 **브랜드 손익**이고, 적자가 이어지면 고칠 곳은 이 산식이
+아니라 **배송비용 탭의 국가 요율표**다.
 
-- **고객 선결제액 정본**: `perBrandShareUsd`(`pricing/chargeable-brands.ts`) → `Order.fxRateSnapshot` 로 KRW 환산.
-  **송장 발급이 EFS 27번(배송비) 필드에 박는 값과 같은 함수**라 송장 == 청구서가 구조적으로 보장된다.
-  스냅샷(`Order.shippingFeeByBrand`)이 없는 legacy 주문은 `총배송비 / 브랜드수` 균등분배로 폴백한다
-  (2026-07-28 이전 주문 전부가 이 경로). ⚠️ 그 **분모는 주문 라인의 브랜드 수**(`orderBrandCount`)다 —
-  발급된 송장 수를 쓰면 아직 안 나온 브랜드가 빠져 분모가 작아지고(선결제 과다 크레딧 → 과소청구),
-  나머지 송장이 나오면 같은 주문의 분모가 달라져 이미 발행한 청구서와 Σ 가 어긋난다.
-  제품이 삭제돼 분모를 못 구하면 0 폴백(= 실비 전액 청구 = 과청구) 대신 **'청구 보류'** 로 뺀다.
-- **⚠️ 바이어 결제분의 KLOW 손익은 별도 축으로 집계한다** *(2026-09 추가)*. 청구는 종전대로 완전 제외이지만
-  (`billedKrw`/`efsChargeKrw`/`feeKrw` 전부 null, `addSub` 미호출, `totalKrw` 불변), 행마다
-  **`buyerGapKrw = 바이어 결제액 − EFS 실비`** 를 계산해 어드민 칩·행·엑셀 요약 시트에 노출한다.
-  ⚠️ 예전엔 이 분기가 **실비를 읽지도 않아서**, 요율표가 실비를 못 덮는 국가가 있어도 금액이 어떤
-  리포트에도 나타나지 않았다(요약 시트에 건수만 찍혔다). 브랜드에 청구하지 않는 만큼 그 차액은
-  **KLOW 가 그대로 떠안는다.**
-  ⚠️ `efsChargeKrw`/`feeKrw` 를 이 행에 채우면 **안 된다** — 그 둘은 "청구 근거"라 엑셀 구분 시트의
-  소계(`subtotals`)와 짝이 맞아야 하는데 이 행은 소계에 안 들어간다(열 합계 ≠ 소계가 된다).
-  ⚠️ 실비 미입력 건은 **0 이 아니라 `null`(미상)** 이다 — 0 으로 치면 마진이 부풀어 보인다.
-  `buyerGapMeasuredCount` 가 `buyerPaidCount` 보다 작으면 그 차이만큼 손익이 미상이고, 어드민이
-  "⚠ N건 미상" 으로 표시한다. **적자가 이어지면 고칠 곳은 청구 규칙이 아니라 배송비용 탭의 국가
-  요율표**다(사후 청구보다 사전 가격). 회귀 잠금은 `__tests__/build-statement.spec.ts`.
+부수 효과: `coveredByPrepaidCount`(선결제가 실비를 덮어 0원 청구되던 행)이 사라지고, 월 청구 총액과
+어드민 대시보드 **배송 청구액** KPI(`rangeChargeTotal` — 같은 `buildStatement` 를 탄다)가 계단처럼
+오른다. 버그가 아니다.
+
+- **`prepaidKrw`(= 이 건의 배송비로 **브랜드에 정산된 금액**)는 계속 계산해 행·소계·엑셀에 싣지만
+  `billedKrw` 에는 넣지 않는다.** 남긴 이유는 어드민이 `Σprepaid − Σbilled` 로 "요율표가 실비를
+  덮는가"(= 브랜드 손익)를 계속 볼 수 있어야 하기 때문이다.
+  ⚠️⚠️ 값은 정산 지급액과 **같은 함수**(`shipments/shipment-settlement.ts` 의
+  `brandShippingSettlementKrw`)로 구한다 — 여기서 `perBrandShareUsd × fx` 를 직접 하면 **PG 5% 만큼
+  어긋나** 화면의 "브랜드 손익"이 늘 낙관적으로 나오고 손익분기 근처에서 부호가 뒤집힌다.
+  2026-09 부터 **일반주문 전용이 아니라 전 구분 공통**이다(시딩 고객결제 건에도 값이 있다).
+  ⚠️ 회귀 잠금이 `__tests__/build-statement.spec.ts` 의 *"prepaidKrw 는 청구액에 영향을 주지 않는다"*
+  describe 다 — 차감이 되살아나면 여기서 먼저 깨진다.
+- ⚠️ **`perBrandShareUsd` 는 여전히 송장 발급의 EFS 27번(배송비) 필드 정본**이므로 함수 자체는 손대지
+  않는다. 바뀐 건 두 번째 소비자가 여기(청구 차감)에서 [settlement](./settlement.md)(정산 지급)로
+  옮겨간 것뿐이다. **양쪽에서 동시에 읽으면 이중 반영**이다.
+- legacy 분모 `orderBrandCount` 는 짝인 `perBrandShareUsd` 와 같은 파일(`pricing/chargeable-brands.ts`)로
+  **이관**했다(정산도 같은 분모를 쓴다). ⚠️ 그 **분모는 주문 라인의 브랜드 수**다 — 발급된 송장 수를
+  쓰면 아직 안 나온 브랜드가 빠져 분모가 작아지고, 나머지 송장이 나오면 같은 주문의 분모가 달라진다.
+- ⚠️ 선결제액을 못 구해도(**fx 스냅샷 결손·분모 미상**) 더 이상 **청구를 보류하지 않는다** — 청구가
+  선결제에 의존하지 않기 때문이다. `missingCharge` 는 이제 **EFS 실비 미입력** 하나만 센다.
+- **손익 축이 KLOW → 브랜드로 넘어갔다** *(2026-09)*. 예전엔 바이어 결제 시딩을 청구에서 빼는 대신
+  행마다 `buyerGapKrw = 바이어 결제액 − EFS 실비`(= **KLOW 손익**)를 집계했다. 지금은 그 건도 청구되고
+  고객이 낸 돈은 브랜드가 받으므로 **KLOW 손익 개념 자체가 없다**. 합계 축 `buyerPaidKrw`·`buyerCostKrw`·
+  `buyerGapKrw`·`buyerGapMeasuredCount`·`coveredByPrepaidCount` 는 제거하고 `prepaidKrw`(고객 결제
+  배송비 합) 하나로 대체했다 — 어드민 칩 **`└ 브랜드 손익 = Σ선결제 − Σ청구액`** 이 그 자리를 대신한다.
+  ⚠️ 행의 `buyerGapKrw` **키는 남긴다** — `EfsBillingStatement.rows` 는 동결 JSON 이라 과거 확정본이
+  이 필드를 갖고 있다. 새 행에는 항상 `null` 이 들어간다.
+  ⚠️ `buyerPaidCount` 는 **DB 컬럼**(`EfsBillingStatement.buyerPaidCount`)이자 브랜드 요약 DTO 필드라
+  계속 센다. 의미만 "청구 제외 건수" → "고객이 배송비를 낸 시딩 건수"(정보성)로 바뀌었다.
 - ⚠️ `paymentBy` 는 **시딩 전용** 필드다. 일반주문은 `seedingLink` 가 없어 항상 `'brand'` 로 떨어지므로,
-  바이어 결제 판정은 반드시 `kind === 'seeding'` 과 **함께** 봐야 한다.
-- fx 스냅샷 결손 등으로 선결제액을 못 구하면 0 폴백(과청구) 대신 **'청구 보류'** 로 빼고 어드민에 노출한다.
+  바이어 결제 판정은 반드시 `kind === 'seeding'` 과 **함께** 봐야 한다(지금은 비고 문구에만 쓴다).
 
 ## 월 버킷 = EFS 픽업 이벤트
 
@@ -130,11 +141,12 @@ publish 시점에 동결된다. 자릿수·부호가 맞는지만 대조할 것.
   수기 행만 있는 브랜드도 셀렉트·필터·엑셀·publish 에 그대로 잡힌다)
 - `rangeChargeTotal` — `chargedAt ∈ [start, endExclusive)`
 
-> **⚠️ `manualToBillingRow` 의 두 상수가 금액을 조용히 바꾼다.**
-> `efsChargeSource: 'manual'` 이 아니면 `buildStatement` 가 청구 근거로 안 쓰고(금액 0),
-> `prepaidKrw: 0` 이 아니라 null 이면 `kind='general'` 수기 행이 **"고객 선결제액 미상 — 청구 보류"
-> 분기에 걸려 전부 사라진다**(에러 없이 `missingCharge` 만 증가). 수기 행은 KLOW 주문이 없어
-> 고객 선결제라는 개념 자체가 없으므로 0 이 정답이다. 회귀 잠금: `__tests__/build-statement.spec.ts`.
+> **⚠️ `manualToBillingRow` 의 `efsChargeSource: 'manual'` 이 금액을 조용히 바꾼다.**
+> 이 값이 아니면 `buildStatement` 가 청구 근거로 안 쓰고 금액이 0 이 된다.
+> (같이 박히는 `prepaidKrw: 0` 은 2026-09 전에는 "선결제 미상 → 청구 보류" 분기를 피하려고
+> **필수**였다. 지금은 선결제가 청구액에 영향을 주지 않아 그 값이 무의미하다 — 수기 행은
+> KLOW 주문이 없어 고객 선결제 개념 자체가 없으므로 0 을 유지한다.)
+> 회귀 잠금: `__tests__/build-statement.spec.ts`.
 
 > **⚠️ 수수료는 행별 override 가 국가 기본값을 이긴다.** `buildStatement` 는
 > `r.feeOverrideKrw ?? feeOf(r.country)` 를 쓴다 — **`??` 이지 `||` 가 아니다**(수수료 0원 지정이
@@ -171,9 +183,12 @@ publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동
 ## 청구서 엑셀 (요약 + 구분별 시트)
 
 `renderXlsx` 가 **요약 / 일반주문 / 시딩** 3시트를 만든다(해당 구분 행이 0건이면 그 시트는 생략, 요약은 항상).
-- **요약**: 구분별 건수·EFS실비 합·수수료 합·선결제 차감·청구액 합 + 총계 + 청구 제외 사유별 건수.
-- **일반주문**: `고객선결제` 열이 추가된다(음수로 표기 — 차감액임을 분명히).
-- **시딩**: 기존 11열 유지(`인스타그램` 포함).
+- **요약**: 구분별 건수·EFS실비 합·수수료 합·**배송비 정산분(참고)**·청구액 합 + 총계 +
+  청구 불가 사유별 건수. 고객이 배송비를 낸 시딩이 있으면 "그 금액은 브랜드 정산으로 지급되고
+  물류 실비는 이 청구서로 별도 정산한다"는 안내 한 줄이 붙는다 — 없으면 브랜드가 "고객이 냈는데
+  왜 또 청구하나"로 읽는다.
+- **구분별 시트**: `배송비 정산분(참고)` 열은 **두 시트 공통**이다(2026-09 전에는 일반주문
+  전용이었고 값도 음수였다 — 차감액이 아니므로 이제 양수). `시딩` 시트만 `인스타그램` 열이 있다.
 
 `buildStatement`(모듈 스코프 순수 함수)가 **청구가 단일 출처**라 export·publish 가 같은 값을 낸다.
 
@@ -188,12 +203,19 @@ publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동
 
 > **하위호환**: `rows` 는 동결 JSON 이라 2026-07-29 이전 발행분엔 `kind`·`prepaidKrw` 키가 **없다**.
 > 읽는 쪽(브랜드 UI)은 `kind ?? 'seeding'` 으로 해석한다 — 그때는 전부 시딩이었으므로 정확하다.
+>
+> ⚠️ **2026-09 이전 발행분은 옛 산식(선결제 차감 · 바이어 결제 제외)으로 동결돼 있다.** 그 달들은
+> 정산이 새 산식으로 소급되므로 **KLOW 가 배송비를 이중 부담**한 상태로 남는다. 배포 전 발행
+> 이력을 확인하고, 필요하면 재발행(`publish` 는 upsert 라 덮어쓴다)할 것. 브랜드가 이미 납부
+> (`paidAt != null`)했다면 차액은 운영이 수동 처리한다.
 
 ## 관련 파일
 
 `efs-billing.service.ts`(`monthlyReport`·**`rangeChargeTotal`**(대시보드 KPI)·`buildBillingRows`·`saveCharge`·**수기 행 CRUD**(`createManualRow`/`updateManualRow`/`deleteManualRow`/`assertHawbFree`)·**순수 헬퍼**(`normalizeHawb`/`kstPickupLabel`/`manualToBillingRow`/`mergeBillingRows`)·`extractFromSettlement`·`importPreview/Apply`·
 `feeResolver`·**`buildStatement`**·`renderXlsx`+시트 빌더·`exportExcel`·`publish`·`markPaid`·브랜드 열람),
-`admin-efs-billing.controller.ts`. 선결제 share 는 `pricing/chargeable-brands.ts` `perBrandShareUsd`,
+`admin-efs-billing.controller.ts`. 고객 결제 배송비(참고값) share 는 `pricing/chargeable-brands.ts`
+`perBrandShareUsd` + `orderBrandCount` — ⚠️ 그 함수는 **송장 EFS 27번**과 **브랜드 정산 지급액**
+([settlement](./settlement.md))의 정본이기도 하다. 청구에서 다시 차감하면 이중 반영이다.
 EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settlement/brand-settlement.controller.ts`.
 
 ## admin-efs-billing.controller.ts (`@Controller('admin/efs-billing')`)
