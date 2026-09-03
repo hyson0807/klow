@@ -334,6 +334,34 @@ Browser-direct two-step upload, used for both images and videos:
 - Server errors are thrown by `klow_admin/src/lib/api/client.ts` as `Error(message)`; forwarding `e.message` into the toast is enough (or `extractApiError(e, fallback)` from that file to strip the `API 400: ` prefix).
 - **Not** for background list fetches (use inline placeholders) or field-validation hints (use inline helper text). Toasts are for _actions the user just took_.
 
+### List filter persistence — sessionStorage, not the URL
+
+목록 화면의 필터/검색을 "다른 페이지 갔다 와도 유지"하려면 **`sessionStorage`** 를 쓴다. URL 쿼리는 이 어드민에서 **구조적으로 동작하지 않는다.**
+
+- 이 어드민은 **iframe 탭 셸**이다(`klow_admin/src/components/tabs/AdminShell.tsx`). 탭 dedupe 키를 만드는 `TabsContext.normalizeHref` 가 **쿼리스트링을 제거**하고, 탭 `src` 는 생성 시 1회만 설정된다.
+- 상세 화면의 "목록으로"는 대부분 쿼리 없는 `<Link href="/orders">` 라, URL 에 필터를 넣어도 돌아올 때 사라진다.
+- ⚠️ **미작동으로 남아 있는 반쪽 구현이 둘 있다** — `settlement/[brandId]` 가 `?yearMonth` 를, `shipping-rates/[iso2]` 가 `?carrier` 를 백링크에 실어 보내지만 **목록이 그걸 읽지 않는다**(각각 `useState(previousKstYearMonth())`, `useState('EMS')` 로만 초기화). `shipping-rates/[iso2]:100` 의 주석이 경고한 리셋이 실제로 일어난다. 새 화면에서 이 패턴을 복사하지 말 것.
+
+정본 패턴은 `klow_admin/src/app/(authed)/tracking/page.tsx` 와 `orders/page.tsx` 두 곳이 공유한다.
+
+```ts
+const FILTERS_STORAGE_KEY = 'klow_admin.<page>.filters';
+
+// 마운트 1회만 읽는다 — 저장(useEffect)이 다시 읽기를 트리거하지 않는 단방향 구조.
+const persisted = useMemo(loadPersisted, []);
+const [filters, setFilters] = useState(persisted?.filters ?? DEFAULT_FILTERS);
+useEffect(() => { try { sessionStorage.setItem(KEY, JSON.stringify({ filters })); } catch {} }, [filters]);
+```
+
+- `typeof window === 'undefined'` 가드 + `try/catch` 는 필수(프라이빗 모드·SSR).
+- 저장된 값은 **기본값 위에 스프레드**한다(`{ ...DEFAULT_FILTERS, ...parsed.filters }`) — 나중에 필터 축이 늘어도 옛 저장분이 화면을 깨지 않는다.
+- ⚠️ **`null` 이 유효한 선택인 값에 `??` 를 쓰지 말 것.** `orders` 의 `yearMonth` 는 `null` = '전체 기간'이라, `parsed.yearMonth ?? kstYearMonth()` 로 쓰면 전체 기간을 골라 둔 운영자가 돌아올 때마다 이번 달로 튕긴다. `=== undefined` 로 "저장 안 됨"과 구분한다.
+- **페이지네이션(`skip`/`page`)은 저장하지 않는다.** 목록은 그 사이 바뀔 수 있어 3페이지로 되돌리면 사라진 주문 자리를 보여준다. 복원 대상은 "무엇을 보고 있었나"(필터·기간)다.
+
+### List width — `<TableCard>` 를 쓰고 폭을 제한하지 않는다
+
+`PageShell` 의 `width` 기본값이 `'full'` 이고 전 코드베이스에서 그 prop 을 넘기는 곳이 0곳이라, 목록 페이지는 기본이 전체폭이다. 표는 공용 `<TableCard>`(`components/ui/table.tsx`, 열이 많으면 `scrollable`)를 쓴다 — `max-w-*` 를 덧붙인 생 `<div>` 를 직접 쓰면 그 페이지만 좁아진다(`orders` 가 `max-w-6xl` 로 10열을 잘라 쓰다 2026-09 에 정리했고, `refunds` 에 같은 형태가 남아 있다).
+
 ---
 
 ## Request Flow Examples
