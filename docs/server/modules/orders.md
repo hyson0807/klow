@@ -139,12 +139,28 @@
   (인덱스는 `Order` 의 단일 컬럼 `createdAt`·`paymentStatus` 로 충분한 규모다 — 트래픽이 커지면
   `@@index([paymentStatus, createdAt])` 이 다음 선택지이고, 지금 마이그레이션을 넣을 이유는 없다.)
 
-**`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` 두 컬럼을 한 축으로 접은
-값이라 DB enum 이 아니다. `seeding`(무가 시딩) / `onsite`(부스 QR 현장결제, 배송 없음) /
-`general`(그 외 일반 결제 주문) 셋은 배타적이라 합집합이 전체다. ⚠️ **시딩 주문도 `channel` 은
-기본값 `web`** 이므로 `isSeeding` 을 먼저 걸러야 `general` 에 섞이지 않는다. 화이트리스트 밖 값은
-필터를 걸지 않고 무시한다(무검증인 `status`/`paymentStatus` 와 달리 Prisma 에러로 새지 않는다).
-어드민 주문 목록의 **유형 컬럼 배지**(일반/시딩/현장)와 상단 필터 pill 이 이 축을 쓴다.
+**`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` + **시딩 결제주체**를 한 축으로
+접은 값이라 DB enum 이 아니다. `seedingCustomer`(고객 결제 시딩) / `seedingBrand`(브랜드 결제 = 무가
+시딩) / `onsite`(부스 QR 현장결제, 배송 없음) / `general`(그 외 일반 결제 주문) 넷은 배타적이라
+합집합이 전체다. ⚠️ **시딩 주문도 `channel` 은 기본값 `web`** 이므로 `isSeeding` 을 먼저 걸러야
+`general` 에 섞이지 않는다. 화이트리스트 밖 값은 필터를 걸지 않고 무시한다(무검증인
+`status`/`paymentStatus` 와 달리 Prisma 에러로 새지 않는다). 어드민 주문 목록의 **유형 컬럼 배지**와
+상단 필터 셀렉트가 이 축을 쓴다(선택지는 klow_admin `ORDER_TYPE_BADGE` 맵에서 파생된다).
+
+⚠️ **무가 시딩은 부정형(`NOT { seedingClaim: { link: { paymentBy: 'customer' } } }`)으로 잡는다.**
+긍정형 `paymentBy: 'brand'` 로 쓰면 `SeedingClaim` 이 아예 없는 레거시 시딩 주문(claim 백필 이전의
+single 링크)이 어느 버킷에도 안 잡혀 **목록에서 조용히 사라진다**. 실측상 그런 주문들은 전부
+`totalUsd=0` · 정산액 0원이라 무가로 떨어지는 것이 실제로 맞다.
+
+⚠️ 레거시 `'seeding'`(시딩 전체)도 서버는 계속 받는다 — klow_admin UI 는 네 값만 보여주지만 저장된
+URL·북마크가 그 값을 들고 올 수 있다.
+
+**결제주체 응답 필드** — 목록·상세 모두 평평한 스칼라 `seedingPaymentBy: 'brand'|'customer'|null` 로
+접어 내린다(중첩 `seedingClaim` 을 그대로 내리면 목록과 상세의 shape 이 갈린다 — 상세만 `itemNames` 를
+더 싣는다). 목록 전용 `ADMIN_ORDER_LIST_INCLUDE` 는 `link.paymentBy` **한 값만** 조회한다.
+⚠️ 공유 상수 `ORDER_INCLUDE`(create/quote/고객 조회 공용)와 `SEEDING_ITEM_NAMES_SELECT`(송장·주문확인
+메일·`/track` 공용)는 **넓히지 않는다**. `null` 은 시딩이 아니거나 claim 없는 레거시라는 뜻이고,
+그 표기(무가)는 화면이 정한다. 회귀 잠금은 `orders/__tests__/admin-order-type-filter.spec.ts`.
 
 ## public-orders.controller.ts (`@Controller('v1/orders')`)
 
