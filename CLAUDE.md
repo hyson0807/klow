@@ -172,7 +172,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 - `useFormState`를 쓰지 않는 플로우(예: `reviews` 목록, `ReviewManager`)는 `useToast()`를 직접 호출해 동일한 규칙을 지킨다.
 - 서버 에러 메시지는 `lib/api/client.ts`가 `Error`로 던지므로 `e.message`를 그대로 토스트에 넘기면 충분(추가 파싱 불필요). `API 400: ` 접두까지 벗기려면 같은 파일의 `extractApiError(e, fallback)`.
 
-**목록 필터 유지**는 `sessionStorage` 로 한다 — ⚠️ URL 쿼리는 이 어드민이 **iframe 탭 셸**이라 구조적으로 안 된다(`TabsContext.normalizeHref` 가 쿼리를 떼어내고, 상세의 '목록으로'가 쿼리 없는 `<Link>` 다). settlement·shipping-rates 에 **미작동 반쪽 구현**이 남아 있으니 복사하지 말 것. 정본은 `tracking/page.tsx` + `orders/page.tsx`. ⚠️ `null` 이 유효한 선택인 값(`yearMonth` = 전체 기간)에 `??` 를 쓰면 매번 기본값으로 튕긴다. 페이지네이션은 저장하지 않는다. **목록 표**는 공용 `<TableCard>` 를 쓰고 `max-w-*` 로 좁히지 않는다(`PageShell` 기본이 전체폭).
+**목록 필터 유지**는 `sessionStorage` 로 한다 — ⚠️ URL 쿼리는 이 어드민이 **iframe 탭 셸**이라 구조적으로 안 된다(`TabsContext.normalizeHref` 가 쿼리를 떼어내고, 상세의 '목록으로'가 쿼리 없는 `<Link>` 다). settlement·shipping-rates 에 **미작동 반쪽 구현**이 남아 있으니 복사하지 말 것. 정본은 `tracking/page.tsx` + `orders/page.tsx`. ⚠️ `null` 이 유효한 선택인 값(`yearMonth` = 전체 기간)에 `??` 를 쓰면 매번 기본값으로 튕긴다. 페이지네이션은 저장하지 않는다. **목록 표**는 공용 `<TableCard>` 를 쓰고 `max-w-*` 로 좁히지 않는다(`PageShell` 기본이 전체폭). **행 클릭**은 두 관례가 갈린다 — **순수 목록**(orders·refunds·customers)만 행 전체가 상세로 가고, **체크박스·액션이 있는 작업 화면**(shipments 탭·tracking·efs-billing·settlement 상세)은 **주문번호 셀만 링크**다. ⚠️ 후자에서 행 전체를 열면 선택 상태(로컬 state)가 날아간 채 **같은 iframe 탭이 갈아끼워지고** 주문 상세의 '목록으로'가 `/orders` 라 되돌아올 길이 없다 — 정산 상세는 기본이 전체 선택이라 특히 그렇다. 바꾸려면 선택 상태를 `sessionStorage` 에 먼저 영속화할 것.
 
 자세한 규칙은 `docs/architecture.md`의 **Admin UI Conventions** 섹션 참고.
 

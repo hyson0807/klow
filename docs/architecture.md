@@ -360,7 +360,18 @@ useEffect(() => { try { sessionStorage.setItem(KEY, JSON.stringify({ filters }))
 
 ### List width — `<TableCard>` 를 쓰고 폭을 제한하지 않는다
 
-`PageShell` 의 `width` 기본값이 `'full'` 이고 전 코드베이스에서 그 prop 을 넘기는 곳이 0곳이라, 목록 페이지는 기본이 전체폭이다. 표는 공용 `<TableCard>`(`components/ui/table.tsx`, 열이 많으면 `scrollable`)를 쓴다 — `max-w-*` 를 덧붙인 생 `<div>` 를 직접 쓰면 그 페이지만 좁아진다(`orders` 가 `max-w-6xl` 로 10열을 잘라 쓰다 2026-09 에 정리했고, `refunds` 에 같은 형태가 남아 있다).
+`PageShell` 의 `width` 기본값이 `'full'` 이고 전 코드베이스에서 그 prop 을 넘기는 곳이 0곳이라, 목록 페이지는 기본이 전체폭이다. 표는 공용 `<TableCard>`(`components/ui/table.tsx`, 열이 많으면 `scrollable`)를 쓴다 — `max-w-*` 를 덧붙인 생 `<div>` 를 직접 쓰면 그 페이지만 좁아진다(`orders` 가 `max-w-6xl` 로 10열을 잘라 쓰다 2026-09 에 정리했고 `settlement/[brandId]` 도 같은 때 `max-w-5xl` → `PageShell` 로 풀었다. `refunds` 에 같은 형태가 남아 있다).
+
+### 행 클릭 — 순수 목록만 행 전체, 작업 화면은 주문번호 링크
+
+표에서 상세로 들어가는 방법이 **두 가지**이고, 어느 쪽인지는 그 표가 무엇을 하는 표인가로 갈린다. 새 표를 만들 때 아무거나 고르면 안 된다.
+
+- **순수 목록 → 행 전체 클릭**(`TR onActivate`, 또는 `onClick`+`onKeyDown`). `orders`·`refunds`·`customers/[id]` 가 이쪽이다. 행에 다른 상호작용이 없어 잘못 눌러도 잃을 게 없다.
+- **행에 체크박스·액션이 있는 작업 화면 → 주문번호(또는 식별자) 셀만 링크.** `shipments` 의 발송대기·실패·삭제됨 탭, `tracking`, `efs-billing`, `settlement/[brandId]` 가 이쪽이다.
+
+⚠️ 후자에서 행 전체 클릭이 위험한 이유는 취향이 아니라 **상태 손실**이다. 정산 상세가 대표적인데, 기본값이 **전체 선택**이라 실제 흐름이 "몇 건 해제 → 정산 실행"이다. 행을 잘못 누르면 (1) 선택 상태가 로컬 state 라 통째로 날아가고 (2) **iframe 탭 셸이라 같은 탭 안에서 화면이 갈아끼워지며** (3) 주문 상세의 '목록으로'는 `/orders` 로 가서 되돌아오는 길도 없다. 정산 상세는 셀 헬퍼 `settlement/[brandId]/_components/settlement-cells.tsx` 의 `OrderLink` 하나를 세 표가 공유하고, 그 파일 주석이 같은 경고를 담고 있다.
+
+행 전체 클릭으로 바꾸고 싶으면 **선택 상태를 `sessionStorage` 에 먼저 영속화**해야 한다(위 필터 유지와 같은 패턴).
 
 ---
 
