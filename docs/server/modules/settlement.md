@@ -19,6 +19,15 @@
   - ⚠️ **서버가 계산해 파생 필드로 내려준다** — 송장 축은 raw Prisma 행을 반환하므로 `settlementShippingKrw`/`settlementShippingUnknown` 을 map 으로 얹는다. 클라 미러(`klow_admin/lib/api/shipments.ts`, `klow_brand/lib/api-types.ts`)에 **재료(`order.shippingFeeUsd`/`shippingFeeByBrand`)를 선언하지 말 것** — 선언하는 순간 두 프론트가 legacy 균등분배·fx 폴백 규칙을 각자 베끼고, 세 벌이 되면 반드시 갈린다. 그래서 `SHIPMENT_INCLUDE` 도 넓히지 않고 정산 전용 `SETTLEMENT_SHIPMENT_INCLUDE` 를 따로 뒀다.
   - ⚠️ **배송현황 화면도 같은 값을 본다** — `shipments.service` 의 `listPendingForBrand`/`listConfirmedForBrand` 도 같은 헬퍼를 타므로 klow_brand `baseView` 의 "정산 ₩X" 가 정산탭과 일치한다. 한쪽만 제품가로 되돌리면 같은 송장이 두 화면에서 다른 금액이 된다.
   - **현장결제(onsite)는 무변경** — `Order.shippingFeeUsd` 가 구조적으로 0 이다(부스 직접 전달).
+  - ⚠️ **주문 목록의 합계와 정산액은 같은 수가 아니다.** 주문 목록은 `Order.totalUsd`(USD 센트,
+    PG 청구액 그대로)이고 정산액은 그걸 주문 시점 환율로 환산하고 **PG 5% 를 뺀 KRW** 다
+    (`정산 ≈ totalUsd × fx × 0.95`, 성분별 floor 라 원 단위 오차). 멀티브랜드 주문은 거기서 다시
+    **그 브랜드 몫만** 잡히므로 주문 합계와 대조하면 안 된다. `SettlementLineDTO.totalUsd` 에
+    `// USD 센트 (표시용 — KRW 와 합산 금지)` 주석이 붙어 있는 이유다.
+  - ⚠️ 브랜드 **배송현황** 카드는 시딩을 무조건 "무료 시딩"으로 표시하면 안 된다 — 고객 결제
+    시딩은 그 배송비가 정산액이 되므로 정산탭엔 금액이 뜨는데 배송 탭만 "무료"가 된다.
+    판정은 `isSeeding` 이 아니라 **`freeSeeding`(= `isSeeding && 정산액 === 0`)** 이다
+    (`klow_brand/src/components/shipping/shipping.model.ts` 의 `baseView`).
   - **마이그레이션·백필 없음.** 정산이 금액 스냅샷을 남기지 않아(`settle()` 은 `settledAt` 만 찍는다) 산식 변경이 **전 기간에 소급**된다 — 정산 실행 이력이 0건이라 안전하다.
   - 회귀 잠금: `settlement/__tests__/settlement-recognition.spec.ts`(배송비 가산·PG 5%·물품가 0 시딩 편입·무가 시딩 제외 유지·fx 결손 폴백·legacy 균등분배).
 - **⚠️ 인식 시점 = 결제완료(`Order.paidAt`)** *(2026-09 전환)*: 예전에는 `Shipment.latestStatusCode === '33'`(EFS 배송완료)인 송장만 정산 후보가 됐고 월 버킷도 `latestStatusAt` 이었다. 그래서 **EFS 픽업 전(`'01'` 배송 예약)에 멈춘 송장에 묶인 매출이 어드민·브랜드 어느 화면에도 뜨지 않았다** — 실측으로 한 브랜드에서 ₩1,510,506 이 10~16일간 그렇게 숨어 있었다(고객이 결제를 마친 유료 시딩 3건). 지금은 결제만 완료되면 후보에 뜨고, 월 버킷·정렬도 `order.paidAt` 이다. 현장결제(onsite)가 원래 `paidAt` 기준이라 이 전환으로 두 축이 통일됐다.
