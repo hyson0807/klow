@@ -42,7 +42,15 @@
     송장을 만들지 않으므로 `countryCode` 의 유일한 소비처인 shipments 경로와 무관하다.
   - ⚠️ 국가 핀이 있는데 그 통화의 FX 행이 없으면 **`billingRate` 가 차단**한다(일반 주문과 공유하는 가드).
     안 막으면 `¥3,420` 을 `$3,420` 로 청구한다.
-- **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `chargeable-brands.ts`(청구 대상 브랜드·배송비 스냅샷·읽기 짝), `brand-weights.ts`(브랜드별 청구중량 → 캐리어 분기), `guest-order-token.ts`(비회원 주문 HMAC 토큰)
+  - ⚠️⚠️ **단일 브랜드 강제** *(2026-09-04)*: 여러 브랜드 제품이 섞이면 400 이다
+    (`onsite-brand.ts` 의 `onsiteMultiBrandError`, 가격 계산 **전**에 검사). 정산 상태가
+    **주문당 하나**(`Order.settledAt`)라 섞이면 한쪽을 정산하는 순간 **남의 브랜드까지
+    '입금 완료'** 가 된다. 스키마 주석이 "부스=단일 브랜드"를 전제로 적어 뒀지만 강제하는
+    코드가 없었고, 카트가 브랜드관을 가로질러 남는 데다 klow_web 이 **카트 전체**를 보내서
+    실제로 섞일 수 있었다(A 브랜드관에서 담아 둔 채 B 부스 QR 을 찍는 흐름). ⚠️ `brandId` 가
+    null 인 legacy 제품은 **별도 버킷**으로 센다 — 묶으면 legacy 와 정상 브랜드가 섞인 주문이
+    통과한다(fail-closed). 자세히는 [`settlement.md`](./settlement.md) 의 같은 항목.
+- **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `chargeable-brands.ts`(청구 대상 브랜드·배송비 스냅샷·읽기 짝), `brand-weights.ts`(브랜드별 청구중량 → 캐리어 분기), `onsite-brand.ts`(현장 주문 단일 브랜드 판정), `guest-order-token.ts`(비회원 주문 HMAC 토큰)
 
 ## admin-orders.controller.ts (`@Controller('admin/orders')`)
 
