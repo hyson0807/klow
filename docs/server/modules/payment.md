@@ -98,13 +98,27 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 - `@HttpCode(200)` + 본문 `rescode=0000&resmsg=Success` 를 text/plain 으로 회신해야 Eximbay 가 retry 를 멈춘다.
   처리 중 예외가 나면 `rescode=9999&resmsg=<urlencoded>` 로 회신(= retry 유도).
 - 소스 IP 는 `req.ip`(main.ts 의 trust proxy 기준 해석)로 판정 — XFF 스푸핑으로 화이트리스트를 우회할 수 없다.
-  화이트리스트가 비어 있으면(dev) 검사를 건너뛰고, 미허용 IP 는 **403**(+ Sentry).
-  ⚠️ 양쪽 다 `::ffff:` 접두(IPv4-mapped IPv6)를 벗겨 비교한다 — 문자열 정확 일치라 정규화 없이는 정상 콜백이 403 난다.
-- ⚠️ **화이트리스트 오설정은 안전망을 통째로 없앤다.** `.env.example` 에 커밋된 기본값은 **샌드박스 IP 4개**이고
-  운영은 `15.165.144.33` 하나다. 예전 부팅 가드는 "비어있지 않은가"만 봐서 샌드박스 값이 그대로 통과했다 —
-  그러면 진짜 콜백이 전부 403 인데 로그는 warn 한 줄뿐이다. 이제 **운영에서 샌드박스 IP 가 있으면 부팅을 거부**한다.
-  같은 이유로 `EXIMBAY_RETURN_BASE_SERVER`/`FRONTEND_URL` 도 운영에서 절대 https URL 이 아니면 부팅을 거부한다
-  (미설정이면 `status_url`/`return_url` 이 상대경로가 되어 콜백이 아무 데도 도달하지 않는다).
+  화이트리스트가 비어 있으면(dev) 검사를 건너뛰고, 미허용 IP 는 **403**(+ Sentry, `order_id` 동봉).
+  ⚠️ 양쪽 다 `::ffff:` 접두(IPv4-mapped IPv6)를 벗겨 비교한다 — 정규화 없이는 정상 콜백이 403 난다.
+- **개별 IPv4 와 CIDR 대역(`a.b.c.d/len`) 을 모두 받는다** — 파서는 `payment/webhook-ip-allowlist.ts`,
+  회귀 잠금은 같은 폴더 `__tests__/webhook-ip-allowlist.spec.ts`.
+  ⚠️⚠️ **빈 문자열(= 미적용, `null`)과 "항목은 있는데 전부 형식 오류"(= 전부 거부, 빈 배열)를 구분한다.**
+  후자를 `null` 로 접으면 오타 하나가 화이트리스트를 통째로 끄고 그 사실이 아무 데도 안 남는다.
+  ⚠️ `/0` 은 인터넷 전체 허용이라 항목째 버린다 — 끄는 방법은 env 를 비우는 것 하나뿐이어야 한다.
+- ⚠️⚠️ **Eximbay 공식 문서의 IP 목록은 실제와 다르다.** 개발자센터는 `172.28.11.71` / `172.28.11.72` /
+  `15.165.144.33` 을 안내하는데 앞의 둘은 **사설 대역**(172.16.0.0/12)이라 인터넷 경유로 올 수 없고 나머지도
+  실측과 맞지 않는다. 2026-09-04 실측 발신 IP 는 `152.233.15.121` / `152.233.15.123` / `152.233.68.97` 로
+  whois 상 **CDN77 싱가포르 엣지**(AS60068, `152.233.14.0/23` · `152.233.68.0/23`)다. 서로 다른 두 /23 에서
+  셋이 나왔으니 엣지 풀은 더 크고 유동적이다 — **개별 IP 로 나열하지 말고 대역으로 둘 것.**
+- ⚠️ **화이트리스트 오설정은 안전망을 통째로 없앤다.** `.env.example` 에 커밋된 기본값은 **샌드박스 IP 4개**다.
+  ⚠️ **부팅 가드는 웹훅 IP 를 막지 않는다 — `console.warn` 한 줄이 전부다**(제3자가 통제하는 IP 를 우리가 추측해
+  배포를 막으면 Eximbay 가 경로를 바꾸는 날 서비스가 통째로 안 뜬다. 실제로 공식 문서 IP 를 강제했다면 이번에
+  부팅부터 막혔을 것이다). 운영에서 fail-closed 인 것은 **SDK/API 키의 샌드박스·라이브 혼용**과
+  `EXIMBAY_RETURN_BASE_SERVER`/`FRONTEND_URL` 의 https 검사뿐이다(미설정이면 `status_url`/`return_url` 이
+  상대경로가 되어 콜백이 아무 데도 도달하지 않는다).
+  ⚠️⚠️ **그래서 "부팅됐으니 IP 는 맞다"고 읽으면 안 된다** — 2026-09-04 사고가 정확히 그 오판 위에서 지속됐다.
+  이 문서가 한동안 "샌드박스 IP 가 있으면 부팅을 거부한다"고 잘못 적고 있었다. 진짜 신호는 실제 콜백이 403 날 때
+  뜨는 `eximbay webhook from non-whitelisted ip <IP>` (Railway 로그 · Sentry error) 이고, 그 메시지에 실제 IP 가 있다.
 - `verify` 와 동일한 `parseAndMarkPaid` 를 타되 `order_id`/`transaction_id` 가 없으면 조용히 무시한다.
 
 ## 결제 완료(pending→paid) 부수효과
@@ -125,7 +139,7 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 - `EXIMBAY_API_BASE` / `EXIMBAY_API_KEY` / `EXIMBAY_MID` (해외·USD MID)
 - `EXIMBAY_DOMESTIC_API_KEY` / `EXIMBAY_DOMESTIC_MID` (국내·KRW 전용 MID — 해외 MID 는 한국카드 차단이라 `issuer_country=KR` 만으로는 PC04)
 - `EXIMBAY_SDK_URL` (클라 SDK 스크립트) / `EXIMBAY_RETURN_BASE_SERVER` (`status_url` base)
-- `EXIMBAY_WEBHOOK_IPS` (CSV — 비면 dev 로 간주해 검사 생략)
+- `EXIMBAY_WEBHOOK_IPS` (CSV, 개별 IPv4 + CIDR 대역 — 비면 dev 로 간주해 검사 생략. ⚠️ 공식 문서 IP 는 실측과 다르다, 위 참고)
 - `FRONTEND_URL` (klow_web origin — `return_url` = `{FRONTEND_URL}/api/eximbay/return`)
 - `SOLAPI_KAKAO_PFID` / `SOLAPI_KAKAO_TEMPLATE_ORDER_PAID` (카카오 알림톡; 미설정 시 dev 콘솔 로그. 선행조건: 채널 심사 통과 + 발신프로필 + 템플릿 승인)
 

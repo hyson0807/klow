@@ -245,8 +245,10 @@ EXIMBAY_DOMESTIC_API_KEY=
 # status_url host (klow_server origin) — webhook 에 박힌다.
 EXIMBAY_RETURN_BASE_SERVER=http://localhost:4000
 
-# webhook 허용 IP (comma 구분). 비우면 dev 편의로 미적용. 운영 필수.
-# 운영: 15.165.144.33 / sandbox: 43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
+# webhook 허용 IP (comma 구분, 개별 IPv4 + CIDR 대역). 비우면 dev 편의로 미적용. 운영 필수.
+# ⚠️ 공식 문서 IP(172.28.11.71/72 = 사설 대역, 15.165.144.33)는 실측과 다르다 — 아래 TODO 참고.
+# 운영(2026-09-04 실측): 152.233.14.0/23,152.233.68.0/23 (CDN77-SGP 엣지)
+# sandbox: 43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 ```
 
@@ -289,10 +291,16 @@ EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 ## TODO (운영 배포 단계)
 
 - **Outbox / idempotency_key** — 환불(`refundOrder`)의 PG cancel 성공 후 DB `updateMany` 사이 서버 크래시로 인한 불일치(PG 환불됐지만 DB 는 paid) 차단. markPaid 부수효과(메일/송장)도 outbox 로 재시도 보장하면 더 견고.
-- **라이브 키 + 운영 도메인** — `EXIMBAY_API_BASE`/`EXIMBAY_SDK_URL`/`EXIMBAY_MID`/`EXIMBAY_API_KEY` 를 라이브 값으로, `FRONTEND_URL`(303 목적지 host)·`EXIMBAY_RETURN_BASE_SERVER`(**return_url + status_url host**)를 운영 https 도메인으로 교체. `EXIMBAY_WEBHOOK_IPS` 를 운영 IP(`15.165.144.33`)로 좁힌다.
-  ⚠️ 2026-08-17 부터 이 세 값은 **운영에서 fail-closed** 다 — 샌드박스 IP 가 남아 있거나 두 URL 이 절대 https 가
-  아니면 부팅을 거부한다. 예전엔 잘못된 값이 조용히 통과해 결제 콜백이 전부 403/미도달이 되고, 그 주문이
-  "카드는 승인, 주문은 미결제" 로 굳었다(자세히는 [`server/modules/payment.md`](./server/modules/payment.md) 3중 방어선).
+- **라이브 키 + 운영 도메인** — `EXIMBAY_API_BASE`/`EXIMBAY_SDK_URL`/`EXIMBAY_MID`/`EXIMBAY_API_KEY` 를 라이브 값으로, `FRONTEND_URL`(303 목적지 host)·`EXIMBAY_RETURN_BASE_SERVER`(**return_url + status_url host**)를 운영 https 도메인으로 교체. `EXIMBAY_WEBHOOK_IPS` 는 **실측 대역**(`152.233.14.0/23,152.233.68.0/23`)으로 좁힌다.
+  ⚠️⚠️ **공식 문서의 IP(`172.28.11.71`/`172.28.11.72`/`15.165.144.33`)를 그대로 넣지 말 것** — 앞의 둘은 사설
+  대역이라 인터넷 경유로 올 수 없고 나머지도 실측과 다르다. 실제 발신은 CDN77 싱가포르 엣지이고, 개별 IP 로
+  나열하면 엣지가 바뀌는 날 다시 깨지므로 **대역(CIDR)으로** 둔다.
+  ⚠️ **fail-closed 인 것은 두 가지뿐이다** — SDK/API 키의 샌드박스·라이브 혼용, 그리고 두 URL 의 https 검사.
+  **웹훅 IP 불일치는 부팅을 막지 않고 `console.warn` 한 줄만 남긴다**(제3자 IP 추측으로 배포를 막지 않기 위한
+  의도된 설계). 이 문서가 한동안 "샌드박스 IP 가 남아 있으면 부팅을 거부한다"고 잘못 적고 있었고, 그 오기재가
+  "부팅됐으니 IP 는 맞다"는 오판을 만들어 **2026-09-04 까지 모든 결제 콜백이 403 인 채로 방치**됐다. 잘못된 값은
+  결제 콜백을 전부 403/미도달로 만들고 그 주문을 "카드는 승인, 주문은 미결제" 로 굳힌다
+  (자세히는 [`server/modules/payment.md`](./server/modules/payment.md) 3중 방어선).
 - **국내(KRW) MID 라이브 값** — sandbox 엔 국내 전용 MID 가 없다. `EXIMBAY_DOMESTIC_MID`/`EXIMBAY_DOMESTIC_API_KEY` 에 실 국내 MID 를 세팅해야 국내카드(issuer_country=KR) 결제가 열린다.
 - **결제수단별 UI 분기 확장** — 현재는 통합 결제창 + global/kr 2-track 토글. 카드/PayPal/Alipay 라디오까지 노출하려면 `payment_method` 코드를 prepare payload 에 채운다.
 - **product[]/ship_to/bill_to** — PayPal·Klarna 결제 시 필수 필드. `Order` 의 배송지/아이템에서 채울 수 있음(현재 미전송).
