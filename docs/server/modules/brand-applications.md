@@ -33,6 +33,7 @@
 | POST   | `/v1/brand/applications/init-draft`           | 드래프트 생성 — `{ slug, category? }`. klow_brand `/start` 2단계가 주소+업종을 한 번에 보낸다. idempotent (기존 brand 가 있으면 slug 불변, category 는 **비어 있을 때만** 채움) |
 | POST   | `/v1/brand/applications/submit-for-review`    | 드래프트 → 검토 제출 (모든 필드 완성 확인, `pgCustomerKey` 발급)  |
 | PATCH  | `/v1/brand/applications/operational-profile`  | 운영 프로필(송화인 4 + 계좌 3 필드) 저장 — OnboardingGate         |
+| PATCH  | `/v1/brand/applications/alerts`              | 시딩 알림톡 수신 토글(`seedingAlertEnabled` 단일 필드)            |
 
 ### 셀프 상품 관리 (Product)
 
@@ -123,6 +124,7 @@
     배포 창에 열려 있던 구 klow_brand 탭이 저장할 때 브랜드가 켠 할인율을 조용히 0 으로 지운다.
     **안 보내면 현재 값 유지**가 계약이고, 서버가 `owned` 행에서 현재 값을 읽어 폴백한다.
 - 추가 정보: 송화인, 정산 계좌 정보 등은 `operational-profile` 로 저장.
+- **시딩 알림톡 토글 (`PATCH .../alerts`, 2026-09-04)**: 무가 시딩 신청·재발송 시 브랜드에게 카카오 알림톡을 보낼지(`Brand.seedingAlertEnabled`, 기본 `false`). ⚠️ `operational-profile` 에 얹을 수 없어 전용 라우트다 — 그쪽 zod 는 송화인·계좌 **7필드가 전부 required** 라 토글 하나만 보낼 수 없다(제품 가리기 `/products/:id/hidden` 과 같은 per-field 컨벤션). ⚠️ **켤 때만** 수신번호를 검사해 없으면 400 이고, 그 판정은 발송 경로와 **같은 함수**(`orders/brand-order-alimtalk.ts` 의 `resolveBrandAlertPhone`)를 쓴다 — 각자 구현하면 "토글은 켜졌는데 아무에게도 안 가는" 무음 상태가 생기는데 그게 이 기능이 없애려는 것 그 자체다(어드민 송장 실패 알림 수신자 지정이 번호 없는 어드민을 400 으로 막는 것과 같은 규칙). ⚠️ **일반 주문·고객 결제 시딩 알림은 이 토글과 무관하게 항상 발송된다** — 비대칭이 의도다(→ [seeding](./seeding.md), [payment](./payment.md)).
 - **무료배송·박스 규격은 전용 엔드포인트가 없다** (2026-07-29). 무료배송은 국가별 설정
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
   실려 저장된다 — 가격 탭 저장 한 번에 전부 반영된다.
