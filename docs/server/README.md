@@ -48,7 +48,8 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | **브랜드 자체 서비스** | [brand-applications](./modules/brand-applications.md)     | 브랜드 입점 신청 + 자체 상품 등록 (셀프-서비스)          |
 |            | [subscription](./modules/subscription.md)                             | 브랜드 멤버십 정기구독 (NicePay 빌링) + 승인 게이트      |
 |            | [brand-scraper](./modules/brand-scraper.md)                           | 자사몰 URL → AI 자동 데이터 추출                         |
-| **고객**   | [customers](./modules/customers.md)                                   | 어드민이 보는 유저 목록/상세                             |
+| **고객**   | [customers](./modules/customers.md)                                   | 어드민이 보는 **가입 회원**(`User`) 목록/상세            |
+|            | [admin-contacts](./modules/admin-contacts.md)                         | 어드민 컨택트 — 전 브랜드 시딩 수령인·바이어를 사람 단위로 파생(읽기 전용 · 회사메일 추정 · 슈퍼 전용 xlsx) |
 |            | [contact](./modules/contact.md)                                       | 랜딩 "상담 문의" 폼 → 운영팀 문의함 메일 (저장 없음)     |
 | **마케팅** | [promotions](./modules/promotions.md)                                  | 인플루언서 할인가 브랜드관 링크(제품×국가 세일가) + 유입 추적 |
 |            | [brand-domains](./modules/brand-domains.md)                          | 브랜드 커스텀 도메인 연결 (Vercel Domains API + Host→슬러그 resolve + Origin 술어) |

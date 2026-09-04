@@ -1,6 +1,9 @@
 # brand-crm — 브랜드 고객 관리(CRM) + 메일 발송
 
 - **모듈 경로**: `src/modules/brand-crm/`
+- **어드민 전 브랜드 뷰는 별도다**: [admin-contacts](./admin-contacts.md) — 같은 사다리·같은 주문
+  필터를 쓰지만 브랜드로 좁히지 않는다. ⚠️ **공개 id 의 스코프가 달라 같은 사람이라도 id 가
+  다르다**(브랜드는 `brandId`, 어드민은 `ADMIN_CONTACT_SCOPE`) — 두 화면 사이에서 id 를 넘기지 말 것.
 - **주 클라이언트**: `klow_brand` (`/crm` 탭)
 - **데이터 모델**: `BrandCrmNote` · `BrandCrmTemplate` · `BrandCrmEmail` · `BrandCrmOptOut`
   (고객 행 자체는 **저장하지 않는다** — `Order`/`OrderItem`/`ManualSeedingRecord` 에서 파생)
@@ -66,6 +69,10 @@ items.some.OR[ productId in (브랜드 제품), (productId=null AND brandId=브�
 ```
 paymentStatus = 'paid'  AND  status <> 'cancelled'
 ```
+
+⚠️ 이 상수(`CONTACT_ORDER_WHERE`)와 채널 판정(`contactChannelOf`)의 **정본은
+`modules/orders/contact-population.ts`** 다 — 어드민 컨택트와 한 벌을 공유한다. 예전엔 두
+모듈에 복사돼 있고 "같은 값이어야 한다"는 주석으로만 묶여 있었다.
 
 - ⚠️ `settlement.service.ts` 의 `SETTLEABLE_ORDER_WHERE` 를 **상속하면 안 된다** — 그건 "돈 받을 대상"이라
   무가 시딩을 의도적으로 제외하는데, CRM 은 무가 시딩 수령자가 핵심 모집단이다.
@@ -305,8 +312,9 @@ CRM_EMAIL_CRON_ENABLED=                     # 'false' 로만 비활성(기본 on
 `OrderItem.@@index([brandId])`. **추가 전용 → 롤링 배포 안전 · 백필 없음.**
 
 - 라우트 **315 → 325**, cron **9 → 10**(`brand-crm-email-dispatch`).
-  (2026-08-28 발송본 열람 라우트가 붙어 지금은 **326**. ⚠️ 예전에 이 줄이 327 이라고 적혀
-  있었는데 부팅 실측과 어긋나 실측값으로 정정했다.)
+  (2026-08-28 발송본 열람 라우트가 붙어 **326**. ⚠️ 그 뒤로도 라우트가 늘어 2026-09-04 부팅
+  실측은 **328**(어드민 컨택트 3개를 더해 **331**)이다 — 이 줄의 숫자는 낡기 쉬우니
+  **부팅 로그를 정본으로 볼 것**.)
 - **배포 전 선행**: Resend 콘솔에 `mail.klow.kr` 도메인 추가 + DNS 등록. 안 하면 발송이 전부 실패한다.
 - 배포 순서: **klow_server → klow_brand**(반대면 `/crm` 이 404).
 
@@ -327,6 +335,9 @@ facets 단일 순회 동치 · **왕복 2단**(product 를 붙잡아 두고 나�
 ## 알려진 갭
 
 - 같은 사람이 이메일을 바꿔 신청하면 두 명으로 보인다(수동 병합 UI 없음).
+- **타임라인의 시딩 제품명이 통관 별칭이다** — `OrderItem.productName` 을 그대로 쓰므로
+  시딩 줄에 `Korean Skincare Toner` 가 나온다. 어드민 컨택트는 `seedingItemNames()` +
+  `displayLines()` 를 태워 진짜 제품명을 보여준다(`admin-contacts.service.ts` 참고).
 - 하드 삭제된 제품의 과거 주문은 `Shipment` 축으로만 잡힌다 — 송장이 없는 현장 주문이면 사라진다.
 - 메일 **열람·클릭 추적 없음**(추적 픽셀·링크 리라이트를 v1 범위에서 뺐다).
 - Gmail API 발송(브랜드 지메일에서 직접)은 `email-sender.ts` 어댑터 뒤 2단계 — Google 앱 검증 필요.
