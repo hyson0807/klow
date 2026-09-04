@@ -246,10 +246,13 @@ EXIMBAY_DOMESTIC_API_KEY=
 EXIMBAY_RETURN_BASE_SERVER=http://localhost:4000
 
 # webhook 허용 IP (comma 구분, 개별 IPv4 + CIDR 대역). 비우면 dev 편의로 미적용. 운영 필수.
-# ⚠️ 공식 문서 IP(172.28.11.71/72 = 사설 대역, 15.165.144.33)는 실측과 다르다 — 아래 TODO 참고.
-# 운영(2026-09-04 실측): 152.233.14.0/23,152.233.68.0/23 (CDN77-SGP 엣지)
+# ⚠️ 152.233.x.x(Railway 엣지)를 넣지 말 것 — 화이트리스트가 무력화된다. 아래 TODO 참고.
 # sandbox: 43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
+
+# 신뢰할 프록시 홉 수 (Express trust proxy). 미설정 시 기본 2(Railway 실측).
+# ⚠️ 틀리면 req.ip 가 프록시 IP 가 되어 rate limit·IP 화이트리스트·동의 IP 기록이 함께 어긋난다.
+TRUST_PROXY_HOPS=
 ```
 
 - `return_url` 의 host(klow_web)는 별도 키 없이 기존 **`FRONTEND_URL`** 을 재사용한다.
@@ -292,9 +295,12 @@ EXIMBAY_WEBHOOK_IPS=43.203.92.211,3.34.20.184,3.37.76.229,52.79.143.149
 
 - **Outbox / idempotency_key** — 환불(`refundOrder`)의 PG cancel 성공 후 DB `updateMany` 사이 서버 크래시로 인한 불일치(PG 환불됐지만 DB 는 paid) 차단. markPaid 부수효과(메일/송장)도 outbox 로 재시도 보장하면 더 견고.
 - **라이브 키 + 운영 도메인** — `EXIMBAY_API_BASE`/`EXIMBAY_SDK_URL`/`EXIMBAY_MID`/`EXIMBAY_API_KEY` 를 라이브 값으로, `FRONTEND_URL`(303 목적지 host)·`EXIMBAY_RETURN_BASE_SERVER`(**return_url + status_url host**)를 운영 https 도메인으로 교체. `EXIMBAY_WEBHOOK_IPS` 는 **실측 대역**(`152.233.14.0/23,152.233.68.0/23`)으로 좁힌다.
-  ⚠️⚠️ **공식 문서의 IP(`172.28.11.71`/`172.28.11.72`/`15.165.144.33`)를 그대로 넣지 말 것** — 앞의 둘은 사설
-  대역이라 인터넷 경유로 올 수 없고 나머지도 실측과 다르다. 실제 발신은 CDN77 싱가포르 엣지이고, 개별 IP 로
-  나열하면 엣지가 바뀌는 날 다시 깨지므로 **대역(CIDR)으로** 둔다.
+  ⚠️⚠️ **값을 정하기 전에 `req.ip` 가 호출자 IP 인지부터 확인한다.** `trust proxy` 홉 수가 틀리면 `req.ip` 에
+  Railway 엣지 IP 가 들어와 화이트리스트가 **구조적으로 매칭 불가**가 된다(2026-09-04 까지 그 상태였다).
+  ⚠️⚠️ **`152.233.14.0/23`·`152.233.68.0/23` 은 Eximbay 가 아니라 Railway 엣지 대역이다** — 넣으면 Railway 를
+  통과한 모든 요청이 매칭되어 화이트리스트가 무력화된다(실제로 한 번 그렇게 넣어 엔드포인트가 인터넷에 열렸다).
+  ⚠️ 공식 문서의 IP(`172.28.11.71`/`172.28.11.72`/`15.165.144.33`) 중 앞의 둘은 **사설 대역**이라 그대로는
+  매칭될 수 없다. 정본은 웹훅 accept/deny 로그에 찍히는 실제 IP 다.
   ⚠️ **fail-closed 인 것은 두 가지뿐이다** — SDK/API 키의 샌드박스·라이브 혼용, 그리고 두 URL 의 https 검사.
   **웹훅 IP 불일치는 부팅을 막지 않고 `console.warn` 한 줄만 남긴다**(제3자 IP 추측으로 배포를 막지 않기 위한
   의도된 설계). 이 문서가 한동안 "샌드박스 IP 가 남아 있으면 부팅을 거부한다"고 잘못 적고 있었고, 그 오기재가
