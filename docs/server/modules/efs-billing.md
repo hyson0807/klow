@@ -189,7 +189,49 @@ publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동
 그래서 남은 유일한 차단 사유는 "이 파일에 그 달 송장이 하나도 없다"(= 명백한 오파일)뿐이다.
 ⚠️ 집합 일치 검사로 되돌리지 말 것 — 수기 발급분이 있는 한 영구히 막힌다.
 
-## 청구서 엑셀 (요약 + 구분별 시트)
+## 문서 2종 — 브랜드 발송용 PDF · 내부 대사용 엑셀
+
+브랜드가 받는 문서와 어드민이 대사에 쓰는 문서를 **분리**했다(2026-09). 예전엔 내부 엑셀 하나를
+브랜드에게 그대로 줬는데, 그 파일의 `HAWB`(EFS 내부 송장번호 — 브랜드가 조회할 곳이 없다)·
+`EFS실비`·`수수료`·`배송비 정산분`이 브랜드에게는 설명이 필요한 열이었고, 특히 실비·수수료 분해는
+"고객이 배송비를 냈는데 왜 또 청구하나"라는 문의를 키웠다.
+
+### 브랜드 발송용 청구서 PDF (`statement-pdf.ts`)
+
+A4. 행마다 **발송일(픽업) · 목적국 · 수취인 · 구분(일반/시딩) · 청구액**과 총 청구금액·입금계좌만 담는다.
+서식은 기존 KLOW 견적서(KLOW SERVICE QUOTATION)와 같은 계열이고 색·여백은 그 PDF 실측값이다.
+
+- ⚠️ **`billedKrw == null`(EFS 실비 미입력) 행은 표에서 뺀다.** 사유를 적을 `비고` 열이 없어 금액 칸이 빈
+  행이 설명 없이 남는다. 빼면 `표 행 수 == 청구 건수`, `Σ 청구액 == 총 청구금액` 이 종이 위에서 그대로
+  검산된다 — 그 건수는 안내 문구에 명시한다(회귀 잠금: `__tests__/statement-pdf.spec.ts`).
+- ⚠️ 렌더러는 **계산을 하지 않는다.** 금액은 동결 `rows` / `buildStatement` 결과를 그대로 옮긴다.
+- ⚠️ **PDF 는 저장하지 않고 다운로드 시점에 렌더**한다. 금액이 동결 JSON 에서 오므로 무결성은 유지되고,
+  publish 때 PDF 를 구웠다면 그 이전에 전달된 달은 영영 xlsx 로 남았을 것이다(지금은 과거 월도 PDF 를 받는다).
+- ⚠️⚠️ **어드민 다운로드도 전달된 달은 동결 스냅샷으로 렌더**한다(`exportStatementPdf`). 라이브로만 뽑으면
+  전달 후 실비를 고쳤을 때 어드민이 메일로 보낸 문서와 브랜드가 보는 문서의 총액이 갈린다 — 청구 사고다.
+  전달 전 검토는 `?source=live` 이고 그 문서에는 `(미확정 미리보기)` 가 찍힌다.
+- 청구서 번호는 `KLOW-INV-{YYYYMM}-{brandId 뒤 6자}`. ⚠️ **`publishedAt` 을 섞지 않는다** — 재전달마다
+  번호가 바뀌면 브랜드가 이전 문서를 지목할 수 없다.
+- 목적국 한글명(`ShippingCountry.nameKo`)은 **표시용 파생**이라 동결 대상이 아니다. 브랜드 정산탭 상세
+  응답에도 같은 값을 `countryName` 으로 실어 **화면과 PDF 의 국가 표기가 갈리지 않게** 한다.
+- 공급자·입금계좌 상수는 `klow-company.ts`(⚠️ klow_brand `legal/_content/documents.ts` 의 `BUSINESS_INFO` 와
+  **의도된 크로스 레포 미러**). 계좌·주소가 바뀌면 과거 청구서를 다시 받았을 때도 새 값이 찍힌다 —
+  "지금 입금할 곳"이 맞는 값이라 의도된 동작이다.
+
+**폰트(`statement-pdf-fonts.ts`)** — ⚠️ 배포 컨테이너에 한글 시스템 폰트가 없어 `src/assets/fonts/` 에
+OFL 폰트를 커밋하고 **`nest-cli.json` 의 `assets`** 로 dist 까지 나른다(`nest build` 는 순수 tsc 라 .ts 만
+컴파일한다 — 설정이 빠지면 **프로덕션에서만** 503 이다. embed 스크립트가 같은 이유로 404 를 냈다).
+경로는 `__dirname` 기준이라 dev(`src/`)와 prod(`dist/`)가 한 줄로 동시에 맞는다.
+⚠️⚠️ **pdfmake/pdfkit 은 글리프 자동 폴백을 하지 않는다** — 없는 글자는 예외도 로그도 없이 빈칸이 된다.
+그래서 `splitByScript` 가 **폰트 cmap 을 직접 조회**해 run 을 쪼갠다(유니코드 블록 표는 부분 커버를 못 잡는다):
+`Noto`(한글·라틴·키릴·그리스·가나·번체 한자) → `Sans`(그리스 성조) → `SC`(간체 중국어) → `Thai`.
+사슬 어디에도 없는 글자(아랍·데바나가리·이모지)는 `?` 로 치환하고 **throw 하지 않는다**(이름 한 글자로
+청구서 전체가 죽으면 안 된다) — 대신 warn 을 남겨 "어떤 폰트를 더 번들할지"의 신호로 쓴다.
+
+### 내부 대사용 엑셀 (요약 + 구분별 시트)
+
+⚠️ **브랜드에게 보내는 문서가 아니다.** 어드민 전용 보조 버튼이고, EFS 정산표와 대사할 때 실비·수수료·
+배송비 정산분이 필요해서 남겼다. `publish` 도 이 파일을 R2 에 동결해 기록으로 남긴다(`excelKey`).
 
 `renderXlsx` 가 **요약 / 일반주문 / 시딩** 3시트를 만든다(해당 구분 행이 0건이면 그 시트는 생략, 요약은 항상).
 - **요약**: 구분별 건수·EFS실비 합·수수료 합·**배송비 정산분(참고)**·청구액 합 + 총계 +
@@ -243,7 +285,8 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 | POST   | `/admin/efs-billing/publish`            | 브랜드×월 청구서 동결(스냅샷 + R2 xlsx) → 브랜드 전달      |
 | GET    | `/admin/efs-billing/published`          | 선택 브랜드×월 전달/납부 상태(배지·버튼용)                 |
 | POST   | `/admin/efs-billing/mark-paid`          | 브랜드 납부 수령 확인 토글                                 |
-| GET    | `/admin/efs-billing/export`             | 청구서 엑셀 스트리밍(요약/일반주문/시딩 시트)              |
+| GET    | `/admin/efs-billing/export-pdf`         | **브랜드 발송용 청구서 PDF**(전달된 달은 동결본, `source=live` 면 미확정 미리보기) |
+| GET    | `/admin/efs-billing/export`             | 내부 대사용 엑셀(요약/일반주문/시딩 시트) — 브랜드 발송용 아님 |
 
 ## 브랜드 열람 (settlement 모듈 컨트롤러)
 
@@ -251,7 +294,8 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 |--------|---------------------------------------------------|-------------------------------|
 | GET    | `/v1/brand/settlement/efs-statements`             | 전달받은 청구서 목록(최신월 순) |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth`  | 청구서 상세(동결 rows)         |
-| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/excel` | 동결 xlsx 재스트리밍(R2)  |
+| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/pdf`   | **청구서 PDF**(동결 rows 에서 렌더) |
+| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/excel` | [legacy] 동결 xlsx 재스트리밍(R2) — klow_brand 전환 후 제거 |
 
 ## 교차링크
 
