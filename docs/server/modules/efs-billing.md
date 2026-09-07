@@ -196,49 +196,105 @@ publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동
 `EFS실비`·`수수료`·`배송비 정산분`이 브랜드에게는 설명이 필요한 열이었고, 특히 실비·수수료 분해는
 "고객이 배송비를 냈는데 왜 또 청구하나"라는 문의를 키웠다.
 
-### 브랜드 발송용 청구서 PDF (`statement-pdf.ts`)
+### 브랜드 발송용 청구서 엑셀 (`statement-invoice.ts`)
 
-A4. 행마다 **순번 · 구분(일반/시딩) · 발송일(픽업) · 목적국 · 수취인 · 청구액**과 총 청구금액·입금계좌만 담는다.
-서식은 기존 KLOW 견적서(KLOW SERVICE QUOTATION)와 같은 계열이고 색·여백은 그 PDF 실측값이다.
+시트 1장(`{브랜드} 청구서`). 행마다 **순번 · 주문번호 · 날짜(픽업) · 목적지(ISO2) · 청구중량 ·
+EMS 정가 · KLOW 운송료 · 절감액**을 담고, 표 아래에 **수출신고비 · 관세 라인 · 최종 청구금액 ·
+입금계좌**가 붙는다.
+
+> **왜 PDF 가 아니라 엑셀인가 (2026-09-07 전환)** — 종전 A4 PDF 는 `발송일·목적국·수취인·구분·청구액`
+> 다섯 열뿐이라 **"KLOW 를 써서 얼마를 아꼈는가"에 답하지 못했다.** 그게 이 문서의 존재 이유이고,
+> 그래서 서식 자체를 운영이 쓰던 참조 청구서(보라 헤드라인 + EMS 비교 3열)로 갈아탔다.
+> `pdfmake`·번들 폰트 18MB(`src/assets/fonts/`)·`nest-cli.json` 의 `assets` 설정은 **전부 제거**했다 —
+> 엑셀은 폰트를 임베드하지 않고 이름만 참조하기 때문이다.
+
+**렌더러가 `exceljs` 인 이유** — 이 레포의 다른 엑셀은 전부 SheetJS(`xlsx@0.18`)로 만들지만
+**커뮤니티 판은 셀 채움·폰트·테두리를 쓸 수 없다.** 브랜드 발송 문서는 그게 전부 필요하다.
+반대로 아래 '내부 대사용 엑셀'은 스타일이 없어 SheetJS 그대로 둔다 — **두 라이브러리 병존은 의도된 것**이다.
 
 - 순번은 동결 `seq` 가 아니라 **표에 실제로 찍힌 순서**(배열 인덱스+1)다 — 청구 불가 행을 걸러낸 뒤
   매기므로 **마지막 번호가 곧 청구 건수**가 되어 브랜드가 세지 않고 검산한다. `seq` 를 쓰면 중간이
   빈 번호가 나온다.
-- **일괄 다운로드**(`export-pdf-all`)는 그 달 청구 내역이 있는 **전 브랜드**를 zip 으로 묶는다.
-  브랜드마다 개별 파일이라 그대로 각자에게 전달할 수 있다(한 PDF 로 합치면 다시 쪼개야 한다).
-  ⚠️ **월 리포트를 브랜드마다 다시 부르지 않는다** — `exportStatementPdf` 를 N 번 부르면
+- **일괄 다운로드**(`export-invoice-all`)는 그 달 청구 내역이 있는 **전 브랜드**를 zip 으로 묶는다.
+  브랜드마다 개별 파일이라 그대로 각자에게 전달할 수 있다(한 파일로 합치면 다시 쪼개야 한다).
+  ⚠️ **월 리포트를 브랜드마다 다시 부르지 않는다** — `exportStatementInvoice` 를 N 번 부르면
   `monthlyReport` 가 N 번 돌고 **실비 미저장 송장의 EFS API 조회가 브랜드 수만큼 반복**된다.
   리포트를 한 번 뽑아 `brandId` 로 잘라 `buildStatement({rows, brandId, buyerPaidCount})` 에 넘긴다.
-  확정본 조회도 `findMany` 한 번이다. ⚠️ zip 안 파일명에 문서번호 꼬리를 붙인다 — 브랜드명은 자유
-  입력이라 동명이 가능하고, 같은 이름이면 뒤가 앞을 덮는다. 압축은 `STORE`(PDF 는 이미 압축돼 있다).
+  확정본·부가 항목 조회도 각각 `findMany` 한 번이다. ⚠️ zip 안 파일명에 문서번호 꼬리를 붙인다 —
+  브랜드명은 자유 입력이라 동명이 가능하고, 같은 이름이면 뒤가 앞을 덮는다. 압축은 `STORE`
+  (xlsx 는 이미 zip 컨테이너다).
 - ⚠️ **`billedKrw == null`(EFS 실비 미입력) 행은 표에서 뺀다.** 사유를 적을 `비고` 열이 없어 금액 칸이 빈
-  행이 설명 없이 남는다. 빼면 `표 행 수 == 청구 건수`, `Σ 청구액 == 총 청구금액` 이 종이 위에서 그대로
-  검산된다 — 그 건수는 안내 문구에 명시한다(회귀 잠금: `__tests__/statement-pdf.spec.ts`).
-- ⚠️ 렌더러는 **계산을 하지 않는다.** 금액은 동결 `rows` / `buildStatement` 결과를 그대로 옮긴다.
-- ⚠️ **PDF 는 저장하지 않고 다운로드 시점에 렌더**한다. 금액이 동결 JSON 에서 오므로 무결성은 유지되고,
-  publish 때 PDF 를 구웠다면 그 이전에 전달된 달은 영영 xlsx 로 남았을 것이다(지금은 과거 월도 PDF 를 받는다).
-- ⚠️⚠️ **어드민 다운로드도 전달된 달은 동결 스냅샷으로 렌더**한다(`exportStatementPdf`). 라이브로만 뽑으면
-  전달 후 실비를 고쳤을 때 어드민이 메일로 보낸 문서와 브랜드가 보는 문서의 총액이 갈린다 — 청구 사고다.
-  전달 전 검토는 `?source=live` 다. ⚠️ **문서에는 확정/미확정 표시가 없다**(2026-09-07 결정) —
+  행이 설명 없이 남는다. 빼면 `표 행 수 == 청구 건수`, `Σ 청구액 == 운송료 합계` 가 종이 위에서 그대로
+  검산된다 — 그 건수는 안내 문구에 명시한다(회귀 잠금: `__tests__/statement-invoice.spec.ts`).
+- ⚠️ 렌더러는 **계산을 하지 않는다.** 금액은 동결 `rows` / `buildStatement` 결과를 그대로 옮기고,
+  유일한 산술이 `savedKrw = emsListKrw − billedKrw` 와 세 합계다.
+- ⚠️ **저장하지 않고 다운로드 시점에 렌더**한다. 금액이 동결 JSON 에서 오므로 무결성은 유지되고,
+  publish 때 구웠다면 그 이전에 전달된 달은 영영 옛 서식으로 남았을 것이다.
+- ⚠️⚠️ **어드민 다운로드도 전달된 달은 동결 스냅샷으로 렌더**한다(`exportStatementInvoice`). 라이브로만
+  뽑으면 전달 후 실비를 고쳤을 때 어드민이 메일로 보낸 문서와 브랜드가 보는 문서의 총액이 갈린다 —
+  청구 사고다. 전달 전 검토는 `?source=live` 다. ⚠️ **문서에는 확정/미확정 표시가 없다**(2026-09-07 결정) —
   구분은 어드민 화면(버튼 툴팁·다운로드 토스트)이 하고, 브랜드는 전달된 청구서만 조회할 수 있어
-  구조적으로 미확정 문서를 받지 않는다. 어드민이 전달 전 문서를 브랜드에 보내지 않도록 주의할 것.
+  구조적으로 미확정 문서를 받지 않는다.
 - 청구서 번호는 `KLOW-INV-{YYYYMM}-{brandId 뒤 6자}`. ⚠️ **`publishedAt` 을 섞지 않는다** — 재전달마다
   번호가 바뀌면 브랜드가 이전 문서를 지목할 수 없다.
-- 목적국 한글명(`ShippingCountry.nameKo`)은 **표시용 파생**이라 동결 대상이 아니다. 브랜드 정산탭 상세
-  응답에도 같은 값을 `countryName` 으로 실어 **화면과 PDF 의 국가 표기가 갈리지 않게** 한다.
-- 공급자·입금계좌 상수는 `klow-company.ts`(⚠️ klow_brand `legal/_content/documents.ts` 의 `BUSINESS_INFO` 와
-  **의도된 크로스 레포 미러**). 계좌·주소가 바뀌면 과거 청구서를 다시 받았을 때도 새 값이 찍힌다 —
-  "지금 입금할 곳"이 맞는 값이라 의도된 동작이다.
+- 입금계좌 상수는 `klow-company.ts`. 2026-09 에 `국민은행 84883700007474 / 웰킷 (WELKIT)` 으로 바꿨다.
+  계좌가 바뀌면 과거 청구서를 다시 받았을 때도 새 값이 찍힌다 — "지금 입금할 곳"이 맞는 값이라 의도된
+  동작이다. ⚠️ 코드 밖 문서인 **견적서(KLOW SERVICE QUOTATION) 서식도 같은 계좌인지 확인할 것.**
 
-**폰트(`statement-pdf-fonts.ts`)** — ⚠️ 배포 컨테이너에 한글 시스템 폰트가 없어 `src/assets/fonts/` 에
-OFL 폰트를 커밋하고 **`nest-cli.json` 의 `assets`** 로 dist 까지 나른다(`nest build` 는 순수 tsc 라 .ts 만
-컴파일한다 — 설정이 빠지면 **프로덕션에서만** 503 이다. embed 스크립트가 같은 이유로 404 를 냈다).
-경로는 `__dirname` 기준이라 dev(`src/`)와 prod(`dist/`)가 한 줄로 동시에 맞는다.
-⚠️⚠️ **pdfmake/pdfkit 은 글리프 자동 폴백을 하지 않는다** — 없는 글자는 예외도 로그도 없이 빈칸이 된다.
-그래서 `splitByScript` 가 **폰트 cmap 을 직접 조회**해 run 을 쪼갠다(유니코드 블록 표는 부분 커버를 못 잡는다):
-`Noto`(한글·라틴·키릴·그리스·가나·번체 한자) → `Sans`(그리스 성조) → `SC`(간체 중국어) → `Thai`.
-사슬 어디에도 없는 글자(아랍·데바나가리·이모지)는 `?` 로 치환하고 **throw 하지 않는다**(이름 한 글자로
-청구서 전체가 죽으면 안 된다) — 대신 warn 을 남겨 "어떤 폰트를 더 번들할지"의 신호로 쓴다.
+#### EMS 정가 · 절감액
+
+`ShippingRate`(carrier=`EMS`, 어드민 **해외배송 비교요율** 탭)에서 그 **목적국 × 청구중량**으로
+**올림 조회**한 공개 정가다. 조회는 `ShippingRateService.listRatesFor('EMS', keys)` 한 번(왕복 1회)이고,
+`monthlyReport` 의 `attachEmsListPrices` 가 행에 붙인다.
+
+- ⚠️⚠️ **없으면 `null` 이다 — 0 으로 폴백 금지.** 요율 미설정국(EMS 는 98/233개국)·최대 티어 초과·
+  청구중량 미입력이 여기 해당한다. 0 을 넣으면 절감액이 음수로 뒤집혀 **"절감했다"는 문서가 손해를
+  주장한다.** 그 행은 표에 `—` 로 남고 절감 합계·`comparedCount` 에서만 빠진다.
+- ⚠️⚠️ **헤드라인 보조줄은 `emsComparedBilledKrw`(비교 가능했던 행의 운송료 합)와 비교한다.**
+  전 행 합(`shippingTotalKrw`)으로 쓰면 EMS 정가가 없는 행이 한쪽에만 들어가, 실제로는 절감했는데
+  `정가 336,850원 → KLOW 353,450원` 처럼 **더 비싸 보인다**. 불변식:
+  `emsListKrw − emsComparedBilledKrw === savedTotalKrw`.
+- ⚠️ **음수 절감(KLOW 운송료 > EMS 정가)을 0 으로 클램프하지 않는다** — 클램프하면
+  `Σ절감 ≠ ΣEMS − ΣKLOW` 가 되어 표가 검산되지 않는다. 대신 3분기 숫자서식
+  `"-"#,##0"원";"+"#,##0"원";"-"0"원"` 으로 `+N원`(초과)으로 표기한다. ⚠️ 참조 파일의
+  `"-"#,##0"원"` 을 그대로 쓰면 **음수가 `-−12,000원` 으로 깨진다**(양수 앞에 리터럴 하이픈을 붙이는 서식).
+- `comparedCount === 0` 이면 절감 헤드라인(3·4행)을 **아예 그리지 않고** 중립 제목으로 대체한다.
+- ⚠️ 요율은 **이미 최종가**다 — `emsSpecialFeePerKgKrw`(dormant)를 더하지 말 것(이중 계상).
+- ⚠️ `ShippingRate` 조회는 **반드시 `carrier` 를 where 에 넣는다**(`@@unique([carrier, iso2, weightG])`).
+  회귀 잠금: `shipping/__tests__/shipping-rate-bulk.spec.ts`.
+
+#### 수출신고비 (건당 300원)
+
+정산표에 **수출신고번호가 있는 건**(`Shipment.efsExportDeclNo` / `EfsManualBillingRow.efsExportDeclNo`)
+마다 `EXPORT_DECLARATION_FEE_KRW = 300` 을 청구한다. EFS 는 우리에게 **250원 + VAT** 를 청구하지만
+브랜드에는 **VAT 없이 정액 300원**이다(국가별 청구 수수료와 같은 관례).
+
+- ⚠️ 상수는 모듈 안에 둔다(env 금지 — 이 레포에 env 수치 상한이 0건이고 오타 하나가 조용히 청구를
+  0원으로 만든다). klow_admin `src/lib/constants.ts` 의 `EXPORT_DECL_FEE_KRW` 는 **의도된 크로스 레포 미러**.
+- ⚠️ **청구 가능한 행(`billedKrw != null`)에서만** 집계한다 — 실비 미입력이라 표에서 빠지는 행의 300원이
+  총액에만 남으면 종이 위 검산이 깨진다.
+- ⚠️ **`billedKrw` 에 포함하지 않는다.** 표 아래 별도 라인이고 `grandTotalKrw` 에만 더해진다
+  (넣으면 `build-statement.spec.ts` 의 청구 산식 회귀 락이 깨지고 대시보드 KPI 가 조용히 부푼다).
+
+#### 관세 대납 (`EfsBillingExtraCharge`)
+
+송장 단위로 귀속되지 않는 브랜드×월 금액. 어드민 **관세·기타 청구** 모달에서 직접 넣는다(한 브랜드에
+여러 건). 청구서에는 `관세 대납 · {메모}` 한 줄씩 찍히고 `grandTotalKrw` 에 합산된다.
+
+- ⚠️ **송장 축과 별개 테이블이다** — 여기에 HAWB 를 두면 `mergeBillingRows` 의 dedupe 가 이 행까지
+  집어삼켜 관세가 조용히 사라진다.
+- ⚠️⚠️ **`paidBy`(선지급 주체: `efs` | `klow`)는 우리 장부용 축이고 청구서에 나가지 않는다.**
+  `efs` = EFS 가 대납해 정산표 `EMS 관세` 시트로 우리에게 청구된 것 / `klow` = KLOW 가 직접 낸 것.
+  브랜드 청구액은 주체와 **무관하게 같다**. 메모 문자열이 아니라 컬럼인 이유는, 문자열이면 오분류가
+  어디서도 안 드러나는데 그 차이가 곧 "EFS 에 갚아야 할 돈"과 "이미 나간 우리 돈"의 구분이기 때문이다.
+  구조적 차단: `InvoiceExtra` 타입에 `paidBy` 자리가 **아예 없다**(회귀 잠금: `__tests__/extra-charge.spec.ts`).
+- ⚠️ 어드민 모달의 주체 셀렉트는 **기본값이 없다** — 주면 급히 입력할 때 전부 그 값으로 쌓여 축이
+  무의미해진다.
+- ⚠️⚠️ **EFS 대납분은 정산표 `EMS 관세` 시트와 자동 매칭되지 않는다.** 같은 건을 두 번 넣으면 두 번
+  청구된다. 방어선은 ① 모달의 주체별 소계를 그 시트 합계와 눈으로 대조 ② 메모에 등기번호 기재.
+  (등기번호는 `Shipment.localTrackingNumber` 와 짝지어지므로 자동 대조는 나중에 붙일 수 있다.)
+- ⚠️ **publish 는 `extras` 를 동결한다** — 전달 후 항목을 추가·수정해도 **재전달 전까지** 브랜드가 받는
+  문서는 안 바뀐다. 어드민 모달이 그 경고를 띄운다.
 
 ### 내부 대사용 엑셀 (요약 + 구분별 시트)
 
@@ -292,13 +348,17 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 | POST   | `/admin/efs-billing/manual`             | **수기 청구 행 등록**(KLOW 밖 발급 송장)                   |
 | PATCH  | `/admin/efs-billing/manual`             | 수기 청구 행 수정                                          |
 | DELETE | `/admin/efs-billing/manual`             | 수기 청구 행 삭제 — ⚠️ **body 로 `id`**(감사 로그가 `req.body` 만 남긴다) |
+| GET    | `/admin/efs-billing/extra`              | 부가 청구 항목(관세 대납) 목록 — `yearMonth`+`brandId`     |
+| POST   | `/admin/efs-billing/extra`              | 부가 청구 항목 등록 (`paidBy` 는 기본값 없는 필수값)        |
+| PATCH  | `/admin/efs-billing/extra`              | 부가 청구 항목 수정                                        |
+| DELETE | `/admin/efs-billing/extra`              | 부가 청구 항목 삭제 — ⚠️ **body 로 `id`**(수기 행과 같은 이유) |
 | POST   | `/admin/efs-billing/import/preview`     | 정산표 .xlsx 파싱 → 현재값 대비 diff (저장 안 함)          |
 | POST   | `/admin/efs-billing/import/apply`       | 선택 행 저장(`efsChargeSource='excel'`, 최대 2000건)       |
 | POST   | `/admin/efs-billing/publish`            | 브랜드×월 청구서 동결(스냅샷 + R2 xlsx) → 브랜드 전달      |
 | GET    | `/admin/efs-billing/published`          | 선택 브랜드×월 전달/납부 상태(배지·버튼용)                 |
 | POST   | `/admin/efs-billing/mark-paid`          | 브랜드 납부 수령 확인 토글                                 |
-| GET    | `/admin/efs-billing/export-pdf`         | **브랜드 발송용 청구서 PDF**(전달된 달은 동결본, `source=live` 면 라이브)  |
-| GET    | `/admin/efs-billing/export-pdf-all`     | 그 달 내역 있는 **전 브랜드** 청구서 PDF 를 zip 으로(브랜드 선택 불필요)   |
+| GET    | `/admin/efs-billing/export-invoice`     | **브랜드 발송용 청구서 엑셀**(전달된 달은 동결본, `source=live` 면 라이브) |
+| GET    | `/admin/efs-billing/export-invoice-all` | 그 달 내역 있는 **전 브랜드** 청구서 엑셀을 zip 으로(브랜드 선택 불필요)   |
 | GET    | `/admin/efs-billing/export`             | 내부 대사용 엑셀(요약/일반주문/시딩 시트) — 브랜드 발송용 아님 |
 
 ## 브랜드 열람 (settlement 모듈 컨트롤러)
@@ -307,8 +367,7 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 |--------|---------------------------------------------------|-------------------------------|
 | GET    | `/v1/brand/settlement/efs-statements`             | 전달받은 청구서 목록(최신월 순) |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth`  | 청구서 상세(동결 rows)         |
-| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/pdf`   | **청구서 PDF**(동결 rows 에서 렌더) |
-| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/excel` | [legacy] 동결 xlsx 재스트리밍(R2) — klow_brand 전환 후 제거 |
+| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/invoice` | **청구서 엑셀**(동결 rows 에서 렌더) |
 
 ## 교차링크
 

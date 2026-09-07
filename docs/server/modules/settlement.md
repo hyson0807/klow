@@ -86,7 +86,7 @@
 | GET    | `/v1/brand/settlement/onsite`    | 현장결제(onsite) 정산 라인(`SettlementLineDTO[]`, 200건)                  |
 | GET    | `/v1/brand/settlement/efs-statements` | 전달받은 EFS 배송비 청구서 목록 — [efs-billing](./efs-billing.md)   |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth` | 청구서 상세(동결 rows 스냅샷)                 |
-| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/pdf`   | **청구서 PDF** — 동결 rows 에서 렌더                |
+| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/invoice` | **청구서 엑셀** — 동결 rows 에서 렌더              |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth/excel` | [legacy] 동결 xlsx 재스트리밍(R2) — klow_brand 전환 후 제거 |
 
 ## admin-settlement.controller.ts (`@Controller('admin/settlement')`)
