@@ -219,7 +219,9 @@ A4. 행마다 **순번 · 구분(일반/시딩) · 발송일(픽업) · 목적�
   publish 때 PDF 를 구웠다면 그 이전에 전달된 달은 영영 xlsx 로 남았을 것이다(지금은 과거 월도 PDF 를 받는다).
 - ⚠️⚠️ **어드민 다운로드도 전달된 달은 동결 스냅샷으로 렌더**한다(`exportStatementPdf`). 라이브로만 뽑으면
   전달 후 실비를 고쳤을 때 어드민이 메일로 보낸 문서와 브랜드가 보는 문서의 총액이 갈린다 — 청구 사고다.
-  전달 전 검토는 `?source=live` 이고 그 문서에는 `(미확정 미리보기)` 가 찍힌다.
+  전달 전 검토는 `?source=live` 다. ⚠️ **문서에는 확정/미확정 표시가 없다**(2026-09-07 결정) —
+  구분은 어드민 화면(버튼 툴팁·다운로드 토스트)이 하고, 브랜드는 전달된 청구서만 조회할 수 있어
+  구조적으로 미확정 문서를 받지 않는다. 어드민이 전달 전 문서를 브랜드에 보내지 않도록 주의할 것.
 - 청구서 번호는 `KLOW-INV-{YYYYMM}-{brandId 뒤 6자}`. ⚠️ **`publishedAt` 을 섞지 않는다** — 재전달마다
   번호가 바뀌면 브랜드가 이전 문서를 지목할 수 없다.
 - 목적국 한글명(`ShippingCountry.nameKo`)은 **표시용 파생**이라 동결 대상이 아니다. 브랜드 정산탭 상세
@@ -295,7 +297,7 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 | POST   | `/admin/efs-billing/publish`            | 브랜드×월 청구서 동결(스냅샷 + R2 xlsx) → 브랜드 전달      |
 | GET    | `/admin/efs-billing/published`          | 선택 브랜드×월 전달/납부 상태(배지·버튼용)                 |
 | POST   | `/admin/efs-billing/mark-paid`          | 브랜드 납부 수령 확인 토글                                 |
-| GET    | `/admin/efs-billing/export-pdf`         | **브랜드 발송용 청구서 PDF**(전달된 달은 동결본, `source=live` 면 미확정 미리보기) |
+| GET    | `/admin/efs-billing/export-pdf`         | **브랜드 발송용 청구서 PDF**(전달된 달은 동결본, `source=live` 면 라이브)  |
 | GET    | `/admin/efs-billing/export-pdf-all`     | 그 달 내역 있는 **전 브랜드** 청구서 PDF 를 zip 으로(브랜드 선택 불필요)   |
 | GET    | `/admin/efs-billing/export`             | 내부 대사용 엑셀(요약/일반주문/시딩 시트) — 브랜드 발송용 아님 |
 
