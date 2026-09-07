@@ -198,9 +198,19 @@ publish 이후 수기 행을 고쳐도 **동결본은 안 바뀐다**(기존 동
 
 ### 브랜드 발송용 청구서 PDF (`statement-pdf.ts`)
 
-A4. 행마다 **발송일(픽업) · 목적국 · 수취인 · 구분(일반/시딩) · 청구액**과 총 청구금액·입금계좌만 담는다.
+A4. 행마다 **순번 · 구분(일반/시딩) · 발송일(픽업) · 목적국 · 수취인 · 청구액**과 총 청구금액·입금계좌만 담는다.
 서식은 기존 KLOW 견적서(KLOW SERVICE QUOTATION)와 같은 계열이고 색·여백은 그 PDF 실측값이다.
 
+- 순번은 동결 `seq` 가 아니라 **표에 실제로 찍힌 순서**(배열 인덱스+1)다 — 청구 불가 행을 걸러낸 뒤
+  매기므로 **마지막 번호가 곧 청구 건수**가 되어 브랜드가 세지 않고 검산한다. `seq` 를 쓰면 중간이
+  빈 번호가 나온다.
+- **일괄 다운로드**(`export-pdf-all`)는 그 달 청구 내역이 있는 **전 브랜드**를 zip 으로 묶는다.
+  브랜드마다 개별 파일이라 그대로 각자에게 전달할 수 있다(한 PDF 로 합치면 다시 쪼개야 한다).
+  ⚠️ **월 리포트를 브랜드마다 다시 부르지 않는다** — `exportStatementPdf` 를 N 번 부르면
+  `monthlyReport` 가 N 번 돌고 **실비 미저장 송장의 EFS API 조회가 브랜드 수만큼 반복**된다.
+  리포트를 한 번 뽑아 `brandId` 로 잘라 `buildStatement({rows, brandId, buyerPaidCount})` 에 넘긴다.
+  확정본 조회도 `findMany` 한 번이다. ⚠️ zip 안 파일명에 문서번호 꼬리를 붙인다 — 브랜드명은 자유
+  입력이라 동명이 가능하고, 같은 이름이면 뒤가 앞을 덮는다. 압축은 `STORE`(PDF 는 이미 압축돼 있다).
 - ⚠️ **`billedKrw == null`(EFS 실비 미입력) 행은 표에서 뺀다.** 사유를 적을 `비고` 열이 없어 금액 칸이 빈
   행이 설명 없이 남는다. 빼면 `표 행 수 == 청구 건수`, `Σ 청구액 == 총 청구금액` 이 종이 위에서 그대로
   검산된다 — 그 건수는 안내 문구에 명시한다(회귀 잠금: `__tests__/statement-pdf.spec.ts`).
@@ -286,6 +296,7 @@ EFS 조회는 `shipments/efs.client.ts`, 브랜드 열람 라우트는 `settleme
 | GET    | `/admin/efs-billing/published`          | 선택 브랜드×월 전달/납부 상태(배지·버튼용)                 |
 | POST   | `/admin/efs-billing/mark-paid`          | 브랜드 납부 수령 확인 토글                                 |
 | GET    | `/admin/efs-billing/export-pdf`         | **브랜드 발송용 청구서 PDF**(전달된 달은 동결본, `source=live` 면 미확정 미리보기) |
+| GET    | `/admin/efs-billing/export-pdf-all`     | 그 달 내역 있는 **전 브랜드** 청구서 PDF 를 zip 으로(브랜드 선택 불필요)   |
 | GET    | `/admin/efs-billing/export`             | 내부 대사용 엑셀(요약/일반주문/시딩 시트) — 브랜드 발송용 아님 |
 
 ## 브랜드 열람 (settlement 모듈 컨트롤러)
