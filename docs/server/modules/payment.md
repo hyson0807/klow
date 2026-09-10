@@ -5,6 +5,53 @@
 - **흐름 요약**: `POST /v1/orders` (동의 + IP + fxRate snapshot) → `POST /v1/payment/prepare` → 클라 Eximbay JS SDK → **`return_url` = 서버 `POST /payment/return` (여기서 확정)** → klow_web `/checkout/redirect?…&klow_verified=1` 로 303 (화면 라우팅·카트 정리만)
 - **보강 경로**: `POST /webhooks/eximbay` (외부 IP 화이트리스트), **`payment-reconcile` 크론 15분 주기**, `PATCH /admin/orders/:id/reconcile-payment` (수동), `POST /v1/payment/report-failure` (pending→failed 멱등)
 
+## ⚠️⚠️ PG 실패 콜백 게이트 — `rescode` 는 `parseAndMarkPaid` 안에 있다 (2026-09-10)
+
+**실패한 결제가 결제완료로 확정된 사고**가 실제로 났다. `rescode` 게이트가 **공유 함수가 아니라
+`handleReturn` 호출부 한 곳에만** 있었고, `parseAndMarkPaid` 로 들어오는 **진입점 3개 중 2개**
+(`handleStatusWebhook`, klow_web 폴백 `verify`)가 그 검사를 통째로 건너뛰었다.
+
+**2026-09-09 FOURSUMMER 현장결제 (NAVER Pay(Card), `payment_method=P307`)**
+
+| 시각(KST) | 채널 | 내용 |
+|---|---|---|
+| 19:39:48 | `return_url` | 인증 성공 → `rescode=0000` → `handleReturn` 통과 → **paid 확정** |
+| 19:39:49 | `status_url` | 최종 승인 **실패** → `rescode=X059`(도난분실 카드) / `8327`(한도 초과) 통보 |
+
+웹훅은 `rescode` 를 안 보고 `parseAndMarkPaid` → `markPaid` 로 직행했고, 이미 `paid` 라
+`count === 0` → **"같은 tid 로 이미 paid → 멱등 성공"** 분기로 조용히 삼켜졌다. 우리 서버는
+Eximbay 에 `rescode=0000&resmsg=success` 를 회신했다. **PG 는 실패를 정확히 통보했는데 우리가
+성공 재통보로 오인한 것이다.** 주문 2건이 결제완료로 남아 브랜드 정산에 ₩39,130 이 잡혔다
+(미정산이라 지급 전에 정정).
+
+**고친 것**
+
+- `rescode` 게이트를 **`parseAndMarkPaid` 안으로** 옮겼다. ⚠️ 호출부로 되돌리지 말 것 — 진입점이
+  늘 때 빠지는 게 이 사고의 원인 그 자체다. `handleReturn` 의 중복 분기는 제거했다(규칙이 두 벌이면
+  반드시 갈린다).
+- ⚠️ 게이트는 **`verify` 호출보다 앞**이다. 실패 콜백은 Eximbay 왕복을 만들 이유가 없고, 게이트가
+  뒤에 있으면 통과 시 그대로 `markPaid` 로 이어진다.
+- ⚠️⚠️ **이미 `paid` 인데 PG 가 실패를 통보한 모순**은 `rejectFailedCallback` 이 ERROR 로그 +
+  Sentry 로 올린다. 예전엔 이 조합이 흔적조차 안 남았다. **자동 강등은 하지 않는다** — 그 주문에는
+  이미 송장·확인메일·카트정리·정산 후보가 붙어 있을 수 있어 되돌리기가 결제 상태 하나로 안 끝난다.
+- `markFailed` 는 `pending` 에서만 전이하므로 이 게이트가 정상 결제를 강등할 수 없다(멱등).
+
+⚠️ **`verify` 는 결제 성공 판정이 아니다.** `/v1/payments/verify` 는 **querystring 위변조 검증
+(무결성)** 이고 `eximbayFetch` 는 **봉투 `rescode`** 만 본다 — 회귀 스펙이 그 응답을
+`{ rescode: '0000' }` 로만 목킹하는 게 그 가정의 증거다. 실제 결제 상태의 정본은 `retrieve` 의
+`payment.status ∈ {SALE, AUTH}`(`retrievePaymentStatus`)이고, 재확인 크론만 그걸 본다.
+
+⚠️ **재확인 크론은 `pending` 만 본다** — 한 번 `paid` 로 잘못 확정되면 다시 검사하지 않아 **영구히
+남는다**. 그래서 이 게이트가 유일한 방어선이다.
+
+**알려진 갭**: PG 응답 원문을 저장하지 않아 사후 원인 규명이 PG 콘솔 대조에만 의존한다(이번에도
+스크린샷을 받고서야 특정했다). 결제완료 74건 중 같은 방식으로 잘못 확정된 건이 더 있는지는
+DB 만으로는 판별할 수 없다.
+
+회귀 잠금: `payment/__tests__/failed-callback-gate.spec.ts`(13) — **세 진입점 전부** × 실제 사고
+파라미터(X059/8327 원문). ⚠️ 하나만 검사하는 스펙으로 줄이지 말 것. 수정 전 코드로 돌리면 9개가
+실패한다(스펙이 실제로 이 버그를 잡는다는 증거).
+
 ## 결제 확정의 3중 방어선 (2026-08-17)
 
 `pending → paid` 전이는 `markPaid()` 한 곳에서만 일어난다. 예전엔 거기 도달하는 경로가 둘뿐이었고
