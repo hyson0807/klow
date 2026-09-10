@@ -11,6 +11,7 @@ klowpro/
 klowsaas/
 image-card/
 klow_search_server/
+buyer_design/
 
 # ── Tooling caches ───────────────────────────────────────────────
 .playwright-mcp/
