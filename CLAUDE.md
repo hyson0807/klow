@@ -90,7 +90,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **ERROR 로그 두 줄이 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 두 가지를 잡는다: ① 31개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 9개 등록 여부**. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 31개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 10개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
 3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 327개 — 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
@@ -100,6 +100,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 ## Key Facts
 
 - **Server port:** `4000` (NestJS)
+- **klow_server 컨테이너 + AWS 이전 준비 (2026-09-11):** Railway → ECS Fargate 이전 1단계로 세 가지가 들어왔다. ① **`CRON_ENABLED`** 전체 스위치 — 정확히 `'false'` 면 `@Cron` 이 **등록조차 안 된다**(`app.module.ts` `ScheduleModule.forRootAsync`). 두 플랫폼이 동시에 뜨는 전환 기간에 정기결제·결제 재확인 이중 실행을 막는 용도라 **평상시엔 어느 환경에도 설정하지 않는다**(켜는 걸 잊으면 결제 재확인이 조용히 멈춘다). ② **`enableShutdownHooks()`** — ⚠️ Nest 종료 순서가 `onModuleDestroy → 스케줄러 정지 → HTTP 닫기 → onApplicationShutdown` 이라 DB·브라우저 정리는 **`onApplicationShutdown`** 에 둔다(`PrismaService`·`BrandScraperService`). `onModuleDestroy` 로 되돌리면 처리 중인 요청의 DB 연결이 먼저 끊긴다. ③ **`klow_server/Dockerfile`**(hydo-api 계보) — ⚠️⚠️ **Railway 는 루트 Dockerfile 을 자동 감지하므로 이 파일을 고치면 운영 빌드가 바뀐다.** `npm prune` 뒤 `prisma generate` 재실행(prune 이 client 를 지운다) · `NODE_ENV` 는 이미지에 넣지 않음(부팅 가드가 이 값에 걸려 있다 — 정본은 플랫폼 env) · `RUN_MIGRATIONS=true` 면 기동 전 `migrate deploy`(기본 off — 런북 순서를 대체하지 않는다) · Playwright 크롬 미포함 · `.dockerignore` 의 `.env*` 필수. AWS 쪽 함정(`TRUST_PROXY_HOPS` 재실측 · 리전 ap-southeast-1 · 벤더 고정 IP · ALB idle timeout)과 단계별 계획은 [`docs/aws-fargate-migration.md`](./docs/aws-fargate-migration.md).
 - **Admin port:** `3000` (Next.js dev)
 - **klow_web port:** `3001` (Next.js dev, chosen to avoid the admin)
 - **klow_brand port:** `3002` (Next.js dev, chosen to avoid web/admin)

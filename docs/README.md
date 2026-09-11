@@ -13,6 +13,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [pricing-model.md](./pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
 | [deploy-drop-logistics-markup-runbook.md](./deploy-drop-logistics-markup-runbook.md) | **판매가 물류비 분리 + 무료배송 릴리스를 prod 에 어떻게 올리나?** 마이그레이션 → 백필 → 배포 순서, 스모크, 사전 공지 |
 | [deploy-free-text-product-tags-runbook.md](./deploy-free-text-product-tags-runbook.md) | **제품 태그 자유 텍스트 전환을 prod 에 어떻게 올리나?** DROP COLUMN 8개 컷오버, 마이그레이션 → 코드 → 백필 순서와 그 이유 |
+| [aws-fargate-migration.md](./aws-fargate-migration.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서, 루트 Dockerfile 을 Railway 가 감지하는 문제 (✅ 1단계 완료 · 2단계는 크레딧 승인 후) |
 | [deploy-custom-domain-runbook.md](./deploy-custom-domain-runbook.md) | **브랜드 커스텀 도메인을 prod 에 어떻게 올리나?** 레포 간 순서(예약 슬러그 동일 창 · P2→P3 · P4 마지막), `VERCEL_PROJECT_ID` 환경별 분리, Vercel "Redirect to primary domain" 함정, 배포 후 curl 검증, 롤백 |
 | [payment-integration.md](./payment-integration.md) | 고객 결제(Eximbay, USD)가 어떻게 흐르나? prepare→verify, 환불, 웹훅 |
 | [brand-subscription.md](./brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
