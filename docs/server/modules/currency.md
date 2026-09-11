@@ -49,7 +49,17 @@
 
 응답: `{ countryCurrency: { [iso2]: currencyCode }, rates: [{ code, usdRate, updatedAt }] }`
 
-- `countryCurrency` 는 **`ShippingCountry.enabled = true` 이고 `currencyCode` 가 있는 국가만** (공개 노출 대상).
+- `countryCurrency` 는 **`currencyCode` 가 있는 모든 국가**(실측 234개국 중 128개).
+  - ⚠️⚠️ **`enabled` 로 거르지 않는다.** 예전엔 걸렀는데, 국가 선택(온보딩·브랜드관·부스 QR)이
+    `enabled` 를 보지 않기 때문에(그 국가는 배송지가 아니라 **가격 기준국**이다) 손님이 고를 수
+    있는 국가와 통화를 아는 국가가 어긋났다 — 사우디를 골라도 `countryCurrency['SA']` 가 없어
+    klow_web `useLocalPrice` 의 `countryCurrency[country] || 'USD'` 가 달러로 폴백했다
+    (SA 는 `currencyCode='SAR'` 도 FX(3.75)도 이미 있었고 `enabled=false` 하나 때문이었다.
+    실측 enabled 는 14개국뿐). klow_brand 스튜디오 목업도 같은 payload 라 브랜드가 국가별
+    판매가를 정할 때 같은 증상을 봤다. `enabled` 는 **배송지원 화이트리스트**이지 통화 축이 아니다.
+  - 노출 위험은 없다(통화코드는 공개 사실이고 금액이 아니다). FX 행이 없는 통화가 섞여도 클라가
+    `rate > 0` 일 때만 현지 통화로 그려 USD 로 안전하게 폴백한다. payload 증가분은 ~1.4KB.
+  - 회귀 잠금: `currency/__tests__/public-payload.spec.ts`(되돌리면 2건 실패).
 - `rates` 는 **전체 통화 행** — 필터 없이 다 내려간다(KRW 정산 환율도 포함).
 - web/brand 가 부팅 시 1콜로 받아 현지통화 표시/입력에 쓴다.
 
