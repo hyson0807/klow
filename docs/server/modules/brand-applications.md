@@ -65,7 +65,7 @@
 - ⚠️ `:locale` 은 **`ZodValidationPipe(OverrideLocale)` 로 검증**한다. 컨트롤러 본문에서 `OverrideLocale.parse()` 를 부르면 지원하지 않는 로케일(`en` 등)이 raw ZodError 로 던져져 **400 이 아니라 500** 이 된다(실제로 그랬다).
 - ⚠️⚠️ zod 에서 **`value` 에 `EnglishText`/`isAsciiPrintable` 를 걸면 안 된다** — 정의상 일본어·중국어·태국어다. 반대로 **`src` 는 반드시 ASCII 검증**한다(영문 정본을 가리키는 키라, 한글 `src` 는 스튜디오가 blur 영문화 전 값을 보냈다는 뜻이고 그대로 받으면 영원히 매칭되지 않는 고아가 된다). 이 파일의 이웃 스키마가 전부 ASCII 전용이라 **가장 나기 쉬운 복붙 버그**다.
 - ⚠️ 번역문 길이 상한(`OVERRIDE_VALUE_MAX`)에 **영문 원문 상한을 그대로 쓰지 않는다** — ru/vi 번역은 영문보다 길어지는 게 흔해 정당한 번역이 400 으로 튕긴다. 남용 방지용으로만 넉넉히 잡는다.
-- `resolve` 가 **전 로케일을 한 요청**으로 받는 이유: 오버라이드는 로케일마다 있는데 영문 원문은 하나라, 목업(한 번에 한 나라)만으로는 브랜드가 6개국을 순회해야 정리가 끝난다.
+- `resolve` 가 **전 로케일을 한 요청**으로 받는 이유: 오버라이드는 로케일마다 있는데 영문 원문은 하나라, 목업(한 번에 한 나라)만으로는 브랜드가 7개 로케일을 순회해야 정리가 끝난다.
 - `BrandApplicationsModule` 이 `ProductsModule` 을 import 한다(`ProductTranslationService` 사용). `ProductsModule` 은 `TranslationModule` 만 import 하고 그 모듈은 imports 가 없어 순환이 없다 — `SeedingModule` 이 같은 이유로 이미 같은 일을 한다.
 - 동시성: PATCH 는 jsonb read-modify-write 라 `$transaction` 으로 감싸지만 READ COMMITTED 라 **탭 두 개가 동시에 저장하면 lost update 가 가능**하다(`countryPrices` replace-all 과 같은 급의 수용된 위험 — UI 가 한 번에 한 필드만 커밋한다).
 

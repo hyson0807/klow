@@ -277,7 +277,7 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 
 ### Translation / i18n
 
-**콘텐츠 번역**(브랜드/제품/리뷰 텍스트)은 `translation` 모듈 + `BrandTranslation`/`ProductTranslation`/`ReviewTranslation` MT 캐시로 처리 — 소스 텍스트가 바뀌면 `sourceUpdatedAt` 로 캐시를 무효화하고 재번역한다. **앱 UI 문구 i18n 은 별개** — `klow_web/src/i18n/` 이 en 단일 원본에서 ja/zh/vi/th/id/ru 를 생성하고 `useT`/`useLabels` 훅으로 렌더한다(가이드 `klow_web/docs/i18n.md`). 두 시스템은 서로 독립.
+**콘텐츠 번역**(브랜드/제품/리뷰 텍스트)은 `translation` 모듈 + `BrandTranslation`/`ProductTranslation`/`ReviewTranslation` MT 캐시로 처리 — 소스 텍스트가 바뀌면 `sourceUpdatedAt` 로 캐시를 무효화하고 재번역한다. **앱 UI 문구 i18n 은 별개** — `klow_web/src/i18n/` 이 en 단일 원본에서 ja/zh/vi/th/id/ru/ar 를 생성하고 `useT`/`useLabels` 훅으로 렌더한다(가이드 `klow_web/docs/i18n.md`). 두 시스템은 서로 독립.
 
 ### Influencer search
 
