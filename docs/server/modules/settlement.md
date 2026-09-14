@@ -134,10 +134,21 @@
   - ⚠️⚠️ **환불은 같은 주문에 두 행으로 온다** — 원거래 Sale 행에 `취소='취소완료'` 가 찍히고 별도 `Refund` 행이 하나 더 생긴다(실측: `Ref.` 가 중복되는 유일한 케이스). **둘 다 빼야** 그 주문이 보정에서 완전히 빠진다 — 한쪽만 빼면 환불된 주문의 승인 원화가 그대로 정산 정본이 된다.
   - ⚠️⚠️ **승인통화가 USD 인 행은 원화가 파일에 아예 없다**(실측 68건 중 5건, **전부 AMEX 계열**) → `approvedKrw: null` = `unavailable`. **0 으로 폴백하면 그 주문의 브랜드 정산액이 0원으로 확정 지급된다.** 스키마에 `@default(0)` 을 주지 않은 이유이기도 하다.
   - ⚠️ 같은 주문번호가 제외 후에도 둘 이상 남으면 **전부 버린다** — 임의로 고른 그 값이 곧 지급액이 되므로 추측하지 않는다.
-  - **라우트 3개**(`POST /admin/settlement/pg/preview` · `apply` · `GET /admin/settlement/pg`)는 **슈퍼관리자 전용**이고, `efs-billing` 의 `importPreview`/`importApply` 와 같은 2단계다(서버 무상태 · 적용은 **선택값 JSON**, 파일 재전송 없음). ⚠️ **새 Nest 모듈을 만들지 않고** `SettlementModule` 의 provider/controller 로 넣었다 — `test/app.e2e-spec.ts` 가 모듈 수·cron 수를 단언하는데 그 둘을 바꿀 이유가 없다.
+  - **라우트 4개**(`POST /admin/settlement/pg/preview` · `apply` · `PATCH /amounts` · `GET /admin/settlement/pg`)는 **슈퍼관리자 전용**이고, `efs-billing` 의 `importPreview`/`importApply` 와 같은 2단계다(서버 무상태 · 적용은 **선택값 JSON**, 파일 재전송 없음). ⚠️ **새 Nest 모듈을 만들지 않고** `SettlementModule` 의 provider/controller 로 넣었다 — `test/app.e2e-spec.ts` 가 모듈 수·cron 수를 단언하는데 그 둘을 바꿀 이유가 없다.
   - ⚠️ 미리보기 `ok` 는 **`matchedCount > 0`** 으로만 판정한다 — "금액이 달라진 행 수"로 게이트하면 이미 반영된 달을 다시 올려 표시 정보만 채우는 정상 경로가 막힌다(`efs-billing` CompareModal 이 같은 실수로 청구중량 백필을 도달 불가로 만든 적이 있다).
   - **회귀 잠금**: `settlement/__tests__/pg-settlement-parse.spec.ts`(가변 요약 블록 · 콤마 금액 · 환불 쌍 양쪽 제외 · USD 승인 null · KST→UTC · 중복 제외 · 형식 거절) + `pg-correction.spec.ts`(단일=나눗셈 없음 · **Σ안분 === net** · 결정성 · 분모 0 → null · 보정 없으면 추정치 그대로 · 보정값 0 보존).
   - 배포 순서는 **klow_server → klow_admin → klow_brand**. ⚠️ **배포만으로는 아무것도 달라지지 않는다 — 정산서를 업로드하는 순간이 곧 보정이다.**
+- **어드민 브랜드 상세의 '정산' 탭 = 브랜드 정산탭의 읽기 전용 미러** *(2026-09-14)*: 브랜드가 "이 건이 왜 안 보이냐"고 물을 때 어드민이 대조할 화면이 없었다. 기존 `/settlement/[brandId]` 는 **정산 처리**용이라 모집단이 다르다 — 서버가 그 달로 잘라 주는 월 스코프이고, EFS 청구서 축이 없으며, `고객 결제(USD)`·상태 배지·할인 링크 배지가 없다. klow_admin `/brands/[id]` 에 4번째 탭(`?tab=settlement`)을 붙였다.
+  - **서버는 위임만 한다.** 신규 `admin-brand-settlement.controller.ts`(`@Controller('admin/settlement/brand')`, `AdminGuard + SuperAdminGuard`)가 `BrandSettlementController` 와 **같은 서비스 메서드를 같은 인자로** 부른다(세션 대신 path param). 라우트 5개: `GET :brandId/{delivered,onsite,export,efs-statements,efs-statements/:yearMonth}`.
+  - ⚠️⚠️ **기존 어드민 쿼리(`candidates`/`monthly`)를 재사용하지 않는 것이 핵심이다.** 이 모듈이 반복해 겪은 실패가 "서로 다른 쿼리가 각자 다른 모집단으로 돌아 값이 조용히 갈린다" 이고, 미러 화면이 그 함정에 빠지면 화면의 목적이 통째로 무효가 된다.
+  - ⚠️ **`take` 를 늘리지 말 것** — 브랜드와 같은 `BRAND_SETTLEMENT_TAKE` 여야 절단 배너까지 같은 조건에서 뜬다.
+  - ⚠️ 청구서 **엑셀은 신설하지 않았다** — 기존 `GET /admin/efs-billing/export-invoice?yearMonth&brandId` 가 같은 동결 스냅샷에서 렌더한다.
+  - **원화는 브랜드와 똑같이 숨긴다** — `pgCorrectionState === 'applied'` 인 행만 `정산액` 열에 숫자가 뜬다. 지급액을 원화로 확인하는 자리는 `/settlement` 축이고, 탭 상단에 그리로 가는 링크가 있다(정산 실행 버튼은 두지 않는다 — 저쪽은 **기본 전체 선택** 작업 화면이라 오클릭 한 번에 선택이 날아간다).
+  - **권한은 슈퍼관리자 전용**(`/settlement`·`/efs-billing` 과 같은 축). 판정은 서버 `SuperAdminGuard` + 클라 `useCurrentAdmin().admin.role === 'super'` 이고, ⚠️ 딥링크로 들어온 operator 가 **빈 화면**을 보지 않도록 `BrandDetailTabs` 가 '브랜드 정보'로 시작한 뒤 권한이 확인되면 승격한다.
+  - **klow_admin 미러 타입 보강 4건** — 서버는 이미 보내는데 선언이 없어 못 쓰던 값들이다: `ShipmentDTO.brandConfirmedShippedAt`(발송 대기 vs 배송 중) · `customerShippingUsdCents` · `promotionName` · `order.totalUsd`, 그리고 `SettlementLineDTO.items[].customerUsdCents`. 위 "미러에 필드를 빠뜨리면 값이 화면에서 영영 안 보인다" 의 네 번째 사례다.
+  - **파생 규칙은 klow_admin `brands/_components/settlement/brand-settlement-model.ts`** 가 소유하고, klow_brand `settlement.model.ts` 의 **의도된 크로스 레포 미러**다(그쪽이 원본). 깨져도 컴파일·린트·빌드가 전부 통과하므로 klow_admin 에도 **`npm run check:settlement`**(신규, `tsx` devDependency 추가)를 두어 25건을 잠근다 — klow_brand 의 같은 스크립트와 단언이 같다.
+  - **마이그레이션·백필·cron 불변**, 모듈 수 **31 불변**(새 Nest 모듈 없이 `SettlementModule` 의 controller 로 넣었다), 라우트 **+5**. 배포 순서는 **klow_server → klow_admin**(반대면 조회 5종이 404).
+- **`listAdminMonthly` 의 현장결제 축이 PG 보정을 건너뛰던 버그** *(2026-09-14 수정)*: 같은 함수의 송장 축·무효화 현장 축과 `listAdminCandidates` 의 현장 축은 전부 `effectiveSettlementKrw` 를 타는데 **활성 현장 축만** `(settlementPriceKrw × quantity)` 를 그대로 더했다. 그래서 정산서를 올린 달에 현장결제 주문이 있으면 어드민 `/settlement` **목록의 미수금만** 상세·브랜드 화면과 갈렸다(환율 드리프트 1370~1404 만큼). 이제 (브랜드 × 주문) 으로 묶어 `loadOnsitePgCorrections` → `effectiveSettlementKrw` 를 태운다 — ⚠️ 묶음 키는 무효화 축(`voidedOnsiteGroups`)과 **같은 규칙**이어야 두 축이 대사되고, 안분이 주문 단위라 아이템 단위로 넘기면 같은 주문이 여러 번 안분된다.
 - **반대 방향(낼 돈)**: 브랜드가 KLOW 에 내는 EFS 배송비 후청구는 [efs-billing](./efs-billing.md) 모듈이다 — 이 모듈(받을 돈)과 돈의 방향이 반대이고, 브랜드 정산탭에서 나란히 보인다.
 - **관련 파일**: `settlement.service.ts`(settleable 필터 정의·`settleableShipmentWhere` 팩토리·`listDeliveredForBrand`·`listOnsiteForBrand`·`listAdminCandidates`·`listAdminBrandCandidates`·`listAdminMonthly`·`settle`), 2 개 컨트롤러(brand · admin — 브랜드 컨트롤러는 `EfsBillingService` 도 주입해 청구서 열람 라우트를 함께 노출). 송장 include 형태는 [shipments](./shipments.md) 의 `SHIPMENT_INCLUDE`/`SHIPMENT_LIST_OMIT` 재사용. 주문 매출/시딩 구분은 [orders](./orders.md), 브랜드 구독 게이트는 [subscription](./subscription.md) 참고.
 
@@ -153,7 +164,6 @@
 | GET    | `/v1/brand/settlement/efs-statements` | 전달받은 EFS 배송비 청구서 목록 — [efs-billing](./efs-billing.md)   |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth` | 청구서 상세(동결 rows 스냅샷)                 |
 | GET    | `/v1/brand/settlement/efs-statements/:yearMonth/invoice` | **청구서 엑셀** — 동결 rows 에서 렌더              |
-| GET    | `/v1/brand/settlement/efs-statements/:yearMonth/excel` | [legacy] 동결 xlsx 재스트리밍(R2) — klow_brand 전환 후 제거 |
 
 ## admin-settlement.controller.ts (`@Controller('admin/settlement')`)
 
@@ -175,4 +185,20 @@
 |--------|---------------------------------|----------------------------------------------------------------------|
 | POST   | `/admin/settlement/pg/preview`  | 엑심베이 정산서 xlsx 파싱 + 대사(multipart `file` + `yearMonth`) — **저장하지 않는다** |
 | POST   | `/admin/settlement/pg/apply`    | 어드민이 고른 행만 upsert(`{yearMonth, items[≤1000]}`, `@HttpCode(200)`) |
-| GET    | `/admin/settlement/pg`          | 그 달 반영 현황(`recordCount`/`appliedCount`/`unavailableCount`/`byBrand`) — 목록 배지 |
+| PATCH  | `/admin/settlement/pg/amounts`  | 승인 원화 **수기 확정**(`{items[≤200]}`) — 정산서가 원화를 못 준 건(승인통화 USD)을 어드민이 PG 콘솔에서 확인해 직접 넣는다 |
+| GET    | `/admin/settlement/pg`          | 그 달 반영 현황(`recordCount`/`appliedCount`/`unavailableCount`/`manualCount`/`byBrand`) — 목록 배지 |
+
+## admin-brand-settlement.controller.ts (`@Controller('admin/settlement/brand')`)
+
+> 전체 라우트 `AdminGuard` + `SuperAdminGuard`. 어드민 브랜드 상세 '정산' 탭이 쓰는 **읽기 전용 미러**다.
+> 경로 첫 세그먼트가 `brand` 라 `@Get('candidates/:brandId')`·`admin/settlement/pg` 와 충돌하지 않는다.
+> ⚠️ 전부 `BrandSettlementController` 와 **같은 서비스 메서드를 같은 인자로** 부른다 — 여기에 월 스코프나
+> 다른 `take` 를 끼워 넣으면 어드민과 브랜드가 다른 숫자를 보게 되고, 그게 이 탭의 존재 이유를 무효화한다.
+
+| Method | Path                                                  | 기능                                          |
+|--------|-------------------------------------------------------|-----------------------------------------------|
+| GET    | `/admin/settlement/brand/:brandId/delivered`          | 일반주문 + 시딩 원장(브랜드 `/delivered` 와 동일) |
+| GET    | `/admin/settlement/brand/:brandId/onsite`             | 현장결제 라인(`SettlementLineDTO[]`)          |
+| GET    | `/admin/settlement/brand/:brandId/export`             | **정산 내역 엑셀**(`?yearMonth=` 필수) — 브랜드가 받는 것과 같은 파일 |
+| GET    | `/admin/settlement/brand/:brandId/efs-statements`     | 전달된 물류비 청구서 목록                      |
+| GET    | `/admin/settlement/brand/:brandId/efs-statements/:yearMonth` | 청구서 상세(동결 rows)                  |
