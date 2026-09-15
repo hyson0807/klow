@@ -25,7 +25,6 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
 ```
 0. 사전 확인 (코드 변경 없음)
    ├─ NicePay·Solapi·EFS 콘솔에 IP 등록 여부
-   ├─ Railway에서 Playwright 크롬 동작 여부 (설치 단계가 없어 SPA 폴백은 503일 가능성)
    └─ Railway 배포 설정(Custom Start / Pre-deploy Command, Healthcheck, NODE_ENV)
 
 1. 코드 준비  ✅ 완료
@@ -76,7 +75,7 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
   ```
   onModuleDestroy → beforeApplicationShutdown(스케줄러 정지) → dispose(HTTP 서버 닫기) → onApplicationShutdown
   ```
-  `PrismaService`와 `BrandScraperService`가 `onModuleDestroy`에서 정리하고 있어서, 훅만 켜면 **HTTP가 아직 요청을 받는 중에 DB와 브라우저를 먼저 닫는다.** 둘 다 `onApplicationShutdown`으로 옮겼다. `scripts/scrape-test.ts`도 같은 이름으로 호출하도록 고쳤다(`npm run typecheck`의 scripts tsconfig가 잡았다).
+  `PrismaService`와 `BrandScraperService`가 `onModuleDestroy`에서 정리하고 있어서, 훅만 켜면 **HTTP가 아직 요청을 받는 중에 DB와 브라우저를 먼저 닫는다.** 둘 다 `onApplicationShutdown`으로 옮겼다. (2026-09-15 에 Playwright 를 제거하면서 `BrandScraperService`의 종료 훅은 사라졌다 — 지금 이 훅을 쓰는 건 `PrismaService` 하나다.)
 - **알려진 한계:** 스케줄러는 다음 틱을 멈출 뿐 실행 중인 핸들러를 기다리지 않는다. 종료 순간 돌던 cron은 끊길 수 있다(예전보다 나빠지지는 않는다).
 
 ### Dockerfile
@@ -88,7 +87,7 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
 - **`node:20.18.0-alpine`:** `.nvmrc`와 같다. `argon2` 0.44는 musl prebuilt가 있다. `openssl`은 Prisma 엔진 탐지용으로 명시 설치한다. `schema.prisma`에 `binaryTargets`는 필요 없다(컨테이너 안에서 generate).
 - **`NODE_ENV`를 이미지에 넣지 않는다.** `main.ts`의 production 부팅 가드가 이 값에 걸려 있어, 박으면 그 값을 쓰지 않던 환경이 부팅 거부될 수 있다. 환경변수의 정본은 플랫폼이다.
 - **`RUN_MIGRATIONS=true`면 기동 직전 `prisma migrate deploy`.** 기본은 꺼짐이다. 롤링 비안전 마이그레이션이 있어 런북 순서를 대체하면 안 된다. 플랫폼에 pre-deploy 명령이 있으면 켜지 않는다(두 번 돈다).
-- **Playwright 크롬은 넣지 않았다.** 현재 레포에도 설치 단계가 없어 운영과 같다. SPA 자사몰 분석이 필요해지면 그때 추가한다(이미지가 수백 MB 이상 커지고 샌드박스 옵션 확인이 필요하다).
+- **Playwright 는 이제 레포에 없다** (2026-09-15 제거). 유일한 소비자였던 자사몰 URL 분석(`analyze-homepage`)이 프론트에서 이미 호출되지 않는 데드코드였고, chromium 설치 단계가 없어 SPA 폴백은 항상 503 이었다. 이미지에 브라우저를 넣을지 고민할 일 자체가 사라졌다 — 되살린다면 `docs/server/modules/brand-scraper.md` 의 경고(SSRF 가드 동반 복원)를 먼저 읽을 것.
 - **`USER node`, exec 형식 엔트리포인트:** node가 PID 1로 SIGTERM을 직접 받는다.
 - **`.dockerignore`에 `.env*` 필수.** 로컬 작업 트리에 `.env`·`.env.*.local`이 있어 빼지 않으면 이미지에 비밀번호가 들어간다.
 

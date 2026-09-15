@@ -68,7 +68,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 - **Throttler** — sensitive 엔드포인트(`login`, `signup`, `send-verification`, OTP 발송, `payment/verify`, 시딩 claim/checkout, scraper 등)에 `@Throttle()` 적용. 미지정 라우트는 전역 기본(60회 / 분 / IP).
   - `THROTTLE_TIGHT`: 5회 / 분 / IP
   - `THROTTLE_LOOSE`: 10회 / 분 / IP
-  - 개별 지정: `POST /v1/brand/translate` 20회 / 분, scraper `analyze-homepage`·`analyze-deck` 3회 / 분, `analyze-product` 6회 / 분 (전부 유료 외부 API 호출)
+  - 개별 지정: `POST /v1/brand/translate` 20회 / 분, scraper `analyze-deck` 3회 / 분, `analyze-product` 6회 / 분 (전부 유료 외부 API 호출)
 - **AdminAuditInterceptor** — `/admin/*` 의 모든 non-GET 응답을 `AdminAuditLog` 에 자동 기록 (password/code/token 류 redact).
 - **ZodValidationPipe** — `src/common/validation/`(도메인별 분할, index 배럴) 의 zod 스키마로 body/query 검증.
 - **PUBLIC_PRODUCT_WHERE** (= `PURCHASABLE_PRODUCT_WHERE`, 노출 == 구매 가능) — 공개 surface 에서 `Brand.status=approved` & `Product.status=approved` + 대표사진 + 판매가 완성도(`hasSellablePrice`) + `Product.hidden=false` 를 모두 만족해야 노출/판매된다. 추가로 **구독 게이트**: 가입 brand(`submittedById != null`)는 `BrandSubscription.status='active'` 동안만 노출/판매되고, 어드민이 직접 만든 brand(`submittedById = null`) 와 legacy(`brandId = null`) 제품은 면제. ([subscription](./modules/subscription.md), `product-selects.ts`.) ⚠️ 브랜드관 자체의 공개 필터(`PUBLIC_BRAND_WHERE`)는 이보다 느슨하다 — [brands](./modules/brands.md) 참고.
