@@ -373,6 +373,10 @@ useEffect(() => { try { sessionStorage.setItem(KEY, JSON.stringify({ filters }))
 
 행 전체 클릭으로 바꾸고 싶으면 **선택 상태를 `sessionStorage` 에 먼저 영속화**해야 한다(위 필터 유지와 같은 패턴).
 
+⚠️ **행 전체 클릭은 반드시 `lib/row-activation.ts` 의 `rowActivationProps(onActivate)` 를 거친다**(공용 `<TR onActivate>` 도 내부에서 이걸 쓴다). `<tr onClick>` 만 걸면 **셀 안의 텍스트를 드래그해 복사하는 것이 구조적으로 불가능**하다 — mousedown 과 mouseup 이 같은 행에서 끝나면 브라우저가 click 을 그대로 발화하기 때문이다(운영팀이 `tracking` 에서 송장번호를 드래그하다 상세로 튕기는 것으로 제보됐다). 헬퍼는 ① 누른 지점 ↔ 뗀 지점 거리 4px ② **그 행에 걸친** 선택 영역(`Range.intersectsNode`) 둘 다 보고 클릭을 무시한다. 선택 검사를 행으로 한정하는 게 중요한데, 페이지 어딘가에 남아 있던 옛 선택까지 보면 정상 클릭이 막히기 때문이다. ⚠️ 훅이 아니라 순수 함수인 이유는 행이 `.map()` 안에 인라인으로 있는 화면이 많아서다(훅이면 목록 길이가 바뀔 때 rules-of-hooks 에 걸린다).
+
+ℹ️ `TR` 주석은 "5개 페이지에 복붙돼 있던 것을 모았다"고 하지만 **전환은 아직 미완**이다 — `orders`·`refunds`·`customers`·`customers/[id]`·`audit-logs`·`tracking` 은 여전히 손으로 쓴 `<tr>` 이고 `rowActivationProps` 만 공유한다. 건드릴 일이 있으면 `<TR>` 로 옮길 것.
+
 ---
 
 ## Request Flow Examples
