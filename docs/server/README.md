@@ -25,7 +25,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 
 ## 모듈 색인
 
-> 33개 모듈, 약 300여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
+> 34개 모듈, 약 350여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
 
 | 카테고리   | 모듈                                                                  | 주요 책임                                                |
 |------------|-----------------------------------------------------------------------|----------------------------------------------------------|
@@ -54,6 +54,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | **마케팅** | [promotions](./modules/promotions.md)                                  | 인플루언서 할인가 브랜드관 링크(제품×국가 세일가) + 유입 추적 |
 |            | [brand-domains](./modules/brand-domains.md)                          | 브랜드 커스텀 도메인 연결 (Vercel Domains API + Host→슬러그 resolve + Origin 술어) |
 |            | [brand-crm](./modules/brand-crm.md)                                  | 브랜드 고객 관리(CRM) + 메일 발송 (주문에서 파생하는 고객 목록 · 태그/메모 · 템플릿 · 큐 발송 · 수신거부) |
+|            | [brand-notices](./modules/brand-notices.md)                          | 브랜드관 공지 팝업 (기간 한정 안내 · 사진 · 자동 번역 · 오늘 하루 보지 않기) |
 |            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
