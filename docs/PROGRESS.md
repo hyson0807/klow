@@ -263,7 +263,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 
 ### 3pl-fulfillment — 콜로세움 3PL 재고 · 출고신청
 
-스펙: [`plan/3pl-fulfillment/implementation-plan.md`](./plan/3pl-fulfillment/implementation-plan.md) 의 1~7단계.
+스펙: [`plan/3pl-fulfillment/implementation-plan.md`](./plan/3pl-fulfillment/implementation-plan.md) 의 1~6단계.
 
 ⚠️ v1 은 **출고신청이 KLOW 주문에서 오지 않는다** — 브랜드가 수취인·제품을 직접 입력하는 독립
 엔티티다. 그래서 `klow_server` 의 EFS·`Shipment`·`ShippingCarrier`·라우팅 코드를 **한 줄도 건드리지
@@ -275,7 +275,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 - **건드리는 레포 · 배포 순서**: klow_brand 만. `배포 순서 제약 없음` (서버 계약 변경 0)
 - **스키마·데이터 위험**: 없음
 - **할 일 · 완료 기준**: 트랙 문서 §4 1단계
-- ⚠️ `DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩을 **둘 다 유지**한다 — 7단계에서 함께 지운다.
+- ⚠️ `DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩을 **둘 다 유지**한다 — 6단계에서 함께 지운다.
   칩만 지우면 예시 숫자가 실재고로 읽히고, 상수만 지우면 실데이터에 "예시" 딱지가 붙는다
 
 #### 2. 스키마 + 마이그레이션 + 모듈 스캐폴딩
@@ -304,6 +304,10 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 1단계(플랫폼 무관 준비 작업 — `CRON_ENABLED`·`enableShutdownHooks`·Dockerfile) 완료.
 **2단계 이후는 AWS 크레딧 승인 대기 = `막힘`.**
 
+⚠️ **트랙 우선순위 최하위** (2026-09-22, 사용자 결정) — 크레딧이 승인돼 막힘이 풀려도 **자동으로
+앞순위가 되지 않는다.** 다른 트랙의 `대기` 단계가 전부 없어진 뒤에 고른다. 그래서 `§7` 표에서도
+맨 아래 행이다.
+
 - 해제 조건(사건): **AWS Activate 크레딧 승인**
 - ⚠️ `TRUST_PROXY_HOPS` 는 Railway 엣지에 맞춰 **실측한 값 2** 다. AWS 에서 **재실측**한다 —
   추측으로 넣으면 2026-09-04 사고(웹훅 전부 403 · rate limit 전역 뭉침)가 재현된다
@@ -326,14 +330,13 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 | 1 | 체계 | 진행표 신설 | 완료 | — | 2026-09-22 | - / - / - / - / (이 커밋) |
 | 2 | 체계 | Key Facts → decisions 이관 | 대기 | — | | |
 | 3 | 체계 | 상태 장치 정리 | 완료 | — | 2026-09-22 | `2b5bd96`·`369c475` / `f53677f` / - / - / (이 커밋) |
-| 4 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
-| 5 | 3pl-fulfillment | 1. 스튜디오 탭 스왑 | 대기 | ✗ | | |
-| 6 | 3pl-fulfillment | 2. 스키마 + 마이그레이션 | 대기 | ✗ | | |
-| 7 | 3pl-fulfillment | 3. 재고 API | 대기 | ✗ | | |
-| 8 | 3pl-fulfillment | 4. 출고신청 API | 대기 | ✗ | | |
-| 9 | 3pl-fulfillment | 5. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 대기 | ✗ | | |
-| 10 | 3pl-fulfillment | 6. 어드민 화면 | 대기 | ✗ | | |
-| 11 | 3pl-fulfillment | 7. 브랜드 화면 | 대기 | ✗ | | |
+| 4 | 3pl-fulfillment | 1. 스튜디오 탭 스왑 | 대기 | ✗ | | |
+| 5 | 3pl-fulfillment | 2. 스키마 + 마이그레이션 | 대기 | ✗ | | |
+| 6 | 3pl-fulfillment | 3. 서버 API (재고 + 출고신청) | 대기 | ✗ | | |
+| 7 | 3pl-fulfillment | 4. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 대기 | ✗ | | |
+| 8 | 3pl-fulfillment | 5. 어드민 화면 | 대기 | ✗ | | |
+| 9 | 3pl-fulfillment | 6. 브랜드 화면 | 대기 | ✗ | | |
+| 10 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 

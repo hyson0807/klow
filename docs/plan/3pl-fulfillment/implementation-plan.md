@@ -108,13 +108,12 @@
 |---|---|---|
 | 1 | 스튜디오 탭 스왑 — 정산→헤더 필 / 재고 탭 복원 | klow_brand |
 | 2 | 스키마 + 마이그레이션 + 모듈 스캐폴딩 | klow_server |
-| 3 | 재고 API — 어드민 쓰기 · 브랜드 읽기 | klow_server |
-| 4 | 출고신청 API — 생성·취소 + 재고 차감 트랜잭션 | klow_server |
-| 5 | 엑셀 — 브랜드 업로드 파서 + 어드민 콜로세움 내보내기 | klow_server |
-| 6 | 어드민 화면 — 브랜드 재고 탭 + 출고신청 내역 | klow_admin |
-| 7 | 브랜드 화면 — 재고현황 + 출고신청(단건 + 엑셀) | klow_brand |
+| 3 | 서버 API — 재고(어드민 쓰기·브랜드 읽기) + 출고신청(생성·취소·재고 차감) | klow_server |
+| 4 | 엑셀 — 브랜드 업로드 파서 + 어드민 콜로세움 내보내기 | klow_server |
+| 5 | 어드민 화면 — 브랜드 재고 탭 + 출고신청 내역 | klow_admin |
+| 6 | 브랜드 화면 — 재고현황 + 출고신청(단건 + 엑셀) | klow_brand |
 
-**1·2단계만 아래에 정밀하게 쓴다.** 3~7은 제목과 범위 한 줄만 남긴다 — 뒤 단계의 전제는 앞 단계가
+**1·2단계만 아래에 정밀하게 쓴다.** 3~6은 제목과 범위 한 줄만 남긴다 — 뒤 단계의 전제는 앞 단계가
 끝나야 확정되므로 미리 쓰면 착수 시점엔 틀려 있다. **틀린 명세는 없는 명세보다 나쁘다.**
 
 ---
@@ -135,7 +134,7 @@
      - 본문 분기를 `InventoryTab` 으로
      - "구 '재고' 자리" 주석과 `showAutoSaveStatus` 주석의 `'settlement'` 문자열 수정
   3. `src/app/(authed)/studio/_components/tabs/InventoryTab.tsx` 복원 (위 `git show` 로 원문 그대로).
-     ⚠️ `DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩을 **둘 다 유지**한다 — 7단계에서 **함께** 지운다.
+     ⚠️ `DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩을 **둘 다 유지**한다 — 6단계에서 **함께** 지운다.
      칩만 지우면 예시 숫자가 실재고로 읽히고, 상수만 지우면 실데이터에 "예시" 딱지가 붙는다
   4. `src/app/(authed)/studio/_components/tabs/SettlementTab.tsx` **삭제**(`/settlement` 페이지는 자립)
   5. `src/app/(authed)/studio/_components/StudioSkeleton.tsx` 라벨 주석 수정 (**칸 수는 4 그대로**)
@@ -181,24 +180,29 @@
   - `npx prisma migrate status` clean
 - ⚠️ 이 단계는 라우트를 만들지 않는다 — 배포해도 **아무 동작이 달라지지 않는다**(안전한 착지점)
 
-### 3~7 (제목과 범위만)
+### 3~6 (제목과 범위만)
 
-3. **재고 API** — 어드민 `GET`/`PUT /admin/brands/:id/inventory`(`AdminGuard`, 브랜드 제품 목록 조인
-   + 수량 upsert), 브랜드 `GET /v1/brand/inventory`(`BrandGuard`).
-   ⚠️ `admin-brands.controller.ts` 에 `@Get(':id')` 가 있으므로 **별도 컨트롤러**로 뺀다.
-4. **출고신청 API** — 브랜드 생성·목록·취소. **생성·취소가 재고 차감/반납과 한 트랜잭션**이고
-   `SELECT … FOR UPDATE` 행 잠금을 쓴다(`reserveSlot()` 선례). 재고 부족은 400 + 남은 수량.
-   취소는 `exported` 전에만.
-5. **엑셀 2종** — ① 브랜드 업로드(KLOW 양식, 라이터+파서 한 파일, 다운로드→미리보기→적용)
+3. **서버 API — 재고 + 출고신청** (한 세션. 재고 쪽은 라우트 3개에 로직이 upsert 뿐이라 단독으로
+   떼면 세션이 비고, 출고신청이 그 재고를 차감하므로 같이 짜는 편이 경계도 덜 흔들린다)
+   - 재고: 어드민 `GET`/`PUT /admin/brands/:id/inventory`(`AdminGuard`, 브랜드 제품 목록 조인 +
+     수량 upsert), 브랜드 `GET /v1/brand/inventory`(`BrandGuard`).
+     ⚠️ `admin-brands.controller.ts` 에 `@Get(':id')` 가 있으므로 **별도 컨트롤러**로 뺀다
+   - 출고신청: 브랜드 생성·목록·취소. **생성·취소가 재고 차감/반납과 한 트랜잭션**이고
+     `SELECT … FOR UPDATE` 행 잠금을 쓴다(`reserveSlot()` 선례). 재고 부족은 400 + 남은 수량.
+     취소는 `exported` 전에만
+4. **엑셀 2종** — ① 브랜드 업로드(KLOW 양식, 라이터+파서 한 파일, 다운로드→미리보기→적용)
    ② 어드민 콜로세움 내보내기(`POST` + `SuperAdminGuard`, 17열 매핑, 내보내기 = `exported` 전이).
    **`EXPORT_SHEET_NAMES` 등재 필수.** 회귀 스펙 `__tests__/fulfillment-xlsx.spec.ts`.
-6. **어드민 화면** — 브랜드 상세 `재고` 탭(`NumericInputCell`) + 사이드바 `배송` 그룹에 출고신청 내역 탭.
+   ⚠️ 3단계와 합치지 않는다 — 라이터·파서 2벌에 회귀 스펙까지라 한 세션에 넘친다
+5. **어드민 화면** — 브랜드 상세 `재고` 탭(`NumericInputCell`) + 사이드바 `배송` 그룹에 출고신청 내역 탭.
    ⚠️ `Sidebar.tsx` 의 `NAV` **와** `components/tabs/routeLabels.ts` 의 `ROUTE_LABELS` **둘 다** 갱신한다 —
    후자를 빠뜨리면 탭 제목이 영문 슬러그로 뜬다(현재 6개 탭이 이미 그 상태다).
    선택·일괄 처리는 `shipments/_components/FailedTable.tsx` 패턴(목록 변경 시 죽은 id 정리 포함).
-7. **브랜드 화면** — 재고 탭 목업을 실데이터로 교체(`DEMO_STOCK` + `예시` 칩 **함께 제거**),
+6. **브랜드 화면** — 재고 탭 목업을 실데이터로 교체(`DEMO_STOCK` + `예시` 칩 **함께 제거**),
    서브탭 2개 추가(`재고현황` / `출고신청`). 서브탭 UI 는 `shipping/ui.tsx` 의 `Segmented` 2칸 변형.
    ⚠️ 기간별 해외/국내 **출고량은 디자인만**이다 — 목업 상수 + `예시` 표시를 남긴다.
+
+⚠️ **5·6을 합치지 않는다** — 레포 경계가 곧 배포 순서다(`klow_server → klow_admin → klow_brand`).
 
 ## 5. 다음 트랙 후보 (v1 이 일부러 하지 않는 것)
 
