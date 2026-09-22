@@ -17,15 +17,15 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**3pl-fulfillment 2단계 — 스키마 + 마이그레이션 + 모듈 스캐폴딩** (2026-09-22 기록)
+**3pl-fulfillment 3단계 — 서버 API (재고 + 출고신청)** (2026-09-22 기록)
 
-⚠️ **git 브랜치 + Neon DB 브랜치를 함께 판다.** 명세는 `§6 3pl-fulfillment` 2단계.
+명세는 `§6 3pl-fulfillment` 3단계. **klow_server 단독 · 마이그레이션 없음** — 2단계가 놓은
+테이블 위에 컨트롤러와 서비스 메서드만 얹는다.
 
-⚠️ 착수 시 먼저 할 것 (1단계 인계 메모에서 이월):
+⚠️ 작업 트리가 **`feat/3pl-fulfillment` 브랜치 + 전용 Neon DB 브랜치**(`ep-floral-sun`)를
+가리킨 채로 있다. 2단계 마이그레이션이 거기에만 적용돼 있으므로 `staging` 으로 돌아가지 않는다.
 
-1. **스튜디오 홈을 한 번 눈으로 연다** — 1단계가 화면을 확인하지 못한 채 끝났다. 탭 4칸
-   (통계·디자인·주문·재고)과 헤더 정산 pill 을 모바일 375px 포함해 확인한다
-2. 기준선은 라우트 **349** · cron **10** · Nest 모듈 **34**
+기준선은 라우트 **349** · cron **10** · Nest 모듈 **35**(2단계에서 fulfillment 가 늘었다).
 
 **그다음: 체계 4단계 — 없음.** 체계 트랙은 1~3단계로 끝났다. `docs/decisions/` 운영은 이제
 `§1` 절차 7번(문서 동기화)에 상시 규칙으로 들어가 있다.
@@ -166,7 +166,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 - **검증 3층** (klow_server 를 건드린 단계는 전부)
   1. `npm run typecheck` — tsconfig **2개**를 돈다. ⚠️ `npx tsc --noEmit` 만 쓰면 `src/` 밖(seed·
      backfill 스크립트)이 조용히 깨진다
-  2. `npm run test:e2e` — 34개 모듈 DI 그래프 + **cron 개수**. 새 cron 을 추가하면 기대 목록도 고친다
+  2. `npm run test:e2e` — 35개 모듈 DI 그래프 + **cron 개수**. 새 cron 을 추가하면 기대 목록도 고친다
   3. `npm run start` — env 가드 + 실 DB 접속 + 라우트 매핑 수(부팅 로그가 정본)
 - **배포 순서** — 보통 `klow_server → klow_admin → klow_brand → klow_web`. 뒤집으면 400(구 zod 가
   새 필드 거부) · 404(라우트 없음) · **조용한 strip**(non-strict zod 가 새 필드를 버린다)이 난다.
@@ -239,23 +239,26 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 엔티티다. 그래서 `klow_server` 의 EFS·`Shipment`·`ShippingCarrier`·라우팅 코드를 **한 줄도 건드리지
 않는다.** 유럽 라우팅·자동 유입·추적·비용 청구는 전부 다음 트랙 후보다(트랙 문서 §5).
 
-#### 1. 스튜디오 탭 스왑 — 정산→헤더 필 / 재고 탭 복원
+#### 3. 서버 API — 재고(어드민 쓰기 · 브랜드 읽기) + 출고신청(생성 · 취소 · 재고 차감)
 
-- **읽을 것**: 트랙 문서 §3(실측 전제) + §4 1단계, 커밋 `724a5cd` diff
-- **건드리는 레포 · 배포 순서**: klow_brand 만. `배포 순서 제약 없음` (서버 계약 변경 0)
-- **스키마·데이터 위험**: 없음
-- **할 일 · 완료 기준**: 트랙 문서 §4 1단계
-- ⚠️ `DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩을 **둘 다 유지**한다 — 6단계에서 함께 지운다.
-  칩만 지우면 예시 숫자가 실재고로 읽히고, 상수만 지우면 실데이터에 "예시" 딱지가 붙는다
-
-#### 2. 스키마 + 마이그레이션 + 모듈 스캐폴딩
-
-- **읽을 것**: 트랙 문서 §1·§2·§3, `server/README.md` 모듈 색인
-- **건드리는 레포 · 배포 순서**: klow_server 만. 마이그레이션 → 코드
-- **스키마·데이터 위험**: `add_3pl_fulfillment` — `CREATE TABLE` ×3 + `CREATE TYPE` ×1 뿐이라
-  **롤링 배포 안전 · 백필 없음**. ⚠️ **git 브랜치 + Neon DB 브랜치를 함께 판다**
-- **할 일 · 완료 기준**: 트랙 문서 §4 2단계. 공통 3층에 더해 **라우트 349 불변 · cron 10 불변**
-  (컨트롤러 라우트를 아직 만들지 않으므로 배포해도 동작이 달라지지 않는다 — 안전한 착지점)
+- **읽을 것**: 트랙 문서 §1·§3 + §4 3단계, 2단계가 만든 `prisma/schema.prisma` 의
+  `BrandInventoryItem`·`FulfillmentRequest`·`FulfillmentRequestItem` 주석과
+  `src/common/validation/fulfillment.ts`, `seeding.service.ts` 의 `reserveSlot()`
+- **건드리는 레포 · 배포 순서**: klow_server 단독. **배포 순서 제약 없음**(라우트 신설뿐이라
+  프론트가 아직 아무도 부르지 않는다)
+- **스키마·데이터 위험**: **없음** — 2단계 마이그레이션 위에 코드만 얹는다
+- **할 일**: 트랙 문서 §4 3단계. 2단계가 확정한 것들:
+  - 컨트롤러는 `src/modules/fulfillment/` 에 **URL surface 접두**로 새로 만든다
+    (`admin-inventory.controller.ts` · `brand-fulfillment.controller.ts`).
+    ⚠️ `admin-brands.controller.ts` 에 넣지 말 것 — 거기 `@Get(':id')` 가 뒤 라우트를 가린다
+  - `FulfillmentModule` 은 이미 `BrandAuthModule` 을 import 하고 `app.module.ts` 에 등록돼 있다.
+    `AdminGuard` 를 쓰려면 `AdminAuthModule` import 를 **추가**해야 한다(빠뜨리면 typecheck 는
+    통과하고 런타임 DI 에서 죽는다 — `test:e2e` 가 잡는다)
+  - zod 는 `FulfillmentRequestInput` · `BrandInventoryInput` 이 이미 있다. **`.default()` 금지**
+  - 재고 부족은 400 + 남은 수량. 취소는 `exportedAt` 이 null 일 때만
+- **완료 기준**: 공통 3층 + **라우트 349 → 신설한 수만큼 증가**(부팅 로그로 실측해 기록) ·
+  `server/modules/fulfillment.md` 신규 작성(모듈 문서 갱신 계약) · `server/README.md` 모듈 색인에
+  fulfillment 행 추가(현재 "34개 모듈" 문구도 함께 고친다)
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -298,7 +301,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 | # | 트랙 | 단계 | 상태 | 운영 배포 | 날짜 | 커밋 (server/admin/brand/web/docs) |
 |---|---|---|---|---|---|---|
 | 1 | 3pl-fulfillment | 1. 스튜디오 탭 스왑 | 완료 | ✗ | 2026-09-22 | - / - / `8677002` / - / (이 커밋) |
-| 2 | 3pl-fulfillment | 2. 스키마 + 마이그레이션 | 대기 | ✗ | | |
+| 2 | 3pl-fulfillment | 2. 스키마 + 마이그레이션 | 완료 | ✗ | 2026-09-22 | `29511f2` / - / - / - / (이 커밋) |
 | 3 | 3pl-fulfillment | 3. 서버 API (재고 + 출고신청) | 대기 | ✗ | | |
 | 4 | 3pl-fulfillment | 4. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 대기 | ✗ | | |
 | 5 | 3pl-fulfillment | 5. 어드민 화면 | 대기 | ✗ | | |
@@ -344,21 +347,28 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
 
-### 3pl-fulfillment 1단계 — 스튜디오 탭 스왑 (완료)
+### 3pl-fulfillment 2단계 — 스키마 + 마이그레이션 + 모듈 스캐폴딩 (완료)
 
-- **한 것**: `724a5cd`(2026-09-19 "홈화면 수정(정산)")의 탭 스왑을 되돌렸다 — `InventoryTab.tsx`
-  를 `724a5cd^` **원문 그대로** 복원(`git diff` 0) · `SettlementTab.tsx` 삭제 · `StudioPillHeader`
-  의 정산 pill 주석 해제 · `StudioTab` 유니온 `'settlement'`→`'inventory'`
-- **문서를 고친 것**: `CLAUDE.md` 2026-09-18 '재고 탭' 항목에 왕복 기록(`⚠️⚠️`) 추가.
-  **모듈 문서는 무변경** — 컨트롤러도 서버 계약도 하나도 안 바뀌었다
-- ⚠️ **확인하지 못한 것 — 화면을 눈으로 보지 못했다.** `npm run build` 통과 + `?tab=orders` 핀
-  로직(`page.tsx:121`)이 무변경임을 코드로 확인한 것이 전부다. 브랜드 로그인이 전화 OTP라
-  dev 서버를 띄워도 세션을 만들 수 없었다. **이전에 배포됐던 화면의 바이트 동일 복원**이라
-  위험이 낮다고 봤다 — **2단계 세션이 스튜디오 홈을 한 번 열어** 4칸(통계·디자인·주문·재고)과
-  헤더 정산 pill 을 눈으로 확인할 것(모바일 375px 포함)
-- ⚠️ **`DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩이 살아 있다 — 6단계에서 함께 지운다.**
-- **다음 단계가 알 것**: 2단계는 klow_server 단독 + 마이그레이션이라 **git 브랜치 + Neon DB
-  브랜치를 함께** 판다. 기준선은 라우트 **349** · cron **10** · Nest 모듈 **34**(트랙 문서 §3)
+- **한 것**: 모델 3개(`BrandInventoryItem`/`FulfillmentRequest`/`FulfillmentRequestItem`) +
+  `enum FulfillmentRequestStatus`, 마이그레이션 `20260922070013_add_3pl_fulfillment`
+  (CREATE TYPE ×1 + CREATE TABLE ×3, **DROP 0건 → 롤링 안전**), `src/modules/fulfillment/`
+  (module + service, **컨트롤러 0개**), `src/common/validation/fulfillment.ts` + 배럴 등재
+- **검증**: typecheck(tsconfig 2개) · `test:e2e` 3 pass(cron 10 불변) · `npm run start`
+  **라우트 349 불변** + `FulfillmentModule dependencies initialized` · `migrate status` clean(166)
+- **문서를 고친 것**: `CLAUDE.md` 모듈 목록에 fulfillment, 모듈 수 34→**35**, 라우트 351→**349**
+  (실측 정정). **`server/modules/` 는 무변경** — 컨트롤러가 0개라 계약이 안 바뀌었다
+- ⚠️ **계획에 없던 판단 하나** — `FulfillmentRequestItem.productId` 를 **nullable + SetNull** 로 했다.
+  `products.service.ts` 에 실제 `product.delete` 가 있어 required 면 제품 삭제가 막히거나 출고
+  이력이 사라진다. 그래서 `productName` 스냅샷이 유일한 기록이 되는 경우가 있다
+- ⚠️ **DB 브랜치가 갈렸다** — `.env` 의 `DATABASE_URL` 이 `ep-floral-sun`(이 트랙 전용)을 가리키고
+  2단계 마이그레이션은 거기에만 있다. `staging`(`ep-icy-flower`)에는 없다
+- ⚠️ **1단계 이월 확인 완료** — 스튜디오 홈 4칸(통계·디자인·주문·재고) · 헤더 정산 pill ·
+  재고 목업 + `예시` 칩 · `?tab=orders` 딥링크 · `/settlement` 를 데스크탑·모바일 375px 에서 눈으로
+  확인했다(브랜드 세션은 `BrandSession` 행을 직접 넣어 만들었다 — 전화 OTP 를 우회하는 방법)
+- ⚠️ **`DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩은 그대로 살아 있다 — 6단계에서 함께 지운다.**
+- **다음 단계가 알 것**: 3단계는 `AdminGuard` 를 쓰려면 `FulfillmentModule` 에 `AdminAuthModule`
+  import 를 **추가**해야 한다(현재는 `BrandAuthModule` 만). 서비스 헤더 주석에 3단계가 지킬
+  트랜잭션·락 계약을 적어 뒀다
 
 ### 체계 2단계 — Key Facts → decisions 이관 (완료 · 체계 트랙 1~3단계 메모를 여기 합쳤다)
 
