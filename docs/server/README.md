@@ -10,7 +10,6 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | `/v1/*`            | `klow_web` (port 3001)    | `UserGuard` 또는 public      | 공개 surface. 로그인 필요시 `UserGuard`.                |
 | `/v1/brand/*`      | `klow_brand` (port 3002)  | `BrandGuard` 또는 public     | 브랜드 셀프-서비스. 자기 브랜드 scope.                  |
 | `/webhooks/*`      | 외부 (Eximbay 등)         | IP 화이트리스트              | 결제사 콜백 등.                                         |
-| `/embed/*`         | 브랜드 자사몰(카페24) 등  | 없음 (공개)                  | 임베드 버튼. GET 전용·쿠키 없음·CORS `*`. ⚠️ preflight 유발 금지 — [embed](./modules/embed.md) 참고. |
 
 ## 인증 가드
 
@@ -55,7 +54,6 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [brand-domains](./modules/brand-domains.md)                          | 브랜드 커스텀 도메인 연결 (Vercel Domains API + Host→슬러그 resolve + Origin 술어) |
 |            | [brand-crm](./modules/brand-crm.md)                                  | 브랜드 고객 관리(CRM) + 메일 발송 (주문에서 파생하는 고객 목록 · 태그/메모 · 템플릿 · 큐 발송 · 수신거부) |
 |            | [brand-notices](./modules/brand-notices.md)                          | 브랜드관 공지 팝업 (기간 한정 안내 · 사진 · 자동 번역 · 오늘 하루 보지 않기) |
-|            | [embed](./modules/embed.md)                                          | 브랜드 자사몰(카페24)에 다는 KLOW 해외구매 버튼 (`/embed/*`, 공개·CORS `*`) |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
 |            | [storefront-stats](./modules/storefront-stats.md)                     | 브랜드관 방문(일반/할인링크/현장) → 장바구니 담기 전환 퍼널 |

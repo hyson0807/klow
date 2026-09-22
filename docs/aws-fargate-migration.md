@@ -54,7 +54,7 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
 6. 1주 관찰 후 Railway 종료 (문제 시 DNS만 되돌리면 복구)
 ```
 
-**`api.klow.kr`을 그대로 쓰는 것이 핵심이다.** Eximbay `return_url`·`status_url`, 프론트 3개의 API 주소, 브랜드 카페24 스킨에 박힌 `/embed/v1.js`가 모두 그 도메인을 가리킨다. DNS만 바꾸면 프론트와 외부 연동을 건드릴 필요가 없다.
+**`api.klow.kr`을 그대로 쓰는 것이 핵심이다.** Eximbay `return_url`·`status_url`과 프론트 3개의 API 주소가 모두 그 도메인을 가리킨다. DNS만 바꾸면 프론트와 외부 연동을 건드릴 필요가 없다.
 
 ## 1단계에서 한 일과 결정 근거
 

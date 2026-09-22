@@ -1,5 +1,21 @@
 # embed — 브랜드 자사몰(카페24) KLOW 해외구매 버튼
 
+> **📦 보관 문서 (2026-09-22 기능 제거):** 이 기능은 쓰지 않기로 결정해 네 레포에서 걷어냈다.
+> `klow_server/src/modules/embed/`(4파일 415줄) · 공개 라우트 2개(`/embed/v1.js`,
+> `/embed/v1/resolve`) · klow_brand `Cafe24Section.tsx`(312줄) · `Product.externalProductCode`
+> 컬럼이 전부 사라졌다. **현행 시스템 설명이 아니므로 여기 내용을 현재 상태로 인용하지 말 것.**
+>
+> ⚠️ 되살린다면 함께 되살릴 것: 컬럼은 **반드시 nullable + default 없음**(빈 문자열 default 를
+> 주면 미매핑 제품이 전부 `(brandId, '')` 로 같아져 브랜드의 2번째 제품 생성부터 `@@unique`
+> 위반으로 죽는다) · `/embed/*` 의 **영구 simple request** 하드룰(헤더 하나만 추가해도 전
+> 브랜드 자사몰의 버튼이 동시에 죽는다) · 스크립트는 `.js` 파일이 아니라 **TS 문자열 상수**여야
+> 한다(`nest-cli.json` 에 `assets` 설정이 없어 raw `.js` 는 `dist/` 에 안 실리고 프로덕션에서만
+> 404 가 난다).
+>
+> ⚠️ **`?brand=` PDP 처리와 방문 집계는 제거되지 않았다** — 임베드가 도입 동기였을 뿐 브랜드관
+> 그리드·프로모션 딥링크·브랜드가 공유한 상품 링크가 같은 경로를 쓴다. 현행 설명은
+> [`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md) 참고.
+
 브랜드가 **이미 운영 중인 국내 자사몰(카페24)** 상품 페이지에 "해외배송으로 구매" 버튼을 달아, 해외 손님을 그 상품의 KLOW 제품 상세로 보내는 임베드 표면입니다. 도착 후에는 **기존 결제 흐름을 그대로** 탑니다(신규 체크아웃 경로 없음).
 
 - 소스: `klow_server/src/modules/embed/`

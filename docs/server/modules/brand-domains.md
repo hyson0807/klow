@@ -510,7 +510,7 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 - **`credentials` 를 오리진별로 가른다** — klow.kr 계열은 `credentials:true`(쿠키 세션), 브랜드 커스텀 도메인은 **`credentials:false`**. 커스텀 도메인은 설계상 세션을 쓰지 않으므로(클라가 `credentials:'omit'`), 서버가 ACAC 를 안 붙이면 실수로 `include` 를 써도 브라우저가 차단해 그 규칙이 **서버쪽에서 fail-closed** 가 된다. ⚠️ 커스텀 도메인 요청에 `Cookie` 헤더가 실린다면 설계가 어긋난 것이다.
 - 비콘 POST 가 `Content-Type: application/json` 이라 방문마다 preflight 가 붙으므로 `maxAge: 86400` 을 함께 준다(없으면 요청 수가 2배).
 - ⚠️ **`common/origin-exempt.ts` 는 손대지 않았다** — 새 예외 경로가 없다. `origin-exempt.spec.ts` 가 **무변경으로 통과해야 하고, 통과하지 않으면 설계가 틀어진 것**이다.
-- ⚠️ **`/embed/*` 무회귀** — 그 컨트롤러가 `setHeader`(덮어쓰기)로 `ACAO:*` 를 쓰고 `ACAC` 를 `removeHeader` 하므로 delegate 가 뭘 붙이든 결과가 같다. **`res.append` 로 바꾸면 안 된다**(ACAO 중복 → 브라우저 전면 거부). 비화이트리스트 preflight 는 종전 배열 미스와 동일하게 ACAO 없이 끝나므로 "영구 simple request" 하드룰도 그대로다.
+- ⚠️ **수동 CORS 를 쓰는 공개 표면이 생기면** `setHeader`(덮어쓰기)로 `ACAO` 를 쓸 것 — **`res.append` 는 금지**다(ACAO 중복 → 브라우저 전면 거부). 비화이트리스트 preflight 는 delegate 가 ACAO 없이 끝내므로 "영구 simple request" 하드룰이 그런 표면에서 성립한다. (2026-09-22 까지 그 유일한 사례가 `/embed/*` 였고, 지금은 없다.)
 
 ## 호스트 정규화 (`domain-host.ts`)
 
@@ -574,7 +574,7 @@ relation 두 줄을 얹어 `customDomain: string | null` · `domainPending: bool
 | `__tests__/verified-origin.spec.ts` | **정확 일치**(서브도메인·접미사·포트 트릭 전부 차단) · active/primary 만 · 브랜드 구독 게이트 · 삭제 즉시 반영 · 로드 전 false |
 | `__tests__/domain-pairing.spec.ts` | apex → www 동반 생성 / **서브도메인 → 페어 없음** / 페어 실패가 primary 를 롤백하지 않음 / 페어 동반 삭제 / **Vercel 성공 + DB 실패 → 보상 제거** / 게이트 4종 |
 | `__tests__/resolve-host.spec.ts` | **F13** — 구독·탈퇴·미승인·`slug:null` 미해석 / redirect 파생과 **오픈 리다이렉트 차단** / 미등록 host 200 / **`cleanupOrphans` 후보가 서빙 게이트의 부정인지** / **F33** 유예 시계가 브랜드 쪽 행인지(구독이 **방금** 끊긴 오래된 도메인은 아직 정리 대상이 아니다) |
-| `common/__tests__/origin-policy.spec.ts` | CSRF·CORS 가 **같은 분류**를 본다 / 브랜드 도메인에 **ACAC 미부착** / 비화이트리스트에 **ACAO 미반사**(`/embed/*` 하드룰의 근거) / **브랜드 오리진의 상태변경 경로 허용목록**(비콘 3 + 견적은 통과, 그 밖 전부 403, `..` 로 접두 매칭을 뚫는 모양 포함) |
+| `common/__tests__/origin-policy.spec.ts` | CSRF·CORS 가 **같은 분류**를 본다 / 브랜드 도메인에 **ACAC 미부착** / 비화이트리스트에 **ACAO 미반사**(fail-closed) / **브랜드 오리진의 상태변경 경로 허용목록**(비콘 3 + 견적은 통과, 그 밖 전부 403, `..` 로 접두 매칭을 뚫는 모양 포함) |
 | `__tests__/domain-purchase.spec.ts` | 게이트·`expectedAmountKrw` 409·`FOR UPDATE` 직렬화·확정 거절 시 Cloudflare 0회·**불확정은 `pending` 유지** |
 | `__tests__/domain-purchase-limits.spec.ts` | 상한 2종(카운트 소스가 charge 이고 `pending` 포함)·서킷 **쿨다운 half-open** |
 | `__tests__/domain-registration-poll.spec.ts` | 흐름 8~11 — 재제출·환불 판정이 **행 단위**·`subscription_required` 는 환불 금지·연결 백오프 |

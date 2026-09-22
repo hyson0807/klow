@@ -71,10 +71,6 @@ curl -sD- -o/dev/null 'https://api.klow.kr/v1/storefront/resolve?host=nope.examp
 curl -sD- -o/dev/null -H 'Origin: https://<연결한도메인>' 'https://api.klow.kr/v1/brands/<slug>'
 #   기대: Access-Control-Allow-Origin 有 / Access-Control-Allow-Credentials **無**
 
-# /embed/* 무회귀 — 여전히 ACAO:* 여야 한다
-curl -sD- -o/dev/null 'https://api.klow.kr/embed/v1.js' | grep -i access-control-allow-origin
-#   기대: *
-
 # cron 9개 — 부팅 로그에 'brand-domain-verify' 가 있는지
 #   ⚠️ @Cron 미등록은 **완전 무음**이다(typecheck 통과·로그 없음).
 
