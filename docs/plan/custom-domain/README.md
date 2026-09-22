@@ -9,7 +9,7 @@ KLOW 입점 브랜드가 자기 도메인(예: `shop.brandA.com`)을 연결하�
 > (`src/middleware.ts`·핸드오프 송수신), klow_brand(설정 > 도메인 연결)가 전부 들어가 있다.
 > 남은 것은 **운영 배포**와 §8-2 의 **핸드오프 왕복 수동 E2E** 다 →
 > [implementation-plan §7 배포 순서](./implementation-plan.md#7-배포-순서) ·
-> [배포 런북](../deploy-custom-domain-runbook.md).
+> [배포 런북](./deploy-runbook.md).
 >
 > **P6 대행 구매: 📝 계획 수립 완료(2026-08-25) · 3차 전수 점검 + 구현 착수 가능성 점검 반영
 > (2026-08-26) · 코드 미착수** — KLOW 가 도메인을 대신 사서 자동 연결하고 연 이용료를 받는다
@@ -242,7 +242,7 @@ Origin·Referer 를 `klow.kr` / `shop.brandA.com` / 무작위 도메인 / 없음
 
 ## 관련 문서
 
-- [`../reference/architecture.md`](../reference/architecture.md) — 전체 구조·URL surface·요청 흐름
-- [`../reference/payment-integration.md`](../reference/payment-integration.md) — Eximbay 결제 흐름(이 기능이 건드리는 리턴 경로)
-- [`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md) — 브랜드관 방문 통계(회귀 대상)
-- [`../archive/embed.md`](../archive/embed.md) — 카페24 임베드(2026-09 기능 제거 · CORS 규칙이 인접해 보관)
+- [`../../reference/architecture.md`](../../reference/architecture.md) — 전체 구조·URL surface·요청 흐름
+- [`../../reference/payment-integration.md`](../../reference/payment-integration.md) — Eximbay 결제 흐름(이 기능이 건드리는 리턴 경로)
+- [`../../server/modules/storefront-stats.md`](../../server/modules/storefront-stats.md) — 브랜드관 방문 통계(회귀 대상)
+- [`../../archive/embed.md`](../../archive/embed.md) — 카페24 임베드(2026-09 기능 제거 · CORS 규칙이 인접해 보관)

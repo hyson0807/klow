@@ -4,9 +4,9 @@
 주문조회는 `klow.kr`** 로 넘기는(핸드오프) 기능의 프로덕션 배포 절차. 코드는 P0~P4 가 세 레포
 `staging` 에 머지돼 있고 스테이징에서 실도메인 라우팅까지 확인했다.
 
-관련: [`custom-domain/README.md`](./custom-domain/README.md) ·
-[`custom-domain/implementation-plan.md`](./custom-domain/implementation-plan.md)(정본) ·
-[`server/modules/brand-domains.md`](./server/modules/brand-domains.md)
+관련: [`README.md`](./README.md) ·
+[`implementation-plan.md`](./implementation-plan.md)(정본) ·
+[`../../server/modules/brand-domains.md`](../../server/modules/brand-domains.md)
 
 ## 왜 순서가 중요한가
 

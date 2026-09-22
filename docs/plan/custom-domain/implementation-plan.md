@@ -829,7 +829,7 @@ shop.brandA.com    ?purchased= 읽고 removeProducts(ids) → router.replace 로
 ### 3-5. 손님에게 보이는 문구는 i18n 을 탄다
 
 klow_web 은 **`src/i18n/locales/en/` 이 단일 원본**이고 `npm run i18n:fill` 로 ja/zh/vi/th/id/ru 를
-생성한다([`../../klow_web/docs/i18n.md`](../../klow_web/docs/i18n.md)). ⚠️ **이 기능이 만드는 새 문구도 전부
+생성한다([`../../../klow_web/docs/i18n.md`](../../../klow_web/docs/i18n.md)). ⚠️ **이 기능이 만드는 새 문구도 전부
 그 규칙을 탄다 — 하드코딩 금지.** 커스텀 도메인 손님은 정의상 해외 손님이라 더 그렇다.
 
 | 화면 | 키 | 비고 |
@@ -1432,7 +1432,7 @@ P0~P4 는 **브랜드가 도메인을 이미 갖고 있다**는 전제 위에 �
 ### 8-3. 문서
 
 - `docs/server/modules/brand-domains.md` 신설 + `docs/server/README.md` 색인 (컨트롤러 변경 시 함께 갱신 — CLAUDE.md 규칙)
-- ✅ [`../deploy-custom-domain-runbook.md`](../deploy-custom-domain-runbook.md) — 배포 순서·env 함정(`VERCEL_PROJECT_ID` 환경별 분리)·Vercel "Redirect to primary domain" 함정·배포 후 curl 검증·롤백
+- ✅ [`deploy-runbook.md`](./deploy-runbook.md) — 배포 순서·env 함정(`VERCEL_PROJECT_ID` 환경별 분리)·Vercel "Redirect to primary domain" 함정·배포 후 curl 검증·롤백
 - 워크스페이스 `CLAUDE.md` Key Facts 항목 추가 — **핸드오프 경계**(브라우징·담기 = 커스텀 도메인 /
   로그인·결제 = klow.kr) · 넘기는 상태 4개 · 배포 순서(P2 → P3)
 - **릴리즈 노트/CS 가이드**: "커스텀 도메인은 **둘러보기·담기 전용**이고 **로그인·결제는 klow.kr 에서**

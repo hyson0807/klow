@@ -27,7 +27,10 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 1. 체계 2단계 — Key Facts 이관. **값이 가장 크다**(`CLAUDE.md` 424KB 중 402KB(95%)가 매 세션
    자동 로드된다). 3단계 잔여보다 이게 급하면 순서를 바꿔도 된다
-2. storefront-sales-analytics 운영 배포 — 첫 실전. 독립적이고 짧다
+
+**표에 남은 것은 2·3·4번뿐이다** — 1번(진행표 신설)은 완료, storefront-sales-analytics 는 배포
+완료로 `§8` 로 내려갔다. 4번 aws-fargate 는 막힘이라 선택에서 제외된다. 즉 **지금 실제로 할 수 있는
+것은 2번과 3번 둘뿐**이다.
 
 막힘: aws-fargate 2단계 (AWS 크레딧 승인 대기, 2026-09-11~)
 
@@ -75,8 +78,8 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 5. **첫 1~2단계만 `§5` 템플릿으로 정밀하게 쓴다.** 나머지는 제목과 순서만 남긴다. 뒤 단계의 전제는
    앞 단계가 끝나야 확정되므로, 미리 쓰면 착수 시점엔 틀려 있다 — **틀린 명세는 없는 명세보다
    나쁘다.**
-6. **계획 문서는 트랙 폴더 안에 쓴다** — `docs/<트랙>/` 를 만들고 그 안에 둔다. `custom-domain/`·
-   `mcf/` 가 선례이고 구성은 셋이다.
+6. **계획 문서는 `docs/plan/<트랙>/` 폴더 안에 쓴다** — 최상위에 평평하게 두지 않는다(트랙이 늘면
+   최상위가 다시 뒤섞인다). `plan/custom-domain/`·`plan/mcf/` 가 선례이고 구성은 셋이다.
 
    | 파일 | 역할 |
    |---|---|
@@ -86,8 +89,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 
    작은 트랙이면 `implementation-plan.md` 하나로 시작해도 되지만 **폴더는 만든다** — 나중에
    쪼갤 때 링크가 안 깨진다. ⚠️ 어느 문서에도 **상태를 적지 않는다.** 상태는 `§7` 뿐이다.
+   자세히는 [`plan/README.md`](./plan/README.md).
 7. **기록** — `§6` 에 트랙 섹션(폴더 링크 + 다음 단계만) + `§7` 표 행 + `§0 지금 할 것` 갱신.
-   `README.md` 문서 지도에도 폴더를 등재한다. 커밋하고 push 하지 않는다.
+   `README.md` 문서 지도와 `plan/README.md` 에도 폴더를 등재한다. 커밋하고 push 하지 않는다.
 8. **멈춘다.** 방금 계획한 단계를 이어서 실행하지 않는다 — **계획도 한 단계다.** 실행은 다음
    세션에서 재진입 한 줄로 시작한다.
 
@@ -125,7 +129,18 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 상한(10행 또는 4주)을 넘으면 인계 메모와 함께 `archive/progress-2026-H2.md` 로 옮긴다.
 
 ⚠️ **회수 대상은 상태 행과 인계 메모이지 스펙이 아니다.** 완료 단계의 스펙은 트랙 문서에 원문 그대로
-남는다. 트랙 전체가 끝나면 트랙 문서를 `archive/` 로 옮기고 📦 보관 배너를 단다.
+남는다.
+
+**트랙 전체가 끝나면 그 폴더는 `plan/` 을 떠난다.** 판정 기준은 *"이 문서가 현행 동작의 유일한
+설명인가"* 다.
+
+- **유일한 설명이면 → `reference/`.** 계획 서술(단계·PR 분할·배포 순서)을 걷어내고 "지금 어떻게
+  동작하나"만 남긴다
+- **`server/modules/` 나 다른 reference 문서가 이미 그 역할을 하면 → `archive/`** + 📦 배너 +
+  정본 포인터
+
+⚠️ **정리하지 않은 계획서를 그대로 `reference/` 에 넣지 말 것** — "무엇을 만들 것인가"와 "무엇이
+동작하는가"가 한 문서에 섞이고, 다음 사람이 계획 단계의 문장을 현행 사양으로 읽는다.
 
 ---
 
@@ -266,14 +281,6 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
   `deploy-custom-domain-runbook.md` 는 **운영 미배포**라 아카이브 대상이 아니다. 실행이 끝난 것만
   옮긴다 — 안 그러면 아직 필요한 절차서가 "완료된 과거"로 묻힌다.
 
-### storefront-sales-analytics — 브랜드관 성과 대시보드
-
-스펙: [`storefront-sales-analytics.md`](./storefront-sales-analytics.md).
-API·불변식 정본은 [`server/modules/storefront-stats.md`](./server/modules/storefront-stats.md).
-
-구현 완료 · **배포 대기**. 대상은 klow_server · klow_brand(klow_web 변경 없음 · 마이그레이션 없음).
-배포 절차는 그 문서 §8. **배포가 끝나면 문서를 `archive/` 로 옮긴다**(문서가 스스로 그렇게 적어 뒀다).
-
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -281,12 +288,12 @@ API·불변식 정본은 [`server/modules/storefront-stats.md`](./server/modules
 
 | 트랙 | 문서 | 멈춘 지점 |
 |---|---|---|
-| custom-domain | [`custom-domain/`](./custom-domain/) | P0~P4 코드 완료·스테이징 배포·**운영 미배포** / P6 는 `purchase-plan.md` §19 기준 A~E 완료, F(klow_brand `/settings/domain`) 남음. ⚠️ 두 문서의 P6 상태 기술이 서로 어긋나 있다 — 재개 시 먼저 대조할 것 |
-| mcf | [`mcf/`](./mcf/) | 문서 완료 · 백엔드 미구현. klow_brand 목업은 `develop/mcf2` 브랜치에만 있다. ⚠️ `implementation-plan.md` §8-4(배송비 선결제분 귀속 A/B)가 미확정이라 재개 전에 정해야 한다 |
+| custom-domain | [`plan/custom-domain/`](./plan/custom-domain/) | P0~P4 코드 완료·스테이징 배포·**운영 미배포** / P6 는 `purchase-plan.md` §19 기준 A~E 완료, F(klow_brand `/settings/domain`) 남음. ⚠️ 두 문서의 P6 상태 기술이 서로 어긋나 있다 — 재개 시 먼저 대조할 것 |
+| mcf | [`plan/mcf/`](./plan/mcf/) | 문서 완료 · 백엔드 미구현. klow_brand 목업은 `develop/mcf2` 브랜치에만 있다. ⚠️ `implementation-plan.md` §8-4(배송비 선결제분 귀속 A/B)가 미확정이라 재개 전에 정해야 한다 |
 
 ### aws-fargate — klow_server Railway → AWS ECS Fargate
 
-스펙: [`aws-fargate-migration.md`](./aws-fargate-migration.md) 의 0~6단계.
+스펙: [`plan/aws-fargate/implementation-plan.md`](./plan/aws-fargate/implementation-plan.md) 의 0~6단계.
 
 1단계(플랫폼 무관 준비 작업 — `CRON_ENABLED`·`enableShutdownHooks`·Dockerfile) 완료.
 **2단계 이후는 AWS 크레딧 승인 대기 = `막힘`.**
@@ -313,8 +320,7 @@ API·불변식 정본은 [`server/modules/storefront-stats.md`](./server/modules
 | 1 | 체계 | 진행표 신설 | 완료 | — | 2026-09-22 | - / - / - / - / (이 커밋) |
 | 2 | 체계 | Key Facts → decisions 이관 | 대기 | — | | |
 | 3 | 체계 | 상태 장치 정리 | 진행 중(부분 완료) | — | 2026-09-22 | - / (이 커밋) / - / - / (이 커밋) |
-| 4 | storefront-sales-analytics | 운영 배포 | 대기 | ✗ | | |
-| 5 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
+| 4 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 
@@ -325,7 +331,13 @@ API·불변식 정본은 [`server/modules/storefront-stats.md`](./server/modules
 완료 행을 인계 메모와 함께 여기로 내린다. 상한 **10행 또는 4주**, 밀려나면
 `archive/progress-2026-H2.md` 로 옮긴다.
 
-*(아직 없음)*
+| 트랙 | 단계 | 완료 | 운영 배포 | 커밋 |
+|---|---|---|---|---|
+| storefront-sales-analytics | 운영 배포 | 2026-09-22 (사용자 확인) | ✓ | ⚠️ 체계 도입 전 배포라 해시 미기록 |
+
+> ⚠️ `§7` 은 "커밋 해시 없이 `완료` 를 쓸 수 없다"가 규칙이다. 이 행은 **진행표가 생기기 전에 배포된
+> 건**이라 예외로 사유를 적어 남긴다. 앞으로 완료되는 단계에는 해시를 채운다.
+> 문서는 `archive/storefront-sales-analytics.md`, 현행 정본은 `server/modules/storefront-stats.md`.
 
 ---
 
@@ -370,6 +382,13 @@ API·불변식 정본은 [`server/modules/storefront-stats.md`](./server/modules
   처럼 **텍스트가 경로가 아니라 API 라벨**인 경우를 오검출하니 결과를 눈으로 훑을 것(2건 밟고 되돌렸다)
 - ⚠️ 2단계(Key Facts 이관) 때 확인할 것: CLAUDE.md 의 **카페24 임베드 항목(2026-08-12)이 스테일**
   이다 — 그 기능은 `c45714b` 에서 제거됐고 모듈 문서도 `archive/embed.md` 로 갔다
+- **2차 정리(같은 날, 사용자 지시)**: 남아 있던 최상위 3개도 치워 `docs/` 가 `README · PROGRESS ·
+  plan/ · reference/ · server/ · archive/ · tools/` 로 정리됐다. 계획 폴더를 **`plan/` 아래로**
+  모으고(`custom-domain`·`mcf`·신설 `aws-fargate`), 커스텀 도메인 런북을 그 트랙 폴더 안
+  (`deploy-runbook.md`)으로, 배포가 끝난 `storefront-sales-analytics.md` 를 archive 로 보냈다.
+  `plan/README.md` 신설 — 새 트랙 만드는 법과 **끝난 트랙의 행선지 판정**(reference/ vs archive/)
+- ⚠️ 이때 링크 26곳의 **텍스트**가 또 어긋났다. 이동은 href 만의 문제가 아니다 — 두 번 다 같은
+  함정을 밟았으니 다음에도 텍스트를 함께 확인할 것
 
 ### 1단계 — 진행표 신설
 

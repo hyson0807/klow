@@ -1,4 +1,9 @@
-# 브랜드관 성과 대시보드 — 국가·제품 수요 분석 + 현장 채널 (✅ 구현 완료 · 배포 대기)
+# 브랜드관 성과 대시보드 — 국가·제품 수요 분석 + 현장 채널
+
+> **📦 보관 문서 (운영 배포 완료 · 2026-09-22 확인):** 계획과 구현 결과(§9)·배포 절차(§8)를
+> 담은 일회성 문서다. 배포가 끝나 소임을 마쳤고, **현행 동작·API·불변식의 정본은**
+> [`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md) 다.
+> 여기 내용을 현재 상태로 인용하지 말 것 — 설계 논거와 두 모집단 구분의 배경으로만 남긴다.
 
 브랜드 `/stats` 를 **유입 퍼널 대시보드**에서 **브랜드관 성과 대시보드**로 확장한다.
 브랜드가 한 화면에서 답을 얻어야 할 질문 셋:
@@ -10,7 +15,7 @@
 
 - 대상 저장소: `klow_server` · `klow_brand`
 - **klow_web 변경 없음 · 마이그레이션 없음 · 백필 없음 · 신규 수집 없음**
-- 관련 현행 문서: [`server/modules/storefront-stats.md`](./server/modules/storefront-stats.md) ← **API·불변식의 정본은 이쪽**
+- 관련 현행 문서: [`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md) ← **API·불변식의 정본은 이쪽**
 - 이 문서는 계획 + 실제 구현 결과(§9)와 배포 절차(§8)를 담는다. 배포가 끝나면 `archive/` 로 옮긴다.
 
 ---
@@ -270,7 +275,7 @@ to_char(o."paidAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
 | 국가×제품 교차표 | 모바일 폭에서 못 읽고 데이터가 성기다 |
 | 어드민 대시보드 반영 | 이번엔 klow_brand 만. 어드민은 기존 '브랜드관 방문' 섹션 유지 |
 | 장바구니 담기의 국가·제품 분해 | 담기 이벤트에 국가가 없고 제품 단위 집계도 저장하지 않는다(신규 수집 설계 필요) |
-| ~~방문자(비결제)의 국가~~ | **2026-08-20 에 별도 작업으로 구현했다** — `BrandVisitorCountryDay` + `track/country` 비콘. 국가는 손님이 국가 선택 모달에서 **고른 값**이고 단위는 **명**이다. 그래서 `/stats` 에 국가 랭킹이 **둘**(방문=명 / 판매=건)이 됐다 — 모집단 비교는 [server/modules/storefront-stats.md](./server/modules/storefront-stats.md) "방문 국가" 절 |
+| ~~방문자(비결제)의 국가~~ | **2026-08-20 에 별도 작업으로 구현했다** — `BrandVisitorCountryDay` + `track/country` 비콘. 국가는 손님이 국가 선택 모달에서 **고른 값**이고 단위는 **명**이다. 그래서 `/stats` 에 국가 랭킹이 **둘**(방문=명 / 판매=건)이 됐다 — 모집단 비교는 [server/modules/storefront-stats.md](../server/modules/storefront-stats.md) "방문 국가" 절 |
 | 마이그레이션·백필 | 스키마 변경 0 |
 
 ---
