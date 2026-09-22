@@ -5,8 +5,13 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 (예: `klow_web/docs/i18n.md`, `klow_search_server/docs/`).
 
 > **작업을 시작하려면 [PROGRESS.md](./PROGRESS.md) 를 연다.** 진행 중인 단계, 다음에 할 일, 세션
-> 절차가 전부 거기 있다. 새 세션에는 이 한 줄만 보낸다 —
-> `docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.`
+> 절차가 전부 거기 있다. 새 세션에는 둘 중 한 줄만 보낸다.
+>
+> - 실행 — `docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.`
+> - 계획 — `docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.`
+>
+> 계획 세션은 조사해서 단계로 쪼개고 `docs/<트랙>/` 폴더에 계획 문서를 쓰고 **멈춘다**(코드 변경
+> 없음). 실행은 그다음 세션부터 한 세션에 한 단계씩.
 
 ## 문서 지도
 
