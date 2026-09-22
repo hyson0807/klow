@@ -3,8 +3,8 @@
 본 문서는 KLOW 워크스페이스의 **고객 체크아웃 결제(Eximbay)** 통합을 설명한다. 현재 상태는 **Eximbay 테스트 머천트**로 cart → checkout → 주문 생성 → prepare → SDK → return_url → verify → success 까지 회원·비회원(게스트) 모두 통과하고, 결제 실패 보고·webhook 안전망·어드민/사용자 환불까지 구현되어 있다. 운영 배포 단계에서 추가해야 할 항목은 [TODO](#todo-운영-배포-단계) 섹션에 정리한다.
 
 - 가격 계산(원가+마진+국가별 물류비) 상세는 [`./pricing-model.md`](./pricing-model.md).
-- 고객측 금액이 KRW 원장에서 **USD 정본**으로 넘어온 전환 이력은 [`./archive/pricing-usd-migration.md`](./archive/pricing-usd-migration.md).
-- 엔드포인트 레퍼런스(요청/응답 스키마)는 [`./server/modules/payment.md`](./server/modules/payment.md).
+- 고객측 금액이 KRW 원장에서 **USD 정본**으로 넘어온 전환 이력은 [`../archive/pricing-usd-migration.md`](../archive/pricing-usd-migration.md).
+- 엔드포인트 레퍼런스(요청/응답 스키마)는 [`../server/modules/payment.md`](../server/modules/payment.md).
 
 ---
 
@@ -204,7 +204,7 @@ DB 전이는 호출자(어드민/사용자/게스트)가 각자 where 절로 수
 
 ## DB 컬럼 매핑
 
-고객측 금액은 **USD 정본** — 구 KRW 원장 컬럼(`Order.subtotal`, `OrderItem.unitPrice`, `shippingFeeKrw`)은 드롭됐다(이력: [`./archive/pricing-usd-migration.md`](./archive/pricing-usd-migration.md)).
+고객측 금액은 **USD 정본** — 구 KRW 원장 컬럼(`Order.subtotal`, `OrderItem.unitPrice`, `shippingFeeKrw`)은 드롭됐다(이력: [`../archive/pricing-usd-migration.md`](../archive/pricing-usd-migration.md)).
 
 | 컬럼 | 값 |
 |------|------|
@@ -310,7 +310,7 @@ TRUST_PROXY_HOPS=
   의도된 설계). 이 문서가 한동안 "샌드박스 IP 가 남아 있으면 부팅을 거부한다"고 잘못 적고 있었고, 그 오기재가
   "부팅됐으니 IP 는 맞다"는 오판을 만들어 **2026-09-04 까지 모든 결제 콜백이 403 인 채로 방치**됐다. 잘못된 값은
   결제 콜백을 전부 403/미도달로 만들고 그 주문을 "카드는 승인, 주문은 미결제" 로 굳힌다
-  (자세히는 [`server/modules/payment.md`](./server/modules/payment.md) 3중 방어선).
+  (자세히는 [`../server/modules/payment.md`](../server/modules/payment.md) 3중 방어선).
 - **국내(KRW) MID 라이브 값** — sandbox 엔 국내 전용 MID 가 없다. `EXIMBAY_DOMESTIC_MID`/`EXIMBAY_DOMESTIC_API_KEY` 에 실 국내 MID 를 세팅해야 국내카드(issuer_country=KR) 결제가 열린다.
 - **결제수단별 UI 분기 확장** — 현재는 통합 결제창 + global/kr 2-track 토글. 카드/PayPal/Alipay 라디오까지 노출하려면 `payment_method` 코드를 prepare payload 에 채운다.
 - **product[]/ship_to/bill_to** — PayPal·Klarna 결제 시 필수 필드. `Order` 의 배송지/아이템에서 채울 수 있음(현재 미전송).

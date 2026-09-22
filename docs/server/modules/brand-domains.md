@@ -2,7 +2,7 @@
 
 - **모듈 경로**: `src/modules/brand-domains/`
 - **목적**: 브랜드가 자기 도메인(`shop.brandA.com`)으로 **브랜드관을 열게** 한다. Vercel Domains API 로 도메인을 자동 등록·검증하고, klow_web 미들웨어가 물어볼 **Host → 슬러그 해석**을 제공하며, 그 도메인이 `api.klow.kr` 를 칠 수 있도록 **CORS·CSRF Origin 을 연다**.
-- **설계 정본**: [`docs/custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`flow.md`](../../custom-domain/flow.md), 결정표는 [`README.md`](../../custom-domain/README.md).
+- **설계 정본**: [`../../custom-domain/implementation-plan.md`](../../custom-domain/implementation-plan.md) §2 (P1). 배경은 [`../../custom-domain/flow.md`](../../custom-domain/flow.md), 결정표는 [`../../custom-domain/README.md`](../../custom-domain/README.md).
 - **관련 파일**: (기존 축) `brand-domains.service.ts`, `brand-domains.controller.ts`, `public-domains.controller.ts`, `brand-domains.cron.ts`, `vercel.client.ts`, `brand-domain-wishes.controller.ts`·`domain-wishes.service.ts`(찜), `domain-host.ts`(정규화·거부), `domain-status.ts`(전이 판정·폴링 포기), 검증 스키마 `common/validation/brand-domain.ts`, 브랜드 게이트 `modules/brands/brand-selects.ts`, 오리진 정책표 `common/origin-policy.ts`
   · (대행 구매 축 = P6) `domain-purchase.service.ts`(구매·연결·어드민 운영), `domain-renewal.service.ts`(갱신), `domain-dns.service.ts`(zone·레코드 실행), `domain-notify.service.ts`(브랜드 알림 4종), `cloudflare-registrar.client.ts`·`cloudflare-dns.client.ts`, `domain-dns.ts`(수렴 계획 · 순수), `registration-status.ts`(상태 집합·문구 · 순수), `registration-transitions.ts`(`action_required` 전이 + 브랜드 알림 · **구매/갱신 공유**), `domain-revenue.ts`(매출 집계 · 순수), `cloudflare-api.ts`(두 Cloudflare 클라이언트의 공용 전송 계층 · 순수), `ttl-cache.ts`·`error-text.ts`(검색/견적 캐시 · 예외 문자열 · 순수), `brand-domain-purchase.controller.ts`, `admin-brand-domains.controller.ts`, `admin-domain-purchase.controller.ts`, `brand-domain-registrations.cron.ts`, 가격 커널 `src/pricing/domain-price.ts`
 
@@ -299,7 +299,7 @@ verified && !misconfigured        → active
 
 # 대행 구매(P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
 
-> **설계 정본**: [`docs/custom-domain/purchase-plan.md`](../../custom-domain/purchase-plan.md).
+> **설계 정본**: [`../../custom-domain/purchase-plan.md`](../../custom-domain/purchase-plan.md).
 > 위 축(브랜드가 이미 가진 도메인을 연결한다)과 **파일도 상태 머신도 분리돼 있다** — 아래
 > 「왜 `BrandDomainStatus` 에 얹지 않았나」 참고.
 

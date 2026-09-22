@@ -11,8 +11,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 > ⚠️ 요율표와 실비의 차액은 이제 **브랜드 손익**이다 — 적자가 이어지면 고칠 곳은 청구 규칙이
 > 아니라 어드민 **배송비용** 탭의 국가 요율표다(브랜드가 정하는 값이 아니라는 점에 주의).
 > ⚠️ **한쪽만 되돌리면 안 된다** — 정산만 되돌리면 브랜드가 배송비를 두 번 내고, 청구만 되돌리면
-> KLOW 가 두 번 잃는다. 상세는 [`server/modules/settlement.md`](./server/modules/settlement.md) +
-> [`server/modules/efs-billing.md`](./server/modules/efs-billing.md).
+> KLOW 가 두 번 잃는다. 상세는 [`../server/modules/settlement.md`](../server/modules/settlement.md) +
+> [`../server/modules/efs-billing.md`](../server/modules/efs-billing.md).
 > 마이그레이션·백필 없음. 정산이 금액 스냅샷을 남기지 않아 **전 기간 소급**된다.
 >
 > **2026-07-30 전환 (고객 배송비 기준무게 500g)**: 고객 결제 배송비가 `2kg 요율의 절반`에서
@@ -58,7 +58,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 > **"국가별 현지통화 판매가 고정 → 브랜드 정산가(KRW)를 주문 시점 환율로 역산"** 으로 바뀌었다.
 > 환율 리스크가 **손님(가격 변동)에서 브랜드(정산액 변동)로** 이동한다 — 손님은 안정적인 현지통화 가격을 보고,
 > 브랜드는 자기가 정한 판매가가 고정되는 대신 환율에 따라 정산액이 오르내린다. 정산가가 원가 밑으로 내려가도
-> **구매는 막지 않고 경고만** 한다(브랜드가 재가격). 이전 모델(마진 고정)은 [`archive/`](./archive/) 참고.
+> **구매는 막지 않고 경고만** 한다(브랜드가 재가격). 이전 모델(마진 고정)은 [`../archive/`](../archive/) 참고.
 
 ## 통화 규칙 (개념별 고정)
 
@@ -247,5 +247,5 @@ model OrderItem {
 
 ## 이력 (보관 문서)
 
-- 고객측 금액 USD 정본화: [`archive/pricing-usd-migration.md`](./archive/pricing-usd-migration.md)
-- dormant 배송 요율 컬럼 드롭: [`archive/cleanup-dormant-shipping-rate.md`](./archive/cleanup-dormant-shipping-rate.md)
+- 고객측 금액 USD 정본화: [`../archive/pricing-usd-migration.md`](../archive/pricing-usd-migration.md)
+- dormant 배송 요율 컬럼 드롭: [`../archive/cleanup-dormant-shipping-rate.md`](../archive/cleanup-dormant-shipping-rate.md)

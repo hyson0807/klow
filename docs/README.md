@@ -21,25 +21,21 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | 문서 | 이런 질문일 때 |
 |------|----------------|
 | [PROGRESS.md](./PROGRESS.md) | **지금 뭘 할 차례인가?** 진행 중인 단계, 세션 절차, 진입/퇴출 기준, 트랙별 다음 단계 |
-| [architecture.md](./architecture.md) | 전체 구조가 어떻게 되나? 저장소·모듈·데이터 모델·URL surface·요청 흐름 |
+| **[reference/](./reference/)** | **현행 시스템 설명 — "지금 어떻게 동작하나"** |
+| [reference/architecture.md](./reference/architecture.md) | 전체 구조가 어떻게 되나? 저장소·모듈·데이터 모델·URL surface·요청 흐름 |
+| [reference/pricing-model.md](./reference/pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
+| [reference/payment-integration.md](./reference/payment-integration.md) | 고객 결제(Eximbay, USD)가 어떻게 흐르나? prepare→verify, 환불, 웹훅 |
+| [reference/brand-subscription.md](./reference/brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
+| [reference/instagram-integration.md](./reference/instagram-integration.md) | 브랜드 Instagram 연동(댓글→DM)을 어떻게 세팅하나? Meta 앱·토큰·private reply 제약 |
+| [reference/preview-pages.md](./reference/preview-pages.md) | klow_web 디자인 프리뷰 화면은 어디에 있나? 결제 완료(`/checkout/preview`)·배송추적(`/track/preview`)·시딩(`/seed/preview*`) |
 | [server/README.md](./server/README.md) | **API 엔드포인트 레퍼런스** — 모듈별 컨트롤러/가드/엔드포인트 (`server/modules/<module>.md`) |
-| [pricing-model.md](./pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
-| [deploy-drop-logistics-markup-runbook.md](./deploy-drop-logistics-markup-runbook.md) | **판매가 물류비 분리 + 무료배송 릴리스를 prod 에 어떻게 올리나?** 마이그레이션 → 백필 → 배포 순서, 스모크, 사전 공지 |
-| [deploy-free-text-product-tags-runbook.md](./deploy-free-text-product-tags-runbook.md) | **제품 태그 자유 텍스트 전환을 prod 에 어떻게 올리나?** DROP COLUMN 8개 컷오버, 마이그레이션 → 코드 → 백필 순서와 그 이유 |
-| [aws-fargate-migration.md](./aws-fargate-migration.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서, 루트 Dockerfile 을 Railway 가 감지하는 문제 |
-| [deploy-custom-domain-runbook.md](./deploy-custom-domain-runbook.md) | **브랜드 커스텀 도메인을 prod 에 어떻게 올리나?** 레포 간 순서(예약 슬러그 동일 창 · P2→P3 · P4 마지막), `VERCEL_PROJECT_ID` 환경별 분리, Vercel "Redirect to primary domain" 함정, 배포 후 curl 검증, 롤백 |
-| [payment-integration.md](./payment-integration.md) | 고객 결제(Eximbay, USD)가 어떻게 흐르나? prepare→verify, 환불, 웹훅 |
-| [brand-subscription.md](./brand-subscription.md) | 브랜드 구독 결제(NicePay 빌링, KRW)가 어떻게 되나? 빌키, 정기 청구, dunning, 노출 게이트 |
-| [instagram-integration.md](./instagram-integration.md) | 브랜드 Instagram 연동(댓글→DM)을 어떻게 세팅하나? Meta 앱·토큰·private reply 제약 |
-| [mcf/README.md](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고. SP-API 조사·구현 계획·플로우 |
-| [custom-domain/README.md](./custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) 연결 — 둘러보기·담기는 그 도메인 / 로그인·결제는 klow.kr(**핸드오프**), 쿠키·CSRF·CORS 처리, 미들웨어 경로 규칙 |
-| [custom-domain/purchase-plan.md](./custom-domain/purchase-plan.md) | **KLOW 가 도메인을 대신 사서 자동 연결하고 연 이용료를 받는다** — 브랜드는 DNS 를 만지지 않는다. Cloudflare Registrar 계약·한계(`.kr` 미지원), 마진 30% 산식, **환불 불가 상품의 결제↔등록 순서와 보상**(타임아웃 ≠ 실패), 갱신 dunning |
+| **트랙** | **진행 중이거나 계획된 일 — 상태는 [PROGRESS.md](./PROGRESS.md)** |
 | [storefront-sales-analytics.md](./storefront-sales-analytics.md) | 브랜드 `/stats` 에 **국가·제품 수요 분석 + 현장 채널**을 어떻게 붙이나? 두 모집단(퍼널 vs 주문 원장)이 왜 다른 숫자를 내는지, 채널 탭 정의 |
-| [preview-pages.md](./preview-pages.md) | klow_web 디자인 프리뷰 화면은 어디에 있나? 결제 완료(`/checkout/preview`)·배송추적(`/track/preview`)·시딩(`/seed/preview*`) |
-| [archive/](./archive/README.md) | 완료된 마이그레이션/정리 노트, 스크래치 — **현행 시스템 설명 아님** |
-
-<!-- 아직 지도에 없는 문서 (체계 4단계에서 처리): 1_/2_/3_instagram_business_*.md (Meta 심사 제출 원고),
-     efs-kz-charge-api-inquiry.md (벤더 문의 초안), deploy-fixed-pricing-runbook.md (실행 완료) -->
+| [aws-fargate-migration.md](./aws-fargate-migration.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서, 루트 Dockerfile 을 Railway 가 감지하는 문제 |
+| [custom-domain/](./custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) 연결 — 둘러보기·담기는 그 도메인 / 로그인·결제는 klow.kr(**핸드오프**). `purchase-plan.md` 는 **KLOW 가 도메인을 대신 사서 연 이용료를 받는** P6. ⚠️ 일정에 없음 |
+| [mcf/](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고. SP-API 조사·구현 계획·플로우. ⚠️ 일정에 없음 |
+| [deploy-custom-domain-runbook.md](./deploy-custom-domain-runbook.md) | **브랜드 커스텀 도메인을 prod 에 어떻게 올리나?** 레포 간 순서(예약 슬러그 동일 창 · P2→P3 · P4 마지막), `VERCEL_PROJECT_ID` 환경별 분리, Vercel "Redirect to primary domain" 함정, 배포 후 curl 검증, 롤백 |
+| [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 외부 제출 원고 — **현행 시스템 설명 아님** |
 
 ## 규칙
 

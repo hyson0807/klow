@@ -1,7 +1,7 @@
 # shipping — 배송
 
 - **모듈 경로**: `src/modules/shipping/`
-- **데이터 모델**: `ShippingCountry`(국가 설정 + 캐리어), `SeedingRate`(국가×무게 배송비 요율표 — **시딩·일반주문 공용 정본**, `LogisticsRateService` 소유), `ShippingExclusion`(EFS 제외구역), `ShippingCarrier`. (구 `ShippingRate` 무게×캐리어 티어·미러 컬럼·추가요금은 **dormant** — [`docs/cleanup-dormant-shipping-rate.md`](../../archive/cleanup-dormant-shipping-rate.md).)
+- **데이터 모델**: `ShippingCountry`(국가 설정 + 캐리어), `SeedingRate`(국가×무게 배송비 요율표 — **시딩·일반주문 공용 정본**, `LogisticsRateService` 소유), `ShippingExclusion`(EFS 제외구역), `ShippingCarrier`. (구 `ShippingRate` 무게×캐리어 티어·미러 컬럼·추가요금은 **dormant** — [`../../archive/cleanup-dormant-shipping-rate.md`](../../archive/cleanup-dormant-shipping-rate.md).)
 - **일반 주문 배송 산출 (2026-07-29 요율표 통합)**: 결제 시 `shipping.service.resolveProductShipping(iso2, addr, brandWeights)` 가 `(customerShippingRateKrw, 브랜드별 캐리어, 대표 캐리어)` 를 1회 반환한다.
   - **요율** = `LogisticsRateService.customerShippingRate(iso2)` = `CUSTOMER_SHIPPING_WEIGHT_G(500)` 티어(무게 올림) — `SeedingRate` 국가×무게 요율표. 운영팀이 캐리어 비교·유류할증료·마진을 미리 반영한 정본값(엑셀 `KLOW_시딩_가격표` 고객_가격표)이라 **런타임 비교·할증 가산 없음**. **고객 결제 배송비가 이 값 그대로**이고 **제품 무게와 무관**하다. 500g 이상 티어가 없으면 **구매 차단**(throw).
     - ⚠️ **2026-07-30 전환**: 구 "2kg 티어의 절반" → "500g 티어 그대로". 요율표는 고정비 비중이 커서 무게 비례가 아니다(500g 요율 ≠ 1kg 요율의 절반) — 전환으로 배송비가 **98개국 중 96개국에서 올랐다**(중앙값 +24%, 내려간 곳은 US·PH). `Order.shippingFeeByBrand` 스냅샷이 있으므로 **기존 주문은 소급 영향 없음**.

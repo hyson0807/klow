@@ -85,4 +85,4 @@ export 하지 않는다 — 구독 상태 머신·dunning·승인 트랜잭션�
 - 브랜드 입점/심사 워크플로우는 [brand-applications](./brand-applications.md) — 구독은 그 위의 결제 게이트.
 - 구독 매출 정산은 [settlement](./settlement.md).
 - 이 어댑터를 함께 쓰는 도메인 대행 구매는 [brand-domains](./brand-domains.md) 「대행 구매(P6)」.
-- 전체 결제 흐름·NicePay 교체 배경·Stage 분리 설계는 워크스페이스 문서 [`../../../docs/brand-subscription.md`](../../../docs/brand-subscription.md).
+- 전체 결제 흐름·NicePay 교체 배경·Stage 분리 설계는 워크스페이스 문서 [`../../reference/brand-subscription.md`](../../reference/brand-subscription.md).

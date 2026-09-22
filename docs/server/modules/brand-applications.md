@@ -131,7 +131,7 @@
   ⚠️ `countryPrices` 저장은 **replace-all** 이라 클라는 언제나 그 제품의 **전체 국가 배열**을 보내야 한다
   (한 국가만 고치려고 부분 배열을 보내면 나머지 국가의 핀·할인·무료배송이 전부 삭제된다).
 - **응답의 국가별 설정**: 목록/단건은 `pins{iso:priceLocal}` · `discounts{iso:pct}` · `freeShippingCountries[iso]`
-  세 맵으로 국가별 원본을 돌려준다(폼 재구성용). 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
+  세 맵으로 국가별 원본을 돌려준다(폼 재구성용). 자세히는 [`../../reference/pricing-model.md`](../../reference/pricing-model.md).
 - **초안 일괄 등록(`POST /v1/brand/products/bulk`)은 `countryPrices` 를 아예 받지 않는다** —
   `createMany` 라 `writeProductCountryPrices` 를 못 타므로 `BrandProductDraftInput` 에서 omit 했다
   (받아놓고 버리지 않는다). 국가별 설정은 발행 전 편집 폼에서 채운다.

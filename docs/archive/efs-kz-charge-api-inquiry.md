@@ -1,5 +1,9 @@
 # [문의] getTrackStatus API — 카자흐스탄(KZ) 배송비(예상 배송 비용) 미회신 건
 
+> **📦 보관 문서 (종료 · 2026-07-28 작성):** EFS 벤더에 보낼 문의 초안이었고 그 건은 끝났다.
+> 현행 배송비·요율 규칙은 [`../server/modules/shipping.md`](../server/modules/shipping.md),
+> EFS 청구는 [`../server/modules/efs-billing.md`](../server/modules/efs-billing.md) 참고.
+
 > EFS 담당자님께 보낼 문의 초안입니다. (API 문서: `EFS_ShippingOrder_API_v3.5`)
 
 ---

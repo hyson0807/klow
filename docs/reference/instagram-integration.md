@@ -1,6 +1,6 @@
 # Instagram 연동 — Meta 앱 셋업 & 운영 가이드
 
-브랜드가 자기 Instagram 계정을 연동해 포스팅 댓글에 브랜드관 링크 DM 을 보내는 기능(klow_brand **인스타그램** 탭)의 **운영 준비** 문서. 코드 구현은 [`docs/server/modules/instagram.md`](./server/modules/instagram.md) 참고.
+브랜드가 자기 Instagram 계정을 연동해 포스팅 댓글에 브랜드관 링크 DM 을 보내는 기능(klow_brand **인스타그램** 탭)의 **운영 준비** 문서. 코드 구현은 [`../server/modules/instagram.md`](../server/modules/instagram.md) 참고.
 
 > ⚠️ **App Review 승인 전엔 실제 브랜드가 쓸 수 없다.** 아래 5의 App Review + Business Verification 이 통과해야 "내 앱에 role 없는 브랜드 계정"에 대해 댓글 조회/DM 발송이 동작한다. 승인 전에는 **앱에 tester role 을 부여한 테스트 IG 계정**으로만 전체 흐름을 검증할 수 있다(코드는 승인 여부와 무관하게 동일).
 

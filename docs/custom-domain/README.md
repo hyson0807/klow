@@ -242,7 +242,7 @@ Origin·Referer 를 `klow.kr` / `shop.brandA.com` / 무작위 도메인 / 없음
 
 ## 관련 문서
 
-- [`../architecture.md`](../architecture.md) — 전체 구조·URL surface·요청 흐름
-- [`../payment-integration.md`](../payment-integration.md) — Eximbay 결제 흐름(이 기능이 건드리는 리턴 경로)
+- [`../reference/architecture.md`](../reference/architecture.md) — 전체 구조·URL surface·요청 흐름
+- [`../reference/payment-integration.md`](../reference/payment-integration.md) — Eximbay 결제 흐름(이 기능이 건드리는 리턴 경로)
 - [`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md) — 브랜드관 방문 통계(회귀 대상)
-- [`../server/modules/embed.md`](../server/modules/embed.md) — 카페24 임베드(무관하지만 CORS 규칙이 인접)
+- [`../archive/embed.md`](../archive/embed.md) — 카페24 임베드(2026-09 기능 제거 · CORS 규칙이 인접해 보관)

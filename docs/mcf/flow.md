@@ -137,7 +137,7 @@ sequenceDiagram
 
 **한 줄: MCF 는 가격 경로를 전혀 건드리지 않는다.** 2026-07-28 전환에서 판매가·정산가에서 **물류비가 완전히 빠졌고**
 (`판매가 = 정산가/0.95/fx`, `정산가 = floor(청구USD × fx × 0.95)` — PG 5% 만 차감), 고객 배송비는 **판매가 바깥의
-별도 라인**이 됐다(→ [`../pricing-model.md`](../pricing-model.md)). 물류비가 애초에 가격에 안 들어가니 **"Amazon 은 EFS 물류비가
+별도 라인**이 됐다(→ [`../reference/pricing-model.md`](../reference/pricing-model.md)). 물류비가 애초에 가격에 안 들어가니 **"Amazon 은 EFS 물류비가
 안 드니 그만큼 빼자"는 옛 2벌 설계는 뺄 것이 없어져 폐기**됐다. MCF 로 갈리는 건 **배송비 선결제분의 귀속**(§7-3) 하나뿐이다.
 
 > **폐기된 옛 설계(2026-07-08)**: MCF 판매가/정산가 2벌 · `ProductAmazonListing.mcfMarginKrw` · MCF 표시가 분기 ·

@@ -1,14 +1,19 @@
 # 배포 런북 — 판매가에서 물류비 분리 + 무료배송 (staging → main)
 
+> **📦 보관 문서 (실행 완료 · 2026-07-29):** 이 릴리스는 프로덕션에 나갔다. 본문이 이미 경고하듯
+> **무료배송은 그 직후 국가별 설정으로 다시 바뀌어 절반이 무효**다. 현행 가격·배송비 모델은
+> [`../reference/pricing-model.md`](../reference/pricing-model.md) 와
+> [`../server/modules/shipping.md`](../server/modules/shipping.md) 참고.
+
 판매가에 섞여 있던 **국가별 2kg 물류비의 절반(마크업)을 제거**하고, 제품/브랜드 단위 **무료배송 판매 모드**를
 추가하는 릴리스의 프로덕션 배포 절차. **순서를 지키지 않으면 브랜드 정산이 조용히 깎이므로** 아래를 따른다.
 
-관련 문서: [`pricing-model.md`](./pricing-model.md) · [이전 전환 런북](./deploy-fixed-pricing-runbook.md)
+관련 문서: [`../reference/pricing-model.md`](../reference/pricing-model.md) · [이전 전환 런북](./deploy-fixed-pricing-runbook.md)
 
 > ⚠️ **이 문서는 그 릴리스 시점의 기록이다.** 2026-07-29 에 무료배송이 **국가별 설정**
 > (`ProductCountryPrice.freeShipping`)으로 바뀌면서 여기 나오는 `Product.freeShipping`·
 > `Brand.freeShippingAll` 컬럼은 드롭됐다. 무료배송 부분은 현행이 아니고, 물류비 분리·백필 절차만
-> 유효하다. 현행 모델은 [`pricing-model.md`](./pricing-model.md) 참고.
+> 유효하다. 현행 모델은 [`../reference/pricing-model.md`](../reference/pricing-model.md) 참고.
 
 ## 왜 순서가 중요한가
 

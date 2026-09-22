@@ -64,6 +64,6 @@ Fulfillment)되게 하는 기능의 설계·구현 문서 모음.
 - **가격 정본(변경 금지 · MCF 는 읽기만)**: `pricing/price-line.ts` `priceLine()`,
   `pricing/formulas.ts`(`settlementKrwFromCustomerUsd`/`perBrandShippingFeeUsdCents`),
   `pricing/chargeable-brands.ts`(`chargeableBrandIds`/`shippingFeeByBrand`/`perBrandShareUsd`) — 전체 모델은
-  [`../pricing-model.md`](../pricing-model.md)
+  [`../reference/pricing-model.md`](../reference/pricing-model.md)
 - 정산 게이트: `settlement/settlement.service.ts`(`EFS_STATUS_DELIVERED` 4곳) ·
   배송비 후청구: `efs-billing/efs-billing.service.ts`(일반+시딩 공용, MCF 는 `efsTrackingNumber` 필터로 자연 제외 — F10)

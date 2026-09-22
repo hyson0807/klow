@@ -4,7 +4,7 @@
 
 - 소스: `klow_server/src/modules/instagram/`
 - 프론트: `klow_brand` **인스타그램** 탭 (`src/app/(authed)/instagram/`)
-- 사전 준비/운영 가이드: [`docs/instagram-integration.md`](../../instagram-integration.md)
+- 사전 준비/운영 가이드: [`../../reference/instagram-integration.md`](../../reference/instagram-integration.md)
 
 ## 핵심 제약 (Meta Instagram Platform API)
 

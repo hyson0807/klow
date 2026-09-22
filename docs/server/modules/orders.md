@@ -6,7 +6,7 @@
   `Zod literal(true)`, 같은 시각으로 `termsAgreedAt`/`refundAgreedAt`/`pgDataSharingAgreedAt` 기록) + IP +
   `fxRateSnapshot` (결제 시점 환율 고정용). 라인 단가·정산가·원가는
   `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
-- **배송비 + 무료배송**: `shippingFeeUsd = 500g 요율/fx × 청구 대상 브랜드수`(산식 정본은 [pricing-model](../../pricing-model.md)). 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
+- **배송비 + 무료배송**: `shippingFeeUsd = 500g 요율/fx × 청구 대상 브랜드수`(산식 정본은 [pricing-model](../../reference/pricing-model.md)). 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
   **그 브랜드 라인이 전부 무료배송일 때만** 면제된다. 무료배송은 **국가별**(`ProductCountryPrice.freeShipping`,
   목적국 행이 없으면 유료)이라 배송지 국가가 판정의 입력이다 — `chargeableBrandIds(lines, iso2)`
   (`pricing/chargeable-brands.ts`, 생성·견적 공유). create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.
@@ -21,7 +21,7 @@
   캐리어 분기는 브랜드별 청구중량(`brandChargeableWeights` = Σ max(실무게, L×W×H/6) × 수량)으로 갈리며
   create/quote 가 같은 헬퍼를 공유해 견적 캐리어 == 청구 캐리어가 보장된다.
 - **과청구 가드**: 현지통화 핀(`priceLocal`) 상품인데 목적국 통화의 유효 환율이 없으면 `OrdersService.billingRate`가
-  주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../pricing-model.md`](../../pricing-model.md).
+  주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../reference/pricing-model.md`](../../reference/pricing-model.md).
 - **브랜드당 최대 5개**(`MAX_ITEMS_PER_BRAND`): 한 브랜드 = 한 EFS 송장(박스)이라 클라 중복 productId 를 병합한
   수량 합이 5를 넘으면 400. legacy(`brandId` 없음) 제품은 면제, 현장(onsite) 주문은 박스가 없어 미적용.
 - **상태**: `Order.status`(`pending → processing → shipped → completed`, 종착 `cancelled`)와

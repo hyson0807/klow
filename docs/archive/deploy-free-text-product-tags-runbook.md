@@ -1,10 +1,14 @@
 # 배포 런북 — 제품 태그 자유 텍스트 전환 + 고정 키워드 폐지 (2026-07-30)
 
+> **📦 보관 문서 (실행 완료 · 2026-07-30):** DROP COLUMN 8개 컷오버까지 프로덕션에 나갔다.
+> 현행 제품 태그 규칙은 [`../server/modules/products.md`](../server/modules/products.md) 참고.
+> 이 문서는 **파괴적 마이그레이션의 순서 설계 선례**로만 남긴다.
+
 제품의 **주요 고민 / 추천 피부 타입**을 고정 enum(11개 concern 키 + 4개 한국어 피부타입)에서
 **자유 텍스트 태그**(영문 저장 → 로케일별 MT 노출)로 바꾸고, 같은 enum 을 쓰던 개인화·필터 기능을
 전부 제거하는 릴리스의 프로덕션 배포 절차.
 
-관련: [`architecture.md`](./architecture.md) · [`server/modules/translation.md`](./server/modules/translation.md) ·
+관련: [`../reference/architecture.md`](../reference/architecture.md) · [`../server/modules/translation.md`](../server/modules/translation.md) ·
 [이전 DROP COLUMN 릴리스](./deploy-drop-logistics-markup-runbook.md)
 
 ## 왜 순서가 중요한가

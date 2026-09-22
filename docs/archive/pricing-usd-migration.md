@@ -1,15 +1,15 @@
 # Pricing — 고객측 가격 USD 정본화 (풀 전환)
 
 > **📦 보관 문서 (2026-06 완료):** 이 마이그레이션은 단계 5(파괴적 정리)까지 전부 완료되었다.
-> 현행 가격 모델은 [`../pricing-model.md`](../pricing-model.md) 참고. 이 문서는 KRW 장부 컬럼이
+> 현행 가격 모델은 [`../reference/pricing-model.md`](../reference/pricing-model.md) 참고. 이 문서는 KRW 장부 컬럼이
 > 왜/어떻게 드롭됐는지에 대한 이력 기록으로만 유지한다.
 
 본 문서는 KLOW 주문/결제 장부의 **고객측 금액을 USD 정본(canonical)으로 전환**하는 설계와
 마이그레이션 절차를 정의한다. 브랜드 정산측은 KRW를 유지한다. 실제 스키마·코드 적용은 각
 subproject repo(`klow_server` 등)에서 별도 작업으로 수행하며, 본 문서는 그 단일 기준이다.
 
-> 결제 흐름 자체는 [`payment-integration.md`](../payment-integration.md), 전체 모델은
-> [`architecture.md`](../architecture.md) Order/Payment 섹션 참고.
+> 결제 흐름 자체는 [`../reference/payment-integration.md`](../reference/payment-integration.md), 전체 모델은
+> [`../reference/architecture.md`](../reference/architecture.md) Order/Payment 섹션 참고.
 
 ---
 
@@ -181,7 +181,7 @@ deprecated 컬럼들을 정리 완료. (a)(b) 각각 단독 마이그레이션�
 - 코드 전환 커밋: `klow_server` `72fbc6f` + web/admin/brand. 마지막으로 남아있던 `seed.ts` 의
   `price` 쓰기까지 제거해 **코드 참조 0** 확인 후 schema 에서 필드 삭제 → 단독 마이그레이션
   `ALTER TABLE "Product" DROP COLUMN "price"`.
-- 가격 모델 전체는 [`pricing-model.md`](../pricing-model.md) 참고.
+- 가격 모델 전체는 [`../reference/pricing-model.md`](../reference/pricing-model.md) 참고.
 
 > **상태 (2026-06 기준): (a)(b) 모두 완료.** 실결제 도입 전 단계라 dual-write 롤백 안전망이
 > 불필요해, 운영 배포 대기 없이 staging 에서 바로 DROP 했다. 착수 전 §6-7 불변식(전 주문
@@ -194,7 +194,7 @@ deprecated 컬럼들을 정리 완료. (a)(b) 각각 단독 마이그레이션�
 
 ## 6. 검증 체크리스트
 
-[`payment-integration.md`](../payment-integration.md) "로컬 테스트 절차"를 베이스로 한다.
+[`../reference/payment-integration.md`](../reference/payment-integration.md) "로컬 테스트 절차"를 베이스로 한다.
 
 1. 단일 상품 주문 → `POST /v1/orders` 응답·DB에 `totalUsd`/`unitPriceUsd`/`shippingFeeUsd` 채워짐,
    backfill 한 값과 일치.

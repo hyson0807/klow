@@ -149,7 +149,7 @@ charged price** across cards, order creation, and quotes. See the Pricing sectio
 
 ## URL Surfaces
 
-The server exposes **four URL surfaces**, each with its own caller and guard. The full per-endpoint reference now lives in the per-module docs — see [`server/README.md`](./server/README.md) and `docs/server/modules/*.md`. This document only covers the surface conventions.
+The server exposes **four URL surfaces**, each with its own caller and guard. The full per-endpoint reference now lives in the per-module docs — see [`../server/README.md`](../server/README.md) and `docs/server/modules/*.md`. This document only covers the surface conventions.
 
 | Surface   | Prefix         | Caller               | Guard                                                            |
 |-----------|----------------|----------------------|-----------------------------------------------------------------|
@@ -182,7 +182,7 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 
 ### 주문 / 결제 (Orders & Payment)
 
-- **`Order`** — 체크아웃 + Eximbay 결제. **고객측 금액은 USD 정본** — `totalUsd`(센트 정수 = PG 청구액), `shippingFeeUsd`(센트), `itemCount`. (구 KRW 원장 `subtotal`/`shippingFeeKrw` 는 2026-06 USD 마이그레이션에서 **드롭** — [`archive/pricing-usd-migration.md`](./archive/pricing-usd-migration.md).) 배송지/수취인(`email`, `fullName`, `phone @VarChar(20)`, `country`+`countryCode @VarChar(2)`, 주소, EFS 전용 `recipientState`/`recipientNameEn`/`addressLine1En`/`recipientTaxId`(31번 세금식별코드 — 배송국별 CN 신분증 / MX RFC)), `OrderStatus`+`PaymentStatus`, 결제 메타(`paymentMethod`, `pgProvider`, `pgTid @unique`, `pgCurrency`, `paidAt`), PG 심사 audit(`termsAgreedAt`/`refundAgreedAt`/`pgDataSharingAgreedAt`/`agreementIp`/`fxRateSnapshot`), 캐리어 스냅샷(`shippingCarrier`, `shippingCarrierByBrand` JSON, 브랜드별 배송비 `shippingFeeByBrand` JSON), 무가 시딩 플래그 `isSeeding`. User(nullable)·OrderItem[]·Shipment[]·SeedingLink.
+- **`Order`** — 체크아웃 + Eximbay 결제. **고객측 금액은 USD 정본** — `totalUsd`(센트 정수 = PG 청구액), `shippingFeeUsd`(센트), `itemCount`. (구 KRW 원장 `subtotal`/`shippingFeeKrw` 는 2026-06 USD 마이그레이션에서 **드롭** — [`../archive/pricing-usd-migration.md`](../archive/pricing-usd-migration.md).) 배송지/수취인(`email`, `fullName`, `phone @VarChar(20)`, `country`+`countryCode @VarChar(2)`, 주소, EFS 전용 `recipientState`/`recipientNameEn`/`addressLine1En`/`recipientTaxId`(31번 세금식별코드 — 배송국별 CN 신분증 / MX RFC)), `OrderStatus`+`PaymentStatus`, 결제 메타(`paymentMethod`, `pgProvider`, `pgTid @unique`, `pgCurrency`, `paidAt`), PG 심사 audit(`termsAgreedAt`/`refundAgreedAt`/`pgDataSharingAgreedAt`/`agreementIp`/`fxRateSnapshot`), 캐리어 스냅샷(`shippingCarrier`, `shippingCarrierByBrand` JSON, 브랜드별 배송비 `shippingFeeByBrand` JSON), 무가 시딩 플래그 `isSeeding`. User(nullable)·OrderItem[]·Shipment[]·SeedingLink.
 - **`OrderItem`** — 주문 라인. `productId` 는 FK 아님(스냅샷이 제품 삭제/개명 후에도 생존) — 시딩 직접입력 라인에선 NULL. `productName/productImage/productBrand` + `unitPriceUsd`(센트, 고객 단가 정본) + `quantity` + `settlementPriceKrw?`(브랜드 정산 단가 스냅샷). `ShipmentItem` 1:1. Order cascade.
 
 ### 유저 인증 (User auth)
@@ -265,13 +265,13 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 
 ### Shipping & EFS invoices
 
-**한 브랜드 = 한 EFS 송장.** 한 주문이 N 개 브랜드 제품을 담으면 결제 배송비도 **청구 대상** 브랜드별 요율의 합(`shippingFeeUsd`), EFS 송장도 N 장(`Shipment` 1 + `ShipmentItem` N). payload-builder 가 24번 itemCapsule 을 `{...},{...}` multi-item 으로 묶고, 배송비는 주문 시점 스냅샷 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 무료배송 브랜드는 0)로 송장별 안분한다(legacy 주문은 null → 균등분배 폴백). 주문 캐리어는 국가 고정값 `ShippingCountry.productCarrier`(직통 EFS / 나머지 EMS), 요율은 `resolveFixedRate(iso2, addr)`(EFS 제외구역/EMS 반영), 표시는 베스트케이스. **EFS 제외구역·미설정국은 구매 차단.** **통관 분류(24-6)·HS 코드(24-8)는 브랜드 취급 품목 `Brand.category` 에서 파생**한다 — `common/constants.ts` 의 `BRAND_CATEGORY_CUSTOMS` 가 정본(화장품 `Cosmetics`/`3304991000`, 치과재료 `Dental Materials`/`3407002000`)이고 일반 주문·시딩 송장이 같은 규칙을 탄다. 제품별 오버라이드는 없다(`Product.hsCode` 등 구 컬럼은 dormant). 어드민 발급은 `(orderId, brandId)` 그룹 단위(`/admin/shipments/order/:orderId/brand/:brandId`). 자세히는 `klow_server/docs/modules/shipping.md` + [`server/modules/shipments.md`](./server/modules/shipments.md).
+**한 브랜드 = 한 EFS 송장.** 한 주문이 N 개 브랜드 제품을 담으면 결제 배송비도 **청구 대상** 브랜드별 요율의 합(`shippingFeeUsd`), EFS 송장도 N 장(`Shipment` 1 + `ShipmentItem` N). payload-builder 가 24번 itemCapsule 을 `{...},{...}` multi-item 으로 묶고, 배송비는 주문 시점 스냅샷 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 무료배송 브랜드는 0)로 송장별 안분한다(legacy 주문은 null → 균등분배 폴백). 주문 캐리어는 국가 고정값 `ShippingCountry.productCarrier`(직통 EFS / 나머지 EMS), 요율은 `resolveFixedRate(iso2, addr)`(EFS 제외구역/EMS 반영), 표시는 베스트케이스. **EFS 제외구역·미설정국은 구매 차단.** **통관 분류(24-6)·HS 코드(24-8)는 브랜드 취급 품목 `Brand.category` 에서 파생**한다 — `common/constants.ts` 의 `BRAND_CATEGORY_CUSTOMS` 가 정본(화장품 `Cosmetics`/`3304991000`, 치과재료 `Dental Materials`/`3407002000`)이고 일반 주문·시딩 송장이 같은 규칙을 탄다. 제품별 오버라이드는 없다(`Product.hsCode` 등 구 컬럼은 dormant). 어드민 발급은 `(orderId, brandId)` 그룹 단위(`/admin/shipments/order/:orderId/brand/:brandId`). 자세히는 `klow_server/docs/modules/shipping.md` + [`../server/modules/shipments.md`](../server/modules/shipments.md).
 
 ### Seeding (무가 시딩)
 
-크리에이터 시딩 배송비는 **`SeedingRate(iso2, weightG, costKrw)`** 표(운영팀이 원가·캐리어·할증·마진 선반영, 98국×71무게티어)에서 **무게 올림 조회한 값을 그대로** 쓴다 — 캐리어 비교·할증 가산 없음. **2026-07-29 부터 일반 주문도 같은 표를 쓴다**(일반 주문은 500g 티어가 곧 고객 배송비). 어드민 **배송비용** 탭(`/seeding-cost`)에서 수기 편집 + 엑셀 업로드, 초기 시드 `npm run seed:seeding-rates`. 무가 시딩 주문은 `SeedingLink` 공개 링크 클레임으로 생성 — `Order.isSeeding=true`, `totalUsd=0`, `paymentStatus=paid`. 캐리어는 `shipping.service.resolveCarrier`(EFS 제외구역이면 차단). 상세: [`server/modules/seeding.md`](./server/modules/seeding.md).
+크리에이터 시딩 배송비는 **`SeedingRate(iso2, weightG, costKrw)`** 표(운영팀이 원가·캐리어·할증·마진 선반영, 98국×71무게티어)에서 **무게 올림 조회한 값을 그대로** 쓴다 — 캐리어 비교·할증 가산 없음. **2026-07-29 부터 일반 주문도 같은 표를 쓴다**(일반 주문은 500g 티어가 곧 고객 배송비). 어드민 **배송비용** 탭(`/seeding-cost`)에서 수기 편집 + 엑셀 업로드, 초기 시드 `npm run seed:seeding-rates`. 무가 시딩 주문은 `SeedingLink` 공개 링크 클레임으로 생성 — `Order.isSeeding=true`, `totalUsd=0`, `paymentStatus=paid`. 캐리어는 `shipping.service.resolveCarrier`(EFS 제외구역이면 차단). 상세: [`../server/modules/seeding.md`](../server/modules/seeding.md).
 
-### Promotions → [`server/modules/promotions.md`](./server/modules/promotions.md)
+### Promotions → [`../server/modules/promotions.md`](../server/modules/promotions.md)
 
 브랜드가 인플루언서별 공개 단축링크(`/r/{code}`)를 발급해 유입을 추적한다. `Promotion` → `PromotionLink`(플랫폼·핸들·`code`·`enabled`·`clickCount`) → `PromotionLinkDailyStat`(KST 일자 버킷). 리다이렉트마다 `clickCount` +1 + 일자 stat upsert, 링크가 `enabled=false` 면 홈으로 폴백 + 미집계. 프론트는 브랜드 포털 `(authed)/promotions` (생성·토글·클릭 통계) + 어드민 promotions 탭(관찰).
 
@@ -291,7 +291,7 @@ Each subsystem has a dedicated deep-dive doc; these are the one-screen summaries
 - **Admin**(`klow_admin`) — 이메일+비밀번호(argon2id) + TOTP 2FA. `AdminSession` + `klow_admin_sid`(24h, 30분 idle). `AdminGuard`/`SuperAdminGuard`. 초대 기반 프로비저닝(공개 가입 없음), 5회 실패 15분 락, 모든 mutation `AdminAuditLog` 기록.
 - **Brand**(`klow_brand`) — **전화+SMS OTP(Solapi) 가 메인**, 이메일+비밀번호·Google 은 보조. `BrandSession` + `klow_brand_sid`(7일). `BrandGuard`. 공개 자체 가입, TOTP 없음(마찰 최소화), `email`/`phone`/`googleId` 각 독립.
 
-자세한 규칙은 workspace `CLAUDE.md` 의 Key Facts + [`server/modules/web-auth.md`](./server/modules/web-auth.md)·`admin-auth.md`·`brand-auth.md`.
+자세한 규칙은 workspace `CLAUDE.md` 의 Key Facts + [`../server/modules/web-auth.md`](../server/modules/web-auth.md)·`admin-auth.md`·`brand-auth.md`.
 
 ---
 
@@ -428,7 +428,7 @@ Confirmation never depends on the buyer's browser running JS. It used to: `retur
 klow_web and a client page fired a second, fire-and-forget `verify` whose errors were swallowed —
 so a buyer who paid and never came back (QR → in-app browser → card app) left the order `pending`
 forever with the card charged. Three independent paths now reach `markPaid`; see
-[`server/modules/payment.md`](./server/modules/payment.md).
+[`../server/modules/payment.md`](../server/modules/payment.md).
 
 Amount truth is always server-side (`Order.totalUsd`); the client's numbers are never trusted. Full state machine and edge cases: [`payment-integration.md`](./payment-integration.md).
 
