@@ -8,6 +8,7 @@
 |------|----------|
 | [custom-domain/](./custom-domain/README.md) | 브랜드가 자기 도메인(`shop.brandA.com`)으로 브랜드관을 연다. 둘러보기·담기는 그 도메인 / 로그인·결제는 klow.kr(**핸드오프**). `purchase-plan.md` 는 KLOW 가 도메인을 대신 사서 연 이용료를 받는 P6, `deploy-runbook.md` 는 운영 배포 절차 |
 | [mcf/](./mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — 이미 Amazon FBA 창고에 재고를 둔 브랜드의 KLOW 주문을 Amazon 이 바로 출고 |
+| [3pl-fulfillment/](./3pl-fulfillment/implementation-plan.md) | 콜로세움 3PL — 어드민이 브랜드별 재고를 입력하고, 브랜드가 출고신청하면 재고가 차감되고, 어드민이 콜로세움 주문서 엑셀을 받아 수작업 업로드한다 |
 | [aws-fargate/](./aws-fargate/implementation-plan.md) | `klow_server` 를 Railway 에서 AWS ECS Fargate 로 이전. Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP)과 0~6단계 순서 |
 
 ## 새 트랙을 만들 때
