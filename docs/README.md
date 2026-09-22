@@ -21,6 +21,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | 문서 | 이런 질문일 때 |
 |------|----------------|
 | [PROGRESS.md](./PROGRESS.md) | **지금 뭘 할 차례인가?** 진행 중인 단계, 세션 절차, 진입/퇴출 기준, 트랙별 다음 단계 |
+| **[decisions/](./decisions/README.md)** | **과거 결정 71건의 본문 — 왜 이렇게 됐나, 되돌리면 뭐가 깨지나.** `CLAUDE.md` 의 `## 결정 기록` 색인에서 항목을 찾고 여기서 읽는다 — 코드를 건드리기 전에 그 주제 파일을 읽는다 |
 | **[reference/](./reference/)** | **현행 시스템 — "지금 어떻게 동작하나"** |
 | [reference/architecture.md](./reference/architecture.md) | 전체 구조가 어떻게 되나? 저장소·모듈·데이터 모델·URL surface·요청 흐름 |
 | [reference/pricing-model.md](./reference/pricing-model.md) | 가격이 어떻게 계산되나? **판매가 고정 → 마진 역산**, 국가별 판매가/할인, USD/KRW 통화 규칙, 물류비 |
@@ -35,7 +36,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/3pl-fulfillment/](./plan/3pl-fulfillment/implementation-plan.md) | 콜로세움 3PL — 브랜드가 창고에 맡긴 재고, 출고신청, 콜로세움 주문서 엑셀(API 가 없어 수작업 업로드) |
 | [plan/aws-fargate/](./plan/aws-fargate/implementation-plan.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서 |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
-| [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` |
+| [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
 
 ## 규칙
 
