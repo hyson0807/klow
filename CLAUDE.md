@@ -59,9 +59,10 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, stats, subscription, translation, upload) |
 | Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | 가격 커널 (공유)              | `klow_server/src/pricing/` (배럴 — formulas/fx/country-price/promotion/price-line/chargeable-brands). **`modules/` 의 형제**이고 6개 모듈이 의존한다 |
+| 3PL 풀필먼트(콜로세움)        | `klow_server/src/modules/fulfillment/` (재고 + 출고신청 + 엑셀 2종 — **EFS·`Shipment` 와 별개 축**) · 어드민 `klow_admin /fulfillment` + 브랜드 상세 `?tab=inventory` · 브랜드 스튜디오 홈 `재고` 탭. 엔드포인트: `docs/server/modules/fulfillment.md` |
 | 제품 카탈로그 게이트          | `klow_server/src/modules/products/product-selects.ts` (노출·구매 가능 판정만 — 가격 계산은 위 `src/pricing/`)  |
 | 제품 텍스트 로케일화           | `klow_server/src/modules/products/product-translation.service.ts` (MT 캐시 + overlay) · `product-translation-overrides.ts` (브랜드 수동 번역 순수 로직) · klow_brand `studio/_hooks/useProductTranslations.ts` + `_components/TranslationDriftModal.tsx` |
-| Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, brand-subscriptions, brand-withdrawals, reviews, orders, refunds, returns, shipments, tracking, sales-report, settlement, promotions, influencers, customers, seeding-cost, shipping-countries, shipping-rates, audit-logs, admins) |
+| Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, brand-subscriptions, brand-withdrawals, reviews, orders, refunds, returns, shipments, tracking, sales-report, settlement, promotions, influencers, customers, seeding-cost, shipping-countries, shipping-rates, fulfillment, audit-logs, admins) |
 | Admin pages (공개)            | `klow_admin/src/app/login/`, `klow_admin/src/app/accept-invite/[token]/`                                |
 | Admin API client              | `klow_admin/src/lib/api/` (도메인별 파일 + index.ts 배럴 — import 경로는 `@/lib/api` 유지). 하부 `client.ts` 가 `BASE`·`fetchJson`·`postMultipart`·`downloadFile`·`extractApiError` 소유 (credentials:'include' + 401 자동 /login 리다이렉트, 단 `/admin/auth/*` 는 자체 처리) |
 | Admin upload helper           | `klow_admin/src/lib/upload.ts`                                                                          |
@@ -111,7 +112,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
 2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 35개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 10개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
-3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 349개 — 2026-09-22 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
+3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 361개 — 2026-09-22 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
 
@@ -186,6 +187,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-02` [EFS 필드 길이 + 해외 주소 자동완성](docs/decisions/shipping-seeding.md#2026-09-02-2)
 - `2026-09-04` [브랜드 알림톡 — 시딩 제품명 교정 + 무가 시딩/재발송 opt-in](docs/decisions/shipping-seeding.md#2026-09-04)
 - `2026-09-14` [바코드 라벨 제품명 — 일반 주문·브랜드 지정 시딩 누락](docs/decisions/shipping-seeding.md#2026-09-14)
+- `2026-09-22` [3PL 풀필먼트(콜로세움) v1 — 창고 재고 + 출고신청](docs/decisions/shipping-seeding.md#2026-09-22)
 
 ### 정산 — `settlement.md`
 

@@ -17,18 +17,22 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**3pl-fulfillment 3단계 — 서버 API (재고 + 출고신청)** (2026-09-22 기록)
+**3pl-fulfillment 운영 배포** (2026-09-22 기록)
 
-명세는 `§6 3pl-fulfillment` 3단계. **klow_server 단독 · 마이그레이션 없음** — 2단계가 놓은
-테이블 위에 컨트롤러와 서비스 메서드만 얹는다.
+1~6단계가 전부 끝났다. **남은 것은 배포뿐이고 그게 이 트랙의 마지막 단계다.**
 
-⚠️ 작업 트리가 **`feat/3pl-fulfillment` 브랜치 + 전용 Neon DB 브랜치**(`ep-floral-sun`)를
-가리킨 채로 있다. 2단계 마이그레이션이 거기에만 적용돼 있으므로 `staging` 으로 돌아가지 않는다.
+- 순서는 **klow_server → klow_admin → klow_brand**. 뒤집으면 어드민 재고 저장·브랜드
+  출고신청이 404 다.
+- ⚠️ **마이그레이션이 전용 Neon DB 브랜치(`ep-floral-sun`)에만 있다.** `staging`
+  (`ep-icy-flower`)·운영에는 없으므로 배포 전에 그 DB 들에 `20260922070013_add_3pl_fulfillment`
+  를 적용해야 한다(`CREATE TYPE` ×1 + `CREATE TABLE` ×3, DROP 0건 → **롤링 안전 · 백필 없음**).
+- ⚠️ 네 레포 중 셋이 **`feat/3pl-fulfillment` 브랜치**에 있다(server·admin·brand).
+  `staging` 머지가 선행한다.
+- 배포 후 확인: 어드민 브랜드 상세 `재고` 탭에서 수량 입력 → 브랜드 스튜디오 `재고` 탭에
+  그 숫자 → 출고신청 1건 → 어드민 `출고신청` 탭에서 콜로세움 엑셀 내보내기.
 
-기준선은 라우트 **349** · cron **10** · Nest 모듈 **35**(2단계에서 fulfillment 가 늘었다).
-
-**그다음: 체계 4단계 — 없음.** 체계 트랙은 1~3단계로 끝났다. `docs/decisions/` 운영은 이제
-`§1` 절차 7번(문서 동기화)에 상시 규칙으로 들어가 있다.
+**그다음: 다음 트랙 후보는 트랙 문서 §5** (유럽 라우팅 · 자동 유입 · 물류비 후청구 · 배송 추적).
+착수 결정이 나면 `§1 계획 세션` 으로 행을 만든다.
 
 막힘: aws-fargate 2단계 (AWS 크레딧 승인 대기, 2026-09-11~)
 
@@ -239,26 +243,17 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 엔티티다. 그래서 `klow_server` 의 EFS·`Shipment`·`ShippingCarrier`·라우팅 코드를 **한 줄도 건드리지
 않는다.** 유럽 라우팅·자동 유입·추적·비용 청구는 전부 다음 트랙 후보다(트랙 문서 §5).
 
-#### 3. 서버 API — 재고(어드민 쓰기 · 브랜드 읽기) + 출고신청(생성 · 취소 · 재고 차감)
+#### 7. 운영 배포 (마지막 단계)
 
-- **읽을 것**: 트랙 문서 §1·§3 + §4 3단계, 2단계가 만든 `prisma/schema.prisma` 의
-  `BrandInventoryItem`·`FulfillmentRequest`·`FulfillmentRequestItem` 주석과
-  `src/common/validation/fulfillment.ts`, `seeding.service.ts` 의 `reserveSlot()`
-- **건드리는 레포 · 배포 순서**: klow_server 단독. **배포 순서 제약 없음**(라우트 신설뿐이라
-  프론트가 아직 아무도 부르지 않는다)
-- **스키마·데이터 위험**: **없음** — 2단계 마이그레이션 위에 코드만 얹는다
-- **할 일**: 트랙 문서 §4 3단계. 2단계가 확정한 것들:
-  - 컨트롤러는 `src/modules/fulfillment/` 에 **URL surface 접두**로 새로 만든다
-    (`admin-inventory.controller.ts` · `brand-fulfillment.controller.ts`).
-    ⚠️ `admin-brands.controller.ts` 에 넣지 말 것 — 거기 `@Get(':id')` 가 뒤 라우트를 가린다
-  - `FulfillmentModule` 은 이미 `BrandAuthModule` 을 import 하고 `app.module.ts` 에 등록돼 있다.
-    `AdminGuard` 를 쓰려면 `AdminAuthModule` import 를 **추가**해야 한다(빠뜨리면 typecheck 는
-    통과하고 런타임 DI 에서 죽는다 — `test:e2e` 가 잡는다)
-  - zod 는 `FulfillmentRequestInput` · `BrandInventoryInput` 이 이미 있다. **`.default()` 금지**
-  - 재고 부족은 400 + 남은 수량. 취소는 `exportedAt` 이 null 일 때만
-- **완료 기준**: 공통 3층 + **라우트 349 → 신설한 수만큼 증가**(부팅 로그로 실측해 기록) ·
-  `server/modules/fulfillment.md` 신규 작성(모듈 문서 갱신 계약) · `server/README.md` 모듈 색인에
-  fulfillment 행 추가(현재 "34개 모듈" 문구도 함께 고친다)
+- **읽을 것**: 이 문서 `§0`, `server/modules/fulfillment.md` 의 엔드포인트 표
+- **건드리는 레포 · 배포 순서**: **klow_server → klow_admin → klow_brand**
+  (뒤집으면 어드민 재고 저장·브랜드 출고신청이 404)
+- **스키마·데이터 위험**: 마이그레이션 `20260922070013_add_3pl_fulfillment` 를 `staging`·
+  운영 DB 에 **아직 적용하지 않았다**(전용 DB 브랜치 `ep-floral-sun` 에만 있다).
+  `CREATE TYPE` ×1 + `CREATE TABLE` ×3 · DROP 0건 → **롤링 안전 · 백필 없음**
+- **할 일**: 세 레포 `feat/3pl-fulfillment` → `staging` 머지 → 마이그레이션 적용 → 배포
+- **완료 기준**: 어드민 브랜드 상세 `재고` 탭 입력 → 브랜드 스튜디오 `재고` 탭에 반영 →
+  출고신청 1건 → 어드민 `출고신청` 탭에서 콜로세움 엑셀 내보내기까지 운영에서 1회 왕복
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -302,11 +297,12 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 |---|---|---|---|---|---|---|
 | 1 | 3pl-fulfillment | 1. 스튜디오 탭 스왑 | 완료 | ✗ | 2026-09-22 | - / - / `8677002` / - / (이 커밋) |
 | 2 | 3pl-fulfillment | 2. 스키마 + 마이그레이션 | 완료 | ✗ | 2026-09-22 | `29511f2` / - / - / - / (이 커밋) |
-| 3 | 3pl-fulfillment | 3. 서버 API (재고 + 출고신청) | 대기 | ✗ | | |
-| 4 | 3pl-fulfillment | 4. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 대기 | ✗ | | |
-| 5 | 3pl-fulfillment | 5. 어드민 화면 | 대기 | ✗ | | |
-| 6 | 3pl-fulfillment | 6. 브랜드 화면 | 대기 | ✗ | | |
-| 7 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
+| 3 | 3pl-fulfillment | 3. 서버 API (재고 + 출고신청) | 완료 | ✗ | 2026-09-22 | `70cc676` / - / - / - / (이 커밋) |
+| 4 | 3pl-fulfillment | 4. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 완료 | ✗ | 2026-09-22 | `43400e5`·`28a2f6f` / - / - / - / (이 커밋) |
+| 5 | 3pl-fulfillment | 5. 어드민 화면 | 완료 | ✗ | 2026-09-22 | - / `78e3ef3` / - / - / (이 커밋) |
+| 6 | 3pl-fulfillment | 6. 브랜드 화면 | 완료 | ✗ | 2026-09-22 | - / - / `6fb35d8` / - / (이 커밋) |
+| 7 | 3pl-fulfillment | 7. 운영 배포 | 대기 | ✗ | | |
+| 8 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 
@@ -347,28 +343,28 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
 
-### 3pl-fulfillment 2단계 — 스키마 + 마이그레이션 + 모듈 스캐폴딩 (완료)
+### 3pl-fulfillment 3~6단계 — 서버 API · 엑셀 · 어드민 화면 · 브랜드 화면 (완료)
 
-- **한 것**: 모델 3개(`BrandInventoryItem`/`FulfillmentRequest`/`FulfillmentRequestItem`) +
-  `enum FulfillmentRequestStatus`, 마이그레이션 `20260922070013_add_3pl_fulfillment`
-  (CREATE TYPE ×1 + CREATE TABLE ×3, **DROP 0건 → 롤링 안전**), `src/modules/fulfillment/`
-  (module + service, **컨트롤러 0개**), `src/common/validation/fulfillment.ts` + 배럴 등재
-- **검증**: typecheck(tsconfig 2개) · `test:e2e` 3 pass(cron 10 불변) · `npm run start`
-  **라우트 349 불변** + `FulfillmentModule dependencies initialized` · `migrate status` clean(166)
-- **문서를 고친 것**: `CLAUDE.md` 모듈 목록에 fulfillment, 모듈 수 34→**35**, 라우트 351→**349**
-  (실측 정정). **`server/modules/` 는 무변경** — 컨트롤러가 0개라 계약이 안 바뀌었다
-- ⚠️ **계획에 없던 판단 하나** — `FulfillmentRequestItem.productId` 를 **nullable + SetNull** 로 했다.
-  `products.service.ts` 에 실제 `product.delete` 가 있어 required 면 제품 삭제가 막히거나 출고
-  이력이 사라진다. 그래서 `productName` 스냅샷이 유일한 기록이 되는 경우가 있다
-- ⚠️ **DB 브랜치가 갈렸다** — `.env` 의 `DATABASE_URL` 이 `ep-floral-sun`(이 트랙 전용)을 가리키고
-  2단계 마이그레이션은 거기에만 있다. `staging`(`ep-icy-flower`)에는 없다
-- ⚠️ **1단계 이월 확인 완료** — 스튜디오 홈 4칸(통계·디자인·주문·재고) · 헤더 정산 pill ·
-  재고 목업 + `예시` 칩 · `?tab=orders` 딥링크 · `/settlement` 를 데스크탑·모바일 375px 에서 눈으로
-  확인했다(브랜드 세션은 `BrandSession` 행을 직접 넣어 만들었다 — 전화 OTP 를 우회하는 방법)
-- ⚠️ **`DEMO_STOCK` 과 `연동 준비 중 · 예시` 칩은 그대로 살아 있다 — 6단계에서 함께 지운다.**
-- **다음 단계가 알 것**: 3단계는 `AdminGuard` 를 쓰려면 `FulfillmentModule` 에 `AdminAuthModule`
-  import 를 **추가**해야 한다(현재는 `BrandAuthModule` 만). 서비스 헤더 주석에 3단계가 지킬
-  트랜잭션·락 계약을 적어 뒀다
+- **한 것**: 라우트 **349 → 361**(어드민 재고 2 · 어드민 출고신청 3 · 브랜드 7),
+  `fulfillment-xlsx.ts`(KLOW 양식 왕복 + 콜로세움 17열), 어드민 브랜드 상세 `재고` 탭 +
+  `/fulfillment` 목록, 브랜드 스튜디오 `재고` 탭 실데이터 + `출고신청` 서브탭
+- **검증**: typecheck(tsconfig 2개) · `npx jest src/modules` **1039 pass**(신규 14) ·
+  `test:e2e` 3 pass(cron 10 불변) · 부팅 라우트 361 · admin/brand `npm run build`
+  · **실 DB 스모크 20스텝**(차감·반납·부족 400·`exported` 후 409·재다운로드 `exportedAt` 불변)
+- **문서를 고친 것**: `server/modules/fulfillment.md` 신규 + `server/README.md`(34→35 모듈),
+  `decisions/shipping-seeding.md` 2026-09-22 항목 + 색인 2곳, `CLAUDE.md` 라우트 349→361 ·
+  Where Things Live 행 · 어드민 페이지 목록
+- ⚠️ **명세와 다른 판단 하나** — 2단계 메모가 "`AdminAuthModule` import 를 추가해야 한다"고
+  적었는데 **불필요했다**(그 모듈이 `@Global` 이다). 모듈 주석에 근거를 남겼다
+- ⚠️⚠️ **`shipping/xlsx-grid.ts` 리더를 고쳤다** — `t="str"` 분기가 없어 SheetJS 가 쓴 문자열
+  셀이 숫자 추론으로 흘러 우편번호 `06234` 가 `6234` 가 됐다. **이 리더는 배송비용·비교요율·
+  신고가 탭 공용**이라 건드리면 `npx jest src/modules` 전체를 돌릴 것
+- ⚠️ **남은 목업 하나** — 브랜드 출고신청 서브탭 상단 '기간별 출고량'(`OutboundVolumeMock.tsx`).
+  `예시` 칩과 상수를 **함께** 지울 것
+- ⚠️ **미확인 3건**(콜로세움 확인 대기, 트랙 문서 §2): 해외 주소 칸 · `상품금액` 용도 ·
+  송장번호 회신 방식. 해외 출고를 실제로 쓰기 전에 §2 A 를 반드시 확인한다
+- **다음 단계가 알 것**: 마이그레이션이 **`ep-floral-sun` 에만** 있다. 세 레포 모두
+  `feat/3pl-fulfillment` 브랜치이고 `staging` 미머지다. push 하지 않았다
 
 ### 체계 2단계 — Key Facts → decisions 이관 (완료 · 체계 트랙 1~3단계 메모를 여기 합쳤다)
 
