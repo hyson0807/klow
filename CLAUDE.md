@@ -2,6 +2,22 @@
 
 This directory is the **workspace root** for the KLOW K-beauty platform. It contains five sibling projects, each operated as **its own independent git repository**.
 
+## 작업 시작 — docs/PROGRESS.md
+
+**세션 경계를 넘는 작업은 [`docs/PROGRESS.md`](./docs/PROGRESS.md) 가 관리한다.** 진행 중인 단계,
+다음에 할 일, 세션 절차, 진입/퇴출 기준이 거기 있고 **상태의 정본은 그 파일 하나**다.
+
+사용자가 새 세션에 아래 한 줄을 보내면 그 문서를 열어 `§1 세션 절차` 를 따른다.
+
+```
+docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
+```
+
+사용자가 표에 없는 일을 바로 시키면 **막지 말고 그냥 한다** — 진행표는 입구가 아니라 출구에서
+작동한다. 끝날 때 `§2 진입 기준`(2세션 이상 · 레포 2개 이상 순서 배포 · 마이그레이션 · 외부 대기 ·
+스테이징 완료 후 운영 배포 대기)에 걸리는지 판정해서, 걸리면 행을 만들고 아니면 모듈 문서와
+커밋으로 닫는다.
+
 ## Workspace Layout
 
 ```
@@ -11,7 +27,7 @@ This directory is the **workspace root** for the KLOW K-beauty platform. It cont
 ├── klow_brand/    ← Brand self-onboarding    (Next.js 14, port 3002, posts /v1/brand/*)
 ├── klow_server/   ← Backend API              (NestJS 10, port 4000, owns Prisma + Neon + R2)
 ├── klow_search_server/ ← 인플루언서 검색 백엔드 (NestJS :4100, 자체 Neon DB + R2 bucket `search`; 프론트는 klow_admin 인플루언서 탭 — 자세히는 klow_search_server/CLAUDE.md)
-├── docs/          ← Workspace docs (README.md 인덱스 · architecture.md · server/ = API 엔드포인트 문서 · archive/ = 완료 노트)
+├── docs/          ← Workspace docs (PROGRESS.md 진행표 ← 작업 시작점 · README.md 인덱스 · architecture.md · server/ = API 엔드포인트 문서 · archive/ = 완료 노트)
 ├── CLAUDE.md      ← This file
 └── .gitignore     ← Excludes the subprojects from the workspace repo
 ```
@@ -247,5 +263,7 @@ cd klow_brand && npm run dev           # http://localhost:3002
 - **Documentation tasks** (architecture, planning, cross-repo design notes) → write in `docs/` from this workspace root.
 - **Code changes** → `cd` into the relevant subproject first. Treat each subproject as a fully isolated repo.
 - **Verifying changes across repos** → run each project independently; they communicate over HTTP, not shared imports.
+- **세션 경계를 넘는 작업** → [`docs/PROGRESS.md`](./docs/PROGRESS.md) 의 단계로 관리한다. 끝낼 때 진행 기록 표와 인계 메모를 갱신하지 않았으면 커밋하지 않는다.
+- **작업 상태를 문서 제목이나 blockquote 에 적지 않는다** — 정본은 진행표 하나다. `⚠️` 같은 위험 마커는 상태가 아니므로 그대로 쓴다.
 
 For the full backend architecture, see [`docs/architecture.md`](./docs/architecture.md).
