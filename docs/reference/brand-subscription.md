@@ -359,12 +359,13 @@ clientKey/secretKey 발급. 샌드박스(`sandbox-api.nicepay.co.kr`)로 실청�
 
 ## 11. TODO
 
-코드 대비 아직 미구현이거나 결정 대기 중인 항목:
+코드 대비 아직 미구현이거나 결정 대기 중인 항목이다. ⚠️ **착수 결정이 난 것은 하나도 없다** —
+하기로 정하는 순간 [진행표](../PROGRESS.md#7-진행-기록)에 행이 생기고, 그때부터 상태의 정본은 그쪽이다.
 
-- [ ] **세금계산서 발행** (NicePay 부가서비스 vs 자체) — 미구현.
-- [ ] **운영자 알림 채널** (Slack/이메일) — 현재 `logger` 구조화 로그만. 알림 채널 없음.
-- [ ] **연체/결제 실패 사용자 알림** — 현재 인앱 배너 + 카드 변경 CTA 뿐. 이메일/SMS 추가는 운영 데이터 보고 결정.
-- [ ] **시스템 액터 audit** — `approveApplication(system)` 은 `logger` 로만 기록. `SystemAuditLog` 테이블 미도입.
+- **세금계산서 발행** (NicePay 부가서비스 vs 자체) — 미구현.
+- **운영자 알림 채널** (Slack/이메일) — 현재 `logger` 구조화 로그만. 알림 채널 없음.
+- **연체/결제 실패 사용자 알림** — 현재 인앱 배너 + 카드 변경 CTA 뿐. 이메일/SMS 추가는 운영 데이터 보고 결정.
+- **시스템 액터 audit** — `approveApplication(system)` 은 `logger` 로만 기록. `SystemAuditLog` 테이블 미도입.
 
 > 웹훅은 TODO 가 아니다 — NicePay 동기 응답이라 **불필요**([§9](#9-환경변수--보안-pci)).
 

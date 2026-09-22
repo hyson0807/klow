@@ -1,6 +1,11 @@
 # Payment Integration — Eximbay (Sandbox)
 
-본 문서는 KLOW 워크스페이스의 **고객 체크아웃 결제(Eximbay)** 통합을 설명한다. 현재 상태는 **Eximbay 테스트 머천트**로 cart → checkout → 주문 생성 → prepare → SDK → return_url → verify → success 까지 회원·비회원(게스트) 모두 통과하고, 결제 실패 보고·webhook 안전망·어드민/사용자 환불까지 구현되어 있다. 운영 배포 단계에서 추가해야 할 항목은 [TODO](#todo-운영-배포-단계) 섹션에 정리한다.
+본 문서는 KLOW 워크스페이스의 **고객 체크아웃 결제(Eximbay)** 통합을 설명한다. cart → checkout → 주문 생성 → prepare → SDK → return_url → verify → success 까지 회원·비회원(게스트) 모두 통과하고, 결제 실패 보고·webhook 안전망·어드민/사용자 환불까지 구현되어 있다.
+
+⚠️ **이 문서의 코드 예시·자격증명은 로컬/개발(Eximbay sandbox 머천트) 기준이다.** 운영은 라이브
+머천트로 실제 결제를 처리하고 있으므로 아래 sandbox 서술을 운영 상태로 읽지 말 것. 운영에서 실제로
+일어난 사고와 3중 방어선은 [`../server/modules/payment.md`](../server/modules/payment.md) 가 정본이고,
+운영 전환 시 교체·확인할 항목은 [TODO](#todo-운영-배포-단계) 섹션에 정리한다.
 
 - 가격 계산(원가+마진+국가별 물류비) 상세는 [`./pricing-model.md`](./pricing-model.md).
 - 고객측 금액이 KRW 원장에서 **USD 정본**으로 넘어온 전환 이력은 [`../archive/pricing-usd-migration.md`](../archive/pricing-usd-migration.md).

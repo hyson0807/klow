@@ -1,6 +1,9 @@
 # klow_server: Railway → AWS ECS Fargate 이전
 
-AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계(어느 플랫폼에서든 이득인 준비 작업)는 완료**했고, 2단계 이후는 크레딧 승인 뒤에 진행한다.
+> 상태: [진행표 §7](../../PROGRESS.md#7-진행-기록) 참조.
+
+AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. 1단계는 어느 플랫폼에서든 이득인 준비
+작업이고, 2단계 이후는 크레딧 승인이 있어야 진행할 수 있다.
 
 - 범위는 `klow_server`다. `klow_search_server`는 cron과 Playwright가 없어 같은 틀로 뒤따른다.
 - 프론트 3개(Vercel)는 옮기지 않는다.
@@ -27,7 +30,7 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
    ├─ NicePay·Solapi·EFS 콘솔에 IP 등록 여부
    └─ Railway 배포 설정(Custom Start / Pre-deploy Command, Healthcheck, NODE_ENV)
 
-1. 코드 준비  ✅ 완료
+1. 코드 준비 (플랫폼 무관)
    ├─ CRON_ENABLED 전체 스위치
    ├─ enableShutdownHooks + 종료 훅 순서
    └─ Dockerfile · docker-entrypoint.sh · .dockerignore
@@ -95,7 +98,9 @@ AWS Activate 크레딧 신청에 맞춰 정리한 이전 계획이다. **1단계
 
 머지하는 순간 Railway 빌드가 자동 빌드에서 이 Dockerfile로 바뀐다. 이미지를 AWS 전에 운영에서 검증하는 효과가 있는 대신 아래를 지킨다.
 
-**머지 전 Railway 대시보드 확인**
+**머지 전 Railway 대시보드 확인** — ⚠️ 아래 체크박스는 **이 절차를 실행하는 동안 손으로 찍는 임시
+표시**이지 단계 상태의 근거가 아니다. 상태의 정본은 [진행표 §7](../../PROGRESS.md#7-진행-기록) 뿐이다.
+
 - [ ] **Custom Start Command:** 비운다. 설정돼 있으면 엔트리포인트를 덮어쓰고, npm을 거치면 SIGTERM 전달이 불확실하다.
 - [ ] **Pre-deploy Command:** `migrate deploy`가 있으면 그대로 동작한다(이미지에 CLI와 migrations 포함). 이 경우 `RUN_MIGRATIONS`는 켜지 않는다.
 - [ ] **Healthcheck Path:** `/health`

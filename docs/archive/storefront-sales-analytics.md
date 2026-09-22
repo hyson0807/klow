@@ -249,17 +249,7 @@ to_char(o."paidAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
 
 기존 `storefront-stats.spec.ts` 에는 `'all'` 창 케이스만 추가한다.
 
-### 5-6. 서버 체크리스트
-
-- [ ] `src/modules/storefront-stats/storefront-sales.service.ts` (신규)
-- [ ] `src/modules/storefront-stats/storefront-stats.module.ts` — provider 추가
-- [ ] `src/modules/storefront-stats/brand-storefront-stats.controller.ts` — `@Get('sales')`
-- [ ] `src/modules/storefront-stats/storefront-stats.service.ts` — `'all'` 창
-- [ ] `src/common/validation/storefront-stats.ts` — `days` 유니온 + `StorefrontSalesQuery`
-- [ ] `src/common/kst-time.ts` — `resolveStatsWindow`(또는 storefront-stats 안에 두고 공유)
-- [ ] `__tests__/storefront-sales.spec.ts`
-- [ ] `docs/server/modules/storefront-stats.md` 갱신 (**컨트롤러 변경 시 필수 규칙**)
-- [ ] 워크스페이스 `CLAUDE.md` Key Facts 에 항목 추가
+### 5-6. 서버 검증
 
 검증 3층: `npm run typecheck` → `npm run test:e2e`(**cron 8개 불변**) → `npm run start`(라우트 288 → **289**).
 
@@ -329,15 +319,6 @@ const sales  = useStorefrontSales(days);   // 탭과 무관 — 채널별 행을
 | 랭킹 0행 | `아직 결제 데이터가 없어요` (차트 오버레이와 같은 톤) |
 | 현장 탭 0건 | `현장(부스 QR) 결제 기록이 없어요` |
 | 퍼널 `trackingSince` 가 창 안쪽 | 기존 안내문 유지 — `전체` 기간에서도 그대로 뜬다 |
-
-### 7-5. 브랜드 체크리스트
-
-- [ ] `src/lib/api.ts` — `storefrontStats.sales` + `StorefrontSalesDTO` 타입
-- [ ] `src/lib/query-keys.ts` — `storefrontSales(days)`
-- [ ] `_hooks/useStorefrontSales.ts` (신규) / `useStorefrontStats.ts` 시그니처
-- [ ] `_components/` 4개 파일(신규 3 + 기존 1 재구성)
-- [ ] `components/charts/ChartChrome.tsx` — `RangeToggle` 타입 확장
-- [ ] 모바일(≈380px)·데스크탑 양쪽에서 랭킹 2단 → 1단 스택 확인
 
 ---
 

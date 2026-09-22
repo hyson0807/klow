@@ -1,18 +1,20 @@
 # 커스텀 도메인 대행 구매 (P6) — KLOW 가 사서 연결하고 연 이용료를 받는다
 
-> **현재 상태: ✅ 구현 완료 (2026-08-26) — §19 의 A · B · C · D · E · F 전부 끝났다. 남은 것은 코드가 아니라 배포·약관·§0 실측이다.**
-> 이 문서가 이 기능의 **정본**이다.
+> 상태: [진행표](../../PROGRESS.md) 참조 (이 트랙은 `§6 일정에 없는 트랙` 에 있다).
+> 이 문서가 이 기능의 **정본**이다 — 스펙은 여기, "어디까지 했는가"는 진행표에만 적는다.
 >
 > ---
 >
-> ## 🚦 다음 세션이 여기부터 읽는다 — 진행 상황 (2026-08-26 갱신)
+> ## 🚦 다음 세션이 여기부터 읽는다 — 코드 위치와 구현 경위
 >
-> **작업 위치**: 워크트리 `/Users/hyson/welkit/klow-domain/klow_server`,
-> 브랜치 `feat/domain-purchase` (staging 기준). 새로 만들지 말 것.
-> 머지는 전부 끝난 뒤 `cd /Users/hyson/welkit/klow/klow_server && git checkout staging &&
-> git merge --no-ff feat/domain-purchase`, 정리는 `git worktree remove`.
+> **코드 위치**: 세 레포(`klow_server`·`klow_admin`·`klow_brand`)의 브랜치
+> **`feat/domain-purchase`** (staging 기준). ⚠️ **staging 미머지라 현 체크아웃에는 없다** —
+> `BrandDomainRegistration`·`/settings/domain` 을 찾아도 안 나오는 게 정상이다.
+> ⚠️ 작업하던 워크트리 `/Users/hyson/welkit/klow-domain/` 은 **이미 제거됐다**(2026-09-22 확인).
+> 재개하려면 `git worktree add` 로 다시 만들거나 그 브랜치를 직접 체크아웃한다.
+> 머지는 `cd klow_server && git checkout staging && git merge --no-ff feat/domain-purchase`.
 >
-> ### 끝난 것 — 커밋 9개 (**klow_server 는 전부 끝났다**)
+> ### klow_server 구현 커밋 9개 (`feat/domain-purchase`)
 >
 > | PR | 커밋 | 내용 |
 > |---|---|---|
@@ -30,18 +32,18 @@
 > 검증 3층은 매 커밋마다 통과시켰다(typecheck 2개 tsconfig · `test:e2e` · `PORT=4001 npm run start`).
 > ⚠️ 포트 4000 은 메인 체크아웃 dev 서버가 점유 중일 수 있어 **4001** 을 쓴다.
 >
-> ### 프론트 2개도 끝났다 (2026-08-26)
+> ### 프론트 구현 커밋 (`feat/domain-purchase`)
 >
 > | PR | 레포 · 브랜치 | 커밋 | 내용 |
 > |---|---|---|---|
-> | **D(화면)** | `klow_admin` · `feat/domain-purchase` (워크트리 `/Users/hyson/welkit/klow-domain/klow_admin`) | `b75a365` | §16 도메인 탭 — 탭 배열 1줄 + `BrandDomainPanel` + 다이얼로그 3종 + `lib/api/brand-domains.ts` + `lib/domain-status.ts` + KPI '도메인 매출' 타일 |
+> | **D(화면)** | `klow_admin` · `feat/domain-purchase` | `b75a365` | §16 도메인 탭 — 탭 배열 1줄 + `BrandDomainPanel` + 다이얼로그 3종 + `lib/api/brand-domains.ts` + `lib/domain-status.ts` + KPI '도메인 매출' 타일 |
 > | **F(서버)** | `klow_server` · 같은 브랜치 | `c243964` | §12 — `/me` 가 `customDomain`·`domainPending` 을 파생해 내린다 + 스펙 5케이스 |
-> | **F(화면)** | `klow_brand` · `feat/domain-purchase` (워크트리 `/Users/hyson/welkit/klow-domain/klow_brand`) | `2e3b7b9` | §13~§15 — `/settings/domain` 신설 · 스튜디오 말풍선 · `DomainSection` 삭제 |
+> | **F(화면)** | `klow_brand` · `feat/domain-purchase` | `2e3b7b9` | §13~§15 — `/settings/domain` 신설 · 스튜디오 말풍선 · `DomainSection` 삭제 |
 >
 > **실측값**: 라우트 **325 유지**(§12 는 라우트를 안 늘린다) · cron **11** · 서버 유닛 **897개**(62스위트).
 > 세 레포 모두 typecheck · lint · build(프론트) / test:e2e · start(서버) 통과.
 >
-> ### 남은 것 — 코드가 아니다
+> ### 배포 전 선행 조건 (코드 밖)
 >
 > 1. **머지** — 세 레포의 `feat/domain-purchase` 를 각각 staging 으로(§19 배포 순서는 그대로).
 > 2. **도메인 구매 약관**(§18-1, 법무) — 배포 5단계를 막는다. 구매 다이얼로그에 고지 문구는
