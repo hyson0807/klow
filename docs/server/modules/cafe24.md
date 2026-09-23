@@ -143,3 +143,13 @@ DB 기본값 `KR` 은 1단계가 마이그레이션용으로 둔 값이지 "브�
 정본은 `klow_server/.env.example`.
 ⚠️ 개발자센터의 Redirect URI 에 `CAFE24_BRAND_CALLBACK_URL` 과 **글자 그대로 같은 값**이
 등록돼 있어야 한다.
+
+⚠️⚠️ **`http://localhost:...` 은 Redirect URI 로 등록할 수 없다**(2026-09-23 실측) — 개발자센터가
+HTTPS 만 받고 IP 주소도 거부한다. **이 레포의 다른 연동(`GOOGLE_*`·`META_*`)은 localhost 를
+등록해 두고 로컬에서 왕복을 돌리므로, 그 관례를 여기에 복사하면 막힌다.** 로컬에서 OAuth 를
+돌리려면 **HTTPS 터널**(cloudflared/ngrok)이 필요하고, 터널 주소가 바뀔 때마다 개발자센터
+목록(최대 10줄)과 이 env 를 **함께** 고쳐야 한다.
+
+⚠️ 개발자센터 앱 설정의 **Time zone(`Asia/Seoul`)이 토큰 만료 시각과 주문 조회 날짜 축 둘 다**에
+걸린다. 주문 날짜를 KST 로 맞추는 쪽을 택했으므로, 만료 문자열의 타임존 문제는
+`parseCafe24Expiry` 한 곳에서 흡수한다.
