@@ -16,3 +16,4 @@
 | [efs-kz-charge-api-inquiry.md](./efs-kz-charge-api-inquiry.md) | 벤더 문의 초안 | ✅ 종료 (2026-07-28 작성, EFS KZ 배송비 미회신 건) |
 | [meta-app-review/](./meta-app-review/README.md) | 외부 제출 원고 3종 | ✅ 종료 (Instagram 권한 심사 설명 박스) |
 | [storefront-sales-analytics.md](./storefront-sales-analytics.md) | 기능 계획 + 구현 결과 | ✅ 운영 배포 완료 (2026-09-22 확인 — 정본은 `../server/modules/storefront-stats.md`) |
+| [progress-2026-H2.md](./progress-2026-H2.md) | 진행표 회수분 | 회수된 상태 행·인계 메모 — ⚠️ 현행 상태는 [`../PROGRESS.md`](../PROGRESS.md) 가 갖는다 |
