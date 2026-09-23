@@ -34,7 +34,7 @@
 
 | 축 | 규칙 |
 |---|---|
-| **git 브랜치** | 먼저 `feat/3pl-fulfillment` 를 세 레포 `staging` 에 **머지만 하고 배포하지 않는다.** 그 `staging` 에서 `feat/cafe24-fulfillment` 를 딴다 |
+| **git 브랜치** | ⚠️ **`feat/3pl-fulfillment` 에 그대로 이어서 쌓는다.** 새 브랜치를 만들지 않는다(2026-09-23 사용자 결정) — 어차피 한 배포로 나가므로 나눌 이유가 없고, 나누면 머지 순서를 또 관리해야 한다 |
 | **DB 브랜치** | ⚠️⚠️ **`ep-floral-sun` 을 이어 쓴다.** 새로 파지 않는다 — 3PL 마이그레이션이 거기에만 있다 |
 | **배포** | 마이그레이션 **2개를 순서대로**: `20260922070013_add_3pl_fulfillment` → `add_cafe24_fulfillment`. 그다음 `klow_server → klow_admin → klow_brand` |
 
@@ -42,9 +42,12 @@
 나간다.** 배포 후에 문제가 생기면 **두 트랙 중 어느 쪽 때문인지 즉시 분리되지 않는다.**
 그래서 배포 후 확인은 **3PL 왕복을 먼저 통과시키고 나서** 카페24를 켜는 순서다(§8 의 배포 단계).
 
-⚠️ 되돌릴 일이 생기면 되돌림도 함께다. 3PL 만 남기고 카페24를 빼려면 `feat/cafe24-fulfillment`
-머지 이전 커밋으로 가야 하고, **카페24 마이그레이션은 `DROP TABLE` 이라 롤링 안전하지 않다**
-(단일 레플리카 컷오버가 필요하다).
+⚠️ **브랜치 이름이 내용을 다 말하지 않는다.** `feat/3pl-fulfillment` 는 이제 **두 트랙을 담는다** —
+어느 커밋이 어느 트랙인지는 **커밋 메시지로만** 구분된다. 카페24 커밋의 제목에 `cafe24` 를 넣는다.
+
+⚠️ 되돌릴 일이 생기면 되돌림도 함께다. 3PL 만 남기고 카페24를 빼려면 **커밋 단위로 골라내야
+하고**(브랜치 경계가 없다), **카페24 마이그레이션은 `DROP TABLE` 이라 롤링 안전하지 않다**
+(단일 레플리카 컷오버가 필요하다). 둘을 따로 낼 수 있기를 원한다면 지금 브랜치를 나눠야 한다.
 
 ## 2. 착수 전 확인할 것 (미확정)
 
@@ -428,7 +431,7 @@ v1 범위를 넘는다. **의식적 결정이고, 뒤집으려면 그 불변식�
   DROP 0건 · 백필 없음 → **롤링 안전**.
   ⚠️⚠️ **DB 브랜치를 새로 파지 않는다 — `ep-floral-sun` 을 이어 쓴다**(G3). 3PL 마이그레이션이
   거기에만 있어서, staging 기준선에서 새로 파면 `FulfillmentRequest` 가 없어 FK 가 깨진다.
-  git 브랜치는 **3PL 을 머지한 `staging` 에서** `feat/cafe24-fulfillment` 로 딴다(§1-A)
+  ⚠️ **git 브랜치도 새로 파지 않는다 — `feat/3pl-fulfillment` 에 이어서 커밋한다**(§1-A)
 - **할 일**: `§4` 의 4모델 + `FulfillmentSource` enum + `FulfillmentRequest.source` →
   역관계 필드 추가 → `npx prisma migrate dev --name add_cafe24_fulfillment`
 - **완료 기준**: `npm run typecheck`(tsconfig **2개**) 통과 · 마이그레이션 SQL 에 **`DROP` 0건**
@@ -505,7 +508,7 @@ v1 범위를 넘는다. **의식적 결정이고, 뒤집으려면 그 불변식�
   2. `add_cafe24_fulfillment` — `CREATE TABLE` ×4 + `CREATE TYPE` ×1 + `ADD COLUMN` ×1 + FK 3건
 
   둘 다 DROP 0건 · 백필 없음 → **롤링 안전**. ⚠️ **`staging`·운영 DB 에는 둘 다 아직 없다**
-- **할 일**: 세 레포 `feat/cafe24-fulfillment` → `staging` 머지(3PL 은 이미 그 안에 있다) →
+- **할 일**: 세 레포 `feat/3pl-fulfillment` → `staging` 머지(**두 트랙이 그 브랜치 안에 함께 있다**) →
   staging DB 마이그레이션 2개 → staging 배포·확인 → 운영 마이그레이션 2개 → 운영 배포
 - **완료 기준** — ⚠️⚠️ **순서를 지킨다. 3PL 왕복이 통과한 뒤에 카페24를 켠다**
   (둘을 동시에 처음 켜면 문제가 났을 때 어느 트랙 때문인지 분리되지 않는다)
