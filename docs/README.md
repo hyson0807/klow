@@ -34,6 +34,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/custom-domain/](./plan/custom-domain/README.md) | 브랜드 커스텀 도메인(`shop.brandA.com`) — 둘러보기·담기는 그 도메인 / 로그인·결제는 klow.kr(**핸드오프**). 대행 구매(P6)와 배포 런북 포함 |
 | [plan/mcf/](./plan/mcf/README.md) | Amazon MCF(멀티채널 풀필먼트) — Amazon FBA 재고로 KLOW 주문 자동 출고 |
 | [plan/3pl-fulfillment/](./plan/3pl-fulfillment/implementation-plan.md) | 콜로세움 3PL — 브랜드가 창고에 맡긴 재고, 출고신청, 콜로세움 주문서 엑셀(API 가 없어 수작업 업로드) |
+| [plan/cafe24-fulfillment/](./plan/cafe24-fulfillment/README.md) | 브랜드 카페24 자사몰 주문을 KLOW 로 불러와 콜로세움 3PL 로 출고 — OAuth 연결 · 상품 매핑 · 주문 미러 · 출고신청 전환 |
 | [plan/aws-fargate/](./plan/aws-fargate/implementation-plan.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서 |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
 | [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
