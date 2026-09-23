@@ -189,6 +189,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-04` [브랜드 알림톡 — 시딩 제품명 교정 + 무가 시딩/재발송 opt-in](docs/decisions/shipping-seeding.md#2026-09-04)
 - `2026-09-14` [바코드 라벨 제품명 — 일반 주문·브랜드 지정 시딩 누락](docs/decisions/shipping-seeding.md#2026-09-14)
 - `2026-09-22` [3PL 풀필먼트(콜로세움) v1 — 창고 재고 + 출고신청](docs/decisions/shipping-seeding.md#2026-09-22)
+- `2026-09-23` [카페24 자사몰 연동 — OAuth 실왕복 + 토큰 갱신 직렬화](docs/decisions/shipping-seeding.md#2026-09-23)
 
 ### 정산 — `settlement.md`
 
