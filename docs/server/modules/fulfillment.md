@@ -273,3 +273,29 @@
 - **배송 추적·송장번호** — 콜로세움 회신 방식 미확인(계획 문서 §2 D). v1 은 추적 없음이다.
 - **해외 주소를 콜로세움 양식의 어느 칸에 넣는지** 미확인(§2 A). 내보내기는 잠정적으로 국가명을
   `수취인주소` 접두로 붙인다.
+
+## 유입 경로 (`FulfillmentRequest.source`)
+
+`enum FulfillmentSource { manual bulk_xlsx cafe24 }` — 브랜드·어드민 목록의 **유입 배지**가
+이 값을 읽는다. 세 생성 경로가 각자 명시한다: 단건 신청 `manual` · 엑셀 일괄 `bulk_xlsx` ·
+카페24 전환 `cafe24`.
+
+- ⚠️⚠️ **`Cafe24Order` 역조인으로 배지를 그리지 않는다.** 그러면 브랜드 목록·어드민 목록·
+  콜로세움 엑셀 **세 곳이 같은 조인을 타야** 표시가 일치한다
+  (`plan/cafe24-fulfillment/implementation-plan.md` §4-F).
+- ⚠️⚠️ **`externalOrderNo` 에 유입 접두사를 붙이지 않는다** — 그 값은 콜로세움 엑셀
+  `쇼핑몰주문번호` 칸으로 **그대로** 나간다.
+- `@default(manual)` 은 기존 행과 구 클라를 위한 것이다. **새 생성 경로는 항상 명시한다** —
+  `createManyInTx(tx, brandId, requests, source)` 가 `source` 에 기본값을 두지 않는 이유다.
+
+### ⚠️ 트랜잭션 안에서 부르는 진입점 — `createManyInTx`
+
+카페24 전환은 **미러 역기록이 재고 차감과 같은 트랜잭션**이어야 해서 그쪽이 트랜잭션을 열고
+이 서비스를 불러온다(`FulfillmentModule` 이 `FulfillmentService` 를 export 하는 유일한 이유).
+
+⚠️⚠️ **락 순서를 지킬 책임은 호출부에 있다.** 이 메서드 안에서 재고가 `ORDER BY "productId"`
+로 잠기므로, 그 **앞에** 다른 행을 잠글 거면 항상 같은 순서여야 한다
+(카페24 전환: `Cafe24Order`(ORDER BY id) → 재고). 한 경로라도 뒤집히면 데드락이다.
+
+⚠️ **재고를 건드리는 두 번째 경로를 만들지 않기 위한 export 다.** 그 경로는 잠금 순서도
+부족 판정도 따로 갖게 되고, 그 둘이 갈리는 순간 재고가 음수가 된다.

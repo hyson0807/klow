@@ -2,32 +2,31 @@
 
 - **모듈 경로**: `src/modules/cafe24/`
 - **관련 파일**: `cafe24.service.ts`, `cafe24.client.ts`(카페24 API 지식의 소유자),
-  `cafe24-crypto.ts`(AES-256-GCM), `cafe24-oauth-cookies.ts`,
+  `cafe24-order-mapper.ts`(주문 → 미러, 순수 함수), `cafe24-crypto.ts`(AES-256-GCM),
+  `cafe24-oauth-cookies.ts`, `cafe24-token.ts`(갱신 직렬화), `cafe24-errors.ts`,
   `brand-cafe24-connect.controller.ts`(OAuth 왕복), `brand-cafe24.controller.ts`(리소스),
+  cron 2개 `cafe24-token-refresh.cron.ts`·`cafe24-retention.cron.ts`,
   검증 스키마 `common/validation/cafe24.ts`, SSRF 회귀 스펙 `__tests__/cafe24-ssrf.spec.ts`
 - **모델**: `Cafe24Connection` · `Cafe24ProductMap` · `Cafe24Order` · `Cafe24OrderItem`
   + `FulfillmentRequest.source`(`enum FulfillmentSource { manual bulk_xlsx cafe24 }`)
 - **프론트**: klow_brand 스튜디오 `재고 > 출고신청` 의 **자사몰 연동 모달**
   (`studio/_components/tabs/inventory/Cafe24ConnectModal.tsx` + `ui.tsx` 의 `DashedEmpty`).
   진입 버튼·`needsReauth` 배너는 `RequestsPanel.tsx`, 콜백 결과 토스트는 `studio/page.tsx`.
-  ⚠️ 매핑·불러오기·전환 화면은 아직 없다
+  **매핑**은 `Cafe24MappingModal.tsx`, **주문 불러오기·전환**은 `Cafe24OrdersModal.tsx`
 - **계획 문서**: [`plan/cafe24-fulfillment/implementation-plan.md`](../../plan/cafe24-fulfillment/implementation-plan.md)
 
 브랜드가 자사몰을 OAuth 로 연결 → 카페24 상품을 KLOW 제품에 매핑 → 주문을 불러와 → 고른 주문을
 **3PL 출고신청으로 전환**(재고 차감). **출고 이후는 [fulfillment](./fulfillment.md) 경로 그대로**이고,
 이 모듈은 `Order`·`Shipment`·EFS 를 만나지 않는다.
 
-## 현재 구현 범위 — 연동·매핑·상품목록까지. **실 API 로 검증됐다**
+## 현재 구현 범위 — **연동 → 매핑 → 불러오기 → 전환까지 한 바퀴가 돈다**
 
-2-1·5-1·3-1·2-2·3-2 까지의 코드다. ✅ **2026-09-23, 테스트 몰 `simsgood1` 로 실왕복 검증** —
-연결 → `GET /connection` `connected:true` → `DELETE` → `connected:false`, lazy refresh·동시 요청
-경합, 그리고 **상품 40개를 실제로 읽어왔다**(검색·페이지네이션 포함).
+✅ **2026-09-23, 테스트 몰 `simsgood1` 로 전 구간 실왕복 검증** — 연결/해제, lazy refresh·동시
+요청 경합, 상품 40개 읽기, **주문 불러오기(멱등·쿨다운)**, **전환**(재고 10 → 9 · 출고신청
+`source=cafe24` 생성 · 미러 PII 파기 · 재전환 차단 · 재수집이 PII 를 되살리지 않음).
 
-⚠️ 아직 없는 것: **주문 불러오기 · 전환**(4-1·4-2)과 **매핑 화면**(5-2). 서버는 상품 목록까지
-준비됐고, 브랜드가 쓸 화면이 아직 없다.
-⚠️⚠️ **주문 상태 코드를 아직 한 번도 못 봤다** — 테스트 몰에 3개월간 주문이 0건이라 실측이
-비어 있다(계획 문서 §2 B). **4-1 착수 전에 테스트 주문을 넣고 확인할 것** — 추측해서 상수로
-박지 말 것.
+⚠️ 아직 없는 것: **송장번호 카페24 되돌려쓰기**(v1 밖 — 아래 R7 절) · **앱스토어(iframe) 진입** ·
+**주문 자동 수집 cron**. 그리고 **운영 배포 전**이다(3PL 과 한 배포로 나간다).
 
 ## 엔드포인트
 
@@ -44,6 +43,11 @@
 | GET | `/product-maps` | `BrandGuard` | 내 매핑 목록(`take`·`skip` · `total` 동봉). KLOW 제품 이름·이미지를 함께 싣는다 |
 | POST | `/product-maps` | `BrandGuard` | 매핑 저장 — **보낸 줄만 반영**(`PUT` 이 아니다) |
 | DELETE | `/product-maps/:id` | `BrandGuard` | 매핑 해제. 없거나 남의 것이면 **같은 404** |
+| POST | `/orders/import` | `BrandGuard` | 기간(`since`/`until`)으로 주문을 불러와 미러 upsert → `{fetched, inserted, updated, skipped, skipReasons, hasMore}` |
+| GET | `/orders` | `BrandGuard` | 미러 목록. **기본 필터 = 미전환**(R7) · `status`·`q`·`take`·`skip` · `counts` 동봉 |
+| PATCH | `/orders/:orderId/items/:itemId` | `BrandGuard` | 품목 줄 **제외 토글**(`{excluded}`). 갱신된 주문을 통째로 돌려준다. 전환된 미러엔 **404** |
+| POST | `/orders/convert/preview` | `BrandGuard` | **아무것도 저장하지 않는다.** 주문 단위 차단 사유 + 합산 부족 |
+| POST | `/orders/convert` | `BrandGuard` | 고른 미러 → `FulfillmentRequest` 일괄 생성(재고 차감) + 역기록 + PII 파기 |
 
 콜백의 결과는 쿼리로 전달된다 — 성공 `cafe24_connected=1`, 실패 `cafe24_error=<사유>`
 (`state_mismatch` · `missing_brand` · `missing_mall` · `mall_mismatch` · `mall_in_use` ·
@@ -226,3 +230,117 @@ HTTPS 만 받고 IP 주소도 거부한다. **이 레포의 다른 연동(`GOOGL
 ⚠️ 개발자센터 앱 설정의 **Time zone(`Asia/Seoul`)이 토큰 만료 시각과 주문 조회 날짜 축 둘 다**에
 걸린다. 주문 날짜를 KST 로 맞추는 쪽을 택했으므로, 만료 문자열의 타임존 문제는
 `parseCafe24Expiry` 한 곳에서 흡수한다.
+
+
+## 주문 불러오기 (`POST /orders/import`)
+
+기간으로만 불러온다. 응답은 `{fetched, inserted, updated, skipped, skipReasons, hasMore}`.
+
+- 상한은 **기간 14일 · 5페이지(=500건)** 코드 상수다(`CAFE24_IMPORT_*`). 초과분은
+  `hasMore: true` 로 돌려 **버튼을 다시 누르게** 한다 — 동기로 무한 페이지를 돌면 응답이 수십
+  초가 되어 엣지 타임아웃에 걸린다. ⚠️ **env 로 빼지 않는다**(`=0` 오타 하나가 전 브랜드를 막는다).
+- 카페24가 강제하는 기간 상한은 **3개월**이다(92일 → 422, 31일 → 200 — 실측). 14일은 그 안이다.
+- 카페24 호출은 **페이지당 1회**다 — `embed=items,receivers,buyer` 로 세 리소스를 함께 받는다.
+  ⚠️ 나눠 부르면 페이지마다 쿼터를 3배로 태운다.
+- **페이지 사이 600ms** 간격(R5 b) + **브랜드별 쿨다운 20초**(R5 c, `lastSyncedAt` 기준 →
+  429 `cafe24_import_cooldown`). ⚠️ `ThrottlerGuard` 는 IP 기준이라 이 축을 못 센다 —
+  쿼터가 **Access Token 기준**이라 연타하는 브랜드가 **자기 연동을 자기 손으로 막는다.**
+- 쿨다운은 **성공한 불러오기** 기준이다. 실패에도 걸면 카페24 장애 때 재시도가 20초에 한 번으로
+  묶이고, 그건 우리가 만든 장애다.
+- 미러 한 페이지는 **한 트랜잭션·한 왕복**이다(주문마다 Prisma 호출이 정확히 하나 — 중첩 쓰기).
+
+### ⚠️⚠️ 상태 판정 — `status_code` 를 쓰면 미결제 주문이 창고로 나간다
+
+같은 주문을 `입금전` → `배송준비중` 으로 옮기며 실측한 결과(계획 문서 §2-C):
+
+| 상태 | 품목 `order_status` | 품목 `status_code` | 주문 `paid` |
+|---|---|---|---|
+| 입금전 | `N00` | `"N1"` | `"F"` |
+| 배송준비중 | `N20` | **`"N1"` (그대로)** | `"T"` |
+
+- **`status_code` 는 상태가 바뀌어도 `"N1"` 그대로다.** 판정에 쓰면 **입금전(미결제) 주문이
+  전환 대상에 섞인다.** 품목 상태의 정본은 **`order_status`** 이고 미러의 `itemStatus` 가 그 값이다.
+- ⚠️ **주문 최상위에는 `order_status` 가 아예 없다.** 거기 있는 것은 `paid`/`canceled`
+  (`"T"`/`"F"` 문자열)뿐이라, 미러의 **`orderStatus` 는 그 둘에서 파생한 우리 토큰**
+  (`paid` / `unpaid` / `canceled`)이다 — 카페24 코드가 아니다.
+- ⚠️ **관측된 품목 코드가 둘뿐**(`N00`·`N20`)이라 **나머지를 추측해 상수로 박지 않는다.**
+  불러오기는 **상태로 거르지 않고** 기간으로만 가져오며, 고르는 일은 화면이 한다.
+
+### ⚠️ 들이지 않는 주문 — `skipReasons`
+
+`multi_address`(**배송지 여러 개**) · `no_receiver` · `no_items` · `no_order_id` · `no_ordered_at`.
+
+⚠️⚠️ **배송지가 여러 개인 주문은 미러를 만들지 않는다.** 출고신청은 수취인 1명이라 첫 배송지만
+쓰면 **나머지 주소의 물건이 엉뚱한 사람에게 간다.** 조용히 건너뛰지 않고 `skipReasons` 로
+돌려 화면이 "N건은 왜 안 들어왔는지"를 말한다.
+
+### 잘린 값 (`truncatedFields`)
+
+미러 컬럼 상한은 `FulfillmentRequest` 보다 **의도적으로 넉넉하다**(계획 문서 §4-E).
+⚠️⚠️ 같게 두면 배송메모가 201자인 주문 하나가 **불러오기 전체를** 22001 로 죽인다.
+넘치면 잘라 저장하고 **어느 칸이 잘렸는지**를 `truncatedFields` 에 남기며, 진짜 검사는
+**전환 시점의 zod** 가 한다 — 거기서는 주문 단위로 사유를 말할 수 있다.
+⚠️ 상한 미러는 `cafe24-order-mapper.ts` 의 `CAP` 이고 **`schema.prisma` 의 `@db.VarChar` 와
+한 쌍**이다. 한쪽만 고치면 22001 이다.
+
+### ⚠️⚠️ 재수집 정책 (§4-G)
+
+| 상황 | 동작 |
+|---|---|
+| 처음 보는 주문 | insert |
+| **미전환** 주문이 또 옴 | 전체 갱신 (주소 수정·부분 취소가 실제로 일어난다) |
+| **전환된** 주문이 또 옴 | **`orderStatus`·`itemStatus` 만** 갱신 |
+
+⚠️⚠️ 마지막 줄을 어기면 **전환 시점에 파기한 수취인 PII 가 되살아난다.**
+⚠️ 품목의 `excluded` 는 **한 방향으로만** 움직인다 — 취소가 새로 잡히면 `true` 로 올리고,
+그 밖에는 손대지 않는다. 브랜드가 끈 사은품 줄을 재수집이 되살리면 매번 다시 꺼야 한다.
+⚠️ `Cafe24OrderItem.productId` 는 **불러오기 시점의 캐시**다. 전환은 이 값을 믿지 않고
+그 시점에 매핑을 **다시 읽는다** — 안 그러면 "매핑을 고쳤는데 여전히 전환이 안 돼요"가 된다.
+
+### 미러 보존 (`cafe24-order-mirror-prune`, 매일 KST 04:40)
+
+⚠️⚠️ 미러에는 **수취인 PII 사본**이 있다. 전환된 건은 전환 시점에 비워지지만(아래) **불러와
+놓고 전환하지 않은 건은 아무도 치우지 않는다** — 매일 불러오는 브랜드의 적체가 무한히 쌓인다.
+`CAFE24_MIRROR_RETENTION_DAYS = 90` 경과분을 파기하고, 조건은 `Cafe24Service.pruneOrderMirrors()`
+가 소유한다(cron 은 스케줄만 — `storefront-stats-retention.cron.ts` 형태).
+⚠️ 축은 `importedAt` 이 아니라 **`updatedAt`** 이다 — 재수집이 계속 건드리는 주문은 아직 살아
+있는 작업이고, `importedAt` 으로 세면 매일 재수집하는 브랜드의 목록에서 90일째 주문이
+**조용히 사라진다.** 90일은 카페24 자신의 조회 상한(3개월)과 같은 값이다.
+
+## 전환 (`POST /orders/convert`)
+
+미러 → `FulfillmentRequest`. **재고 차감 · 역기록 · PII 파기가 한 트랜잭션**이다.
+
+- ⚠️⚠️ **락 순서는 `Cafe24Order`(ORDER BY id) → 재고(ORDER BY productId)** 다(계획 문서 G4).
+  뒤집힌 경로가 하나라도 생기면 데드락이다.
+- ⚠️⚠️ **재고를 직접 건드리지 않는다** — `FulfillmentService.createManyInTx` 를 부른다.
+  그래서 `Cafe24Module` 이 `FulfillmentModule` 을 import 한다(방향은 **cafe24 → fulfillment**
+  뿐이다 — 반대면 브랜드 목록·어드민 목록·콜로세움 엑셀이 전부 미러 조인을 타야 한다).
+- ⚠️ **부분 성공이 없다.** 한 건이라도 막히면 400 이고 아무것도 만들어지지 않는다.
+- ⚠️⚠️ `externalOrderNo` 는 **카페24 주문번호 원값**이다 — 접두사를 붙이면 그 값이 콜로세움
+  엑셀 `쇼핑몰주문번호` 칸으로 **그대로** 나간다(§4-F). 유입 구분은 `FulfillmentRequest.source`.
+- ⚠️ **전환 직후 수취인 스냅샷을 빈 문자열로 덮는다**(R4) — 정본이 `FulfillmentRequest` 로
+  옮겨갔으므로 사본을 하나로 줄인다. `fulfillmentRequestId` 가 링크를 유지한다.
+- ⚠️ **재전환 불가**(R8). 출고신청을 취소해도 `fulfillmentRequestId` 는 남아 그 미러는 영구히
+  막힌다 — **v1 의 의식적 결정**이다. 다시 보내려면 단건 신청으로 낸다.
+
+### 차단 사유 (`convert/preview`)
+
+`not_found` · `already_converted` · `canceled` · `not_paid` · `no_items` · `unmapped` ·
+`invalid` · `insufficient_inventory`. 각 사유는 **한국어 `message` 와 함께** 온다.
+
+- ⚠️ 프리뷰가 따로 있는 이유는 `reserveInventory` 의 `shortages[]` 가 **제품 단위**라 서버가
+  "어느 주문이 걸렸는지"를 모르기 때문이다(§5-E). 적용 단계에서야 400 이 나면 사용자는 어느
+  주문이 문제인지 알 수 없다 — `previewBulk` 와 같은 근거다.
+- **프리뷰와 적용이 같은 판정 함수**(`evaluateConvert`)를 쓴다. 두 벌로 나누면 "미리보기는
+  통과하는데 적용은 400" 이 생기고, 그게 정확히 프리뷰가 없애려던 상황이다.
+- ⚠️ 프리뷰는 **재고를 잡아두지 않는다.**
+- ⚠️⚠️ **매핑이 빠진 줄이 하나라도 있으면 주문 전체를 막는다**(§2 E) — 매핑된 줄만 자동으로
+  보내면 창고가 무엇을 집을지 브랜드가 모르는 채 절반만 나간다. 사은품처럼 매핑 대상이 아닌
+  줄은 브랜드가 **`excluded` 로 끈다.**
+- ⚠️⚠️ **N:1 매핑은 수량을 합산한다**(§5-D) — 옵션이 다른 두 줄이 같은 `productId` 로 풀릴 수
+  있고, 그대로 넘기면 `FulfillmentRequestInput.items` 의 refine 이 "같은 제품이 두 번
+  담겼습니다"로 400 을 던진다.
+- 재고 부족은 **고른 주문 전체를 합산**해서 본다(적용이 그렇게 검사하므로 프리뷰도 같아야 한다).
+- 회귀 스펙: `__tests__/cafe24-convert.spec.ts` · `cafe24-order-import.spec.ts` ·
+  `cafe24-order-mapper.spec.ts`.

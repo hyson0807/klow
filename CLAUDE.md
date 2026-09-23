@@ -112,8 +112,8 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 35개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 10개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
-3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 365개 — 2026-09-23 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 35개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 12개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 375개 — 2026-09-23 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
 
@@ -190,6 +190,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-14` [바코드 라벨 제품명 — 일반 주문·브랜드 지정 시딩 누락](docs/decisions/shipping-seeding.md#2026-09-14)
 - `2026-09-22` [3PL 풀필먼트(콜로세움) v1 — 창고 재고 + 출고신청](docs/decisions/shipping-seeding.md#2026-09-22)
 - `2026-09-23` [카페24 자사몰 연동 — OAuth 실왕복 + 토큰 갱신 직렬화](docs/decisions/shipping-seeding.md#2026-09-23)
+- `2026-09-23` [카페24 주문 불러오기 → 3PL 출고신청 전환](docs/decisions/shipping-seeding.md#2026-09-23-2)
 
 ### 정산 — `settlement.md`
 
