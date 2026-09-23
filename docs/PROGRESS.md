@@ -64,6 +64,36 @@ OAuth 설정이 깨질 위험**이 있다). 2026-09-23 사용자 결정: **그�
 → **7단계 시범을 4곳까지만 잡으면** 이 불확실성을 피한다. 5곳이 필요해지는 시점이면
 이미 심사를 낼 때다.
 
+#### staging 에서 카페24 왕복을 먼저 돌린다 — 필요한 값 (2026-09-23 실측)
+
+호스트는 **살아 있고 카페24 라우트만 없다**(머지 전이라 정상):
+`api-staging.klow.kr/v1/shipping-countries` 200 · `/v1/brand/cafe24/callback` **404** ·
+`brand-staging.klow.kr` 200.
+
+| # | 할 일 | 값 |
+|---|---|---|
+| 1 | 개발자센터 STEP 01 **Redirect URI 한 줄 추가** | `https://api-staging.klow.kr/v1/brand/cafe24/callback` |
+| 2 | staging 서버 env | `CAFE24_CLIENT_ID` · `CAFE24_CLIENT_SECRET`(운영과 **같은 앱**) |
+| 3 | staging 서버 env | `CAFE24_BRAND_CALLBACK_URL` = 위 1번 주소 (**운영과 다른 값**) |
+| 4 | staging 서버 env | `CAFE24_TOKEN_ENCRYPTION_KEY` — ⚠️ **운영과 다른 키를 쓴다**(DB 가 다르고, 키를 나눠야 한쪽 유출·회전이 다른 쪽을 죽이지 않는다) |
+| 5 | staging 서버 env 확인 | `BRAND_FRONTEND_URL` = `https://brand-staging.klow.kr` (콜백 후 돌아갈 곳) |
+| 6 | staging DB | 마이그레이션 **2개를 순서대로** |
+
+⚠️⚠️ **5개 몰 한도는 staging·운영이 같이 쓴다** — 한도가 앱(`client_id`) 단위인데 두 환경이
+같은 앱을 쓴다. **staging 테스트로 붙인 몰은 테스트가 끝나면 그 쇼핑몰 관리자에서 앱을 지운다.**
+안 지우면 운영에서 쓸 자리가 그만큼 준다.
+
+⚠️ `CAFE24_BRAND_CALLBACK_URL` 은 서버당 env 하나라 staging·운영이 각자 제 주소를 가리키면
+충돌하지 않는다. ⚠️ **`/connect` 와 `/callback` 은 반드시 같은 오리진**이어야 한다 —
+`/connect` 가 심는 쿠키 4종(state·brand·returnTo·mallId)이 그 도메인에 붙기 때문이다
+(로컬에서 시작해 운영으로 돌아오면 `state_mismatch`·`missing_brand` 로 떨어진다).
+
+⚠️⚠️ **심사는 staging 주소로 내지 않는다**(2026-09-23 결정). App URL 은 심사 통과 후 **실제
+브랜드가 들어가는 주소**가 되고, staging 은 배포마다 끊기고 데이터도 리셋 대상이다.
+그리고 **심사 통과 후 App URL·Redirect URI 를 바꾸면 재심사가 필요한지 미확인**이라,
+staging 으로 받은 심사가 통째로 무의미해질 수 있다 — **카페24에 문의해 확인할 값**이다.
+심사를 서두를 이유도 없다: **심사 없이도 5개 몰이 붙으므로 7단계 시범은 운영에서 그대로 돈다.**
+
 - ⚠️⚠️ **DB 브랜치도 git 브랜치도 새로 파지 않는다** — DB 는 `ep-floral-sun`,
   git 은 `feat/3pl-fulfillment`. 두 레포(server·brand) 모두 그 브랜치이고 **push 하지 않았다.**
 - 7단계(실브랜드 시범)·8단계(심사 제출)는 그 뒤다.
