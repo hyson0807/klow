@@ -17,14 +17,14 @@
 **3PL 출고신청으로 전환**(재고 차감). **출고 이후는 [fulfillment](./fulfillment.md) 경로 그대로**이고,
 이 모듈은 `Order`·`Shipment`·EFS 를 만나지 않는다.
 
-## 현재 구현 범위 — 연동·매핑까지. **OAuth 는 실왕복으로 검증됐다**
+## 현재 구현 범위 — 연동·매핑·상품목록까지. **실 API 로 검증됐다**
 
-2-1·5-1·3-1·2-2 까지의 코드다. ✅ **2026-09-23, 테스트 몰 `simsgood1` 로 OAuth 왕복이 실제로
-통과했다** — 연결 → `GET /connection` `connected:true` → `DELETE` → `connected:false`, 그리고
-lazy refresh·동시 요청 경합·주문 API 호출(HTTP 200)까지 확인했다.
+2-1·5-1·3-1·2-2·3-2 까지의 코드다. ✅ **2026-09-23, 테스트 몰 `simsgood1` 로 실왕복 검증** —
+연결 → `GET /connection` `connected:true` → `DELETE` → `connected:false`, lazy refresh·동시 요청
+경합, 그리고 **상품 40개를 실제로 읽어왔다**(검색·페이지네이션 포함).
 
-⚠️ 아직 없는 것: **카페24 상품 목록(`/catalog`)** · 주문 불러오기 · 전환. 그래서 매핑 CRUD 는
-있어도 **브랜드가 상품 번호를 알아낼 화면이 없다**(3-2·5-2).
+⚠️ 아직 없는 것: **주문 불러오기 · 전환**(4-1·4-2)과 **매핑 화면**(5-2). 서버는 상품 목록까지
+준비됐고, 브랜드가 쓸 화면이 아직 없다.
 ⚠️⚠️ **주문 상태 코드를 아직 한 번도 못 봤다** — 테스트 몰에 3개월간 주문이 0건이라 실측이
 비어 있다(계획 문서 §2 B). **4-1 착수 전에 테스트 주문을 넣고 확인할 것** — 추측해서 상수로
 박지 말 것.
@@ -40,6 +40,7 @@ lazy refresh·동시 요청 경합·주문 API 호출(HTTP 200)까지 확인했�
 | GET | `/connection` | `BrandGuard` | 판별 유니온 `{connected:false}` 또는 `{connected:true, mallId, scopes, connectedAt, lastSyncedAt, defaultCountryCode, needsReauth, reauthRequiredAt, daysUntilReauth}` |
 | PATCH | `/connection` | `BrandGuard` | **몰 기본 배송국** 변경(`{defaultCountryCode}`). 갱신된 상태를 그대로 돌려준다. 연동이 없으면 404 |
 | DELETE | `/connection` | `BrandGuard` | 연동 해제 — 토큰 폐기 + **미전환 미러 파기** |
+| GET | `/catalog` | `BrandGuard` | **카페24 상품 목록**(`limit`≤100 · `skip` · `q` 부분일치) + 그 상품에 걸린 매핑 동봉 |
 | GET | `/product-maps` | `BrandGuard` | 내 매핑 목록(`take`·`skip` · `total` 동봉). KLOW 제품 이름·이미지를 함께 싣는다 |
 | POST | `/product-maps` | `BrandGuard` | 매핑 저장 — **보낸 줄만 반영**(`PUT` 이 아니다) |
 | DELETE | `/product-maps/:id` | `BrandGuard` | 매핑 해제. 없거나 남의 것이면 **같은 404** |
@@ -126,6 +127,34 @@ tx(20s):  SELECT … FOR UPDATE            ← NOWAIT 금지(두 번째 요청�
   뒤집으면 카페24 쪽 장애가 멀쩡한 연동을 죽이거나, 죽은 연동이 영원히 "실패"만 띄운다.
 - ✅ 2026-09-23 실측: 만료를 과거로 돌린 뒤 **동시 요청 2개 → 둘 다 성공 · 같은 토큰 · 회전 1회.**
 - 회귀 잠금: `__tests__/cafe24-token.spec.ts`.
+
+
+## 카페24 상품 목록 (`GET /catalog`)
+
+매핑 화면이 고를 목록이다. ⚠️ 이름이 `products` 가 **아닌** 이유는 KLOW `Product` 와 축이
+섞이기 때문이다(계획 문서 §5).
+
+응답: `{ items: [{ productNo, productName, image, price, display, selling, variants[], maps[] }], total, limit, skip }`
+
+- ⚠️ **매핑 상태를 같은 응답에 싣는다.** 화면이 `/catalog` 와 `/product-maps` 를 따로 불러
+  맞추면 두 응답의 시점이 어긋나고(그 사이 저장이 끼면 "방금 매핑했는데 안 걸린 것처럼"
+  보인다), 매핑 목록은 따로 페이지를 끊으므로 이 페이지 상품의 매핑이 저쪽 페이지에 있을 수 있다.
+- ⚠️⚠️ **`maps` 를 `variantCode` 로 미리 짝지어 주지 않는다** — 옵션 없는 상품의 매핑 키를
+  실제 `variant_code` 로 둘지 빈 문자열로 둘지가 **아직 미확정**이다(계획 문서 §2 F). 주문
+  품목이 어느 값을 싣는지 못 봤기 때문이고, 여기서 한쪽으로 짝지으면 **그 추측이 응답 모양에
+  굳는다.** 짝짓기는 화면이 한다.
+- ⚠️ 카페24 호출이 **2회**(목록 + 건수)다. 건수를 빼고 `items.length === limit` 로 추정하면
+  마지막 페이지가 정확히 꽉 찼을 때 빈 페이지를 한 번 더 보여주고, 화면이 "상품 N개 중 M개
+  매핑"을 못 쓴다. 검색어는 **양쪽에 함께** 넘긴다(한쪽만 거르면 총계가 거짓말을 한다).
+- ⚠️⚠️ **`display`/`selling` 은 카페24가 `"T"`/`"F"` 문자열로 준다.** 서비스가 불리언으로
+  바꾼다 — 그대로 흘리면 `'F'` 가 truthy 라 **판매중지 상품이 판매중으로** 보인다.
+- ⚠️⚠️ **클라이언트가 `fields` 파라미터를 쓰지 않는다** — 쓰면 `embed=variants` 가 **조용히
+  빠진다**(실측). 매핑 키가 `(product_no, variant_code)` 라 variants 가 없으면 이 엔드포인트는
+  쓸모가 없다. 큰 응답은 우리 서버와 카페24 사이에서만 오가고 DTO 는 서비스가 줄인다.
+- `limit` 상한 **100 은 카페24가 정한 값**이다(101 → 422). 우리가 더 받으면 그 422 가 브랜드
+  화면에 502 로 나타난다.
+- 미연동이면 **404**, `needsReauth` 면 **409**(`cafe24_reauth_required`).
+- 회귀 스펙: `__tests__/cafe24-catalog.spec.ts`.
 
 ## 상품 매핑 (`Cafe24ProductMap`)
 
