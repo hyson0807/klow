@@ -17,24 +17,25 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**cafe24-fulfillment 1단계 — 스키마 + 마이그레이션** (2026-09-23 기록)
+**cafe24-fulfillment 2-1단계 — 서버 OAuth 왕복** (2026-09-23 기록)
 
-**3pl 운영 배포를 단독으로 하지 않기로 했다**(2026-09-23 사용자 결정). 카페24 연동까지 끝낸 뒤
-**두 트랙을 한 번에 배포**한다 — 그 단계는 `cafe24-fulfillment` 트랙 문서 §8 의 6단계다.
+1단계(스키마 + 마이그레이션)가 끝났다. 명세는 트랙 문서 §8 의 2-1.
 
-- ⚠️⚠️ **DB 브랜치를 새로 파지 않는다 — `ep-floral-sun` 을 이어 쓴다.** 3pl 마이그레이션이
-  거기에만 있어서, staging 기준선에서 새로 파면 `FulfillmentRequest` 가 없어 첫 FK 부터 깨진다.
-- ⚠️ **git 브랜치도 새로 파지 않는다 — `feat/3pl-fulfillment` 에 그대로 이어서 커밋한다**
-  (2026-09-23 사용자 결정). 그 브랜치가 이제 **두 트랙을 담으므로** 카페24 커밋 제목에
-  `cafe24` 를 넣어 구분한다.
-- **0단계(카페24 개발자센터 앱 생성)는 사용자 작업이고 병행한다** — 가입에 하루쯤 걸려서
-  기다리지 않는다. 1단계와 2-1 은 자격증명 없이 쓸 수 있고, **2-2 부터 필요**하다.
-  ⚠️ 앱을 만들 때 **심사 요건에 "앱 실행 화면(iframe)"이 포함되는지 가장 먼저 확인**할 것
-  (포함되면 트랙 문서 §7 R1 의 회피안이 무너져 계획을 다시 짜야 한다).
+- ⚠️ **카페24 자격증명 없이 여기까지 간다.** 코드를 쓰되 **OAuth 를 한 번도 실행하지 못하므로**,
+  끝나도 "동작한다"고 적지 않는다. 실왕복은 2-2 다.
+- 대신 자격증명 없이 잠글 수 있는 둘을 완료 기준으로 올렸다 — **SSRF 가드 단위 테스트**
+  (`mallId` 가 그대로 호스트가 된다)와 **authorize URL 조립 눈 검증**.
+- **0단계(카페24 개발자센터 앱 생성)는 사용자 작업이고 병행한다.** **2-2 를 시작할 때까지**
+  도착하면 된다. ⚠️ 앱을 만들 때 **심사 요건에 "앱 실행 화면(iframe)"이 포함되는지 가장 먼저
+  확인**할 것 — 포함되면 트랙 문서 §7 R1 의 회피안이 무너져 계획을 다시 짜야 한다.
 
-⚠️⚠️ **이 결정의 대가**: 3pl 이 운영에서 한 번도 돌아본 적 없는 채로 카페24와 함께 나간다.
-배포 후 문제가 나면 어느 트랙 때문인지 즉시 분리되지 않으므로, 배포 확인은 **3pl 왕복을 먼저
-통과시키고 나서** 카페24를 켜는 순서다.
+**배포는 3pl 과 한 번에 낸다**(2026-09-23 결정) — 그 단계는 트랙 문서 §8 의 6단계다.
+
+- ⚠️⚠️ **DB 브랜치도 git 브랜치도 새로 파지 않는다** — DB 는 `ep-floral-sun`,
+  git 은 `feat/3pl-fulfillment` 에 그대로 이어서 커밋한다(그 브랜치가 두 트랙을 담으므로
+  카페24 커밋 제목에 `cafe24` 를 넣는다).
+- ⚠️⚠️ **대가**: 3pl 이 운영 검증 없이 카페24와 함께 나간다. 배포 확인은 **3pl 왕복을 먼저
+  통과시키고 나서** 카페24를 켜는 순서다.
 
 3pl 트랙 문서 §5 의 나머지 후보(유럽 라우팅 · 내부 주문 자동 유입 · 물류비 후청구 · 배송 추적)는
 그대로 백로그다. 착수 결정이 나면 `§1 계획 세션` 으로 행을 만든다.
@@ -282,21 +283,23 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 ⚠️ **v1 은 카페24 앱스토어(iframe) 진입을 지원하지 않는다** — 그 화면에서는 `klow_brand_sid` 가
 3rd-party 차단에 걸려 로그인 상태가 아닐 수 있다(트랙 문서 §7 R1).
 
-#### 1. 스키마 + 마이그레이션
+#### 2-1. 서버 — OAuth 왕복
 
-- **읽을 것**: 트랙 문서 `§4` 전체 + `§1-A`, `klow_server/prisma/schema.prisma` 의
-  `FulfillmentRequest`·`BrandInventoryItem`·`InstagramConnection` 블록
-- **건드리는 레포 · 배포 순서**: klow_server 만. **배포 없음**(마이그레이션만)
-- **스키마·데이터 위험**: `CREATE TABLE` ×4 + `CREATE TYPE` ×1 + `ADD COLUMN` ×1
-  (`FulfillmentRequest.source`, `NOT NULL DEFAULT` → rewrite 없음) + 기존 3테이블에 FK
-  `ADD CONSTRAINT`. DROP 0건 · 백필 없음 → **롤링 안전**.
-  ⚠️⚠️ **DB 브랜치는 `ep-floral-sun` 을 이어 쓴다**(새로 파지 않는다 — G3)
-- **할 일**: 트랙 문서 `§4` 의 4모델 + `FulfillmentSource` enum + `FulfillmentRequest.source` →
-  역관계 필드 → `npx prisma migrate dev --name add_cafe24_fulfillment`
-- **완료 기준**: `npm run typecheck`(tsconfig **2개**) · 마이그레이션 SQL 에 **`DROP` 0건** ·
-  `Cafe24ProductMap.productId` 가 **Cascade**, `Cafe24Order.fulfillmentRequestId` 가 **SetNull**
-  인지 SQL 에서 확인 · 4테이블 생성 확인
-- **불변식**: 트랙 문서 §1 의 G3 · §1-A
+본문은 트랙 문서 [§8 의 2-1](./plan/cafe24-fulfillment/implementation-plan.md) 에 있다. 여기엔 읽을 것과 완료 기준만 둔다.
+
+- **읽을 것**: 트랙 문서 `§3`·`§5`·`§7 R1·R2`, `klow_server/src/modules/instagram/` 8파일,
+  `server/modules/instagram.md`
+- **건드리는 레포 · 배포 순서**: klow_server 만. **배포 없음**
+- **스키마·데이터 위험**: **없음** (1단계에서 끝났다)
+- **완료 기준** — ⚠️ **자격증명 없이 여기까지 온다.** 실왕복은 2-2 다
+  - `npm run typecheck`(tsconfig 2개) · `npm run test:e2e` 통과(cron 은 아직 10개)
+  - 부팅 라우트 수 실측(361 → 365 예상)
+  - **R2 SSRF 가드 단위 테스트** — `evil.com`·`..`·`@` 거절. ⚠️ 외부 호출이 없어 지금 잠글 수
+    있고, **가장 먼저 잠가야 하는 것**이다
+  - `GET /connect` 의 authorize URL 을 로그로 찍어 눈으로 검증(호스트가 `{mall_id}.cafe24api.com`)
+  - ⚠️ `common/origin-exempt.ts` 에 콜백 경로 + **그 스펙의 긍정/부정 목록**을 함께 고친다
+  - ⚠️ env 5개를 **`.env.example` 에도 넣는다** — META_* 가 거기 빠져 있는 선례를 반복하지 않는다
+- **불변식**: 트랙 문서 §1-A (브랜치·DB 를 새로 파지 않는다)
 
 #### 0. 카페24 개발자센터 앱 생성 (사용자 작업 · **병행**)
 
@@ -355,9 +358,10 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 | 4 | 3pl-fulfillment | 4. 엑셀 (브랜드 업로드 · 콜로세움 내보내기) | 완료 | ✗ | 2026-09-22 | `43400e5`·`28a2f6f` / - / - / - / (이 커밋) |
 | 5 | 3pl-fulfillment | 5. 어드민 화면 | 완료 | ✗ | 2026-09-22 | - / `78e3ef3` / - / - / (이 커밋) |
 | 6 | 3pl-fulfillment | 6. 브랜드 화면 | 완료 | ✗ | 2026-09-22 | - / - / `6fb35d8` / - / (이 커밋) |
-| 7 | cafe24-fulfillment | 1. 스키마 + 마이그레이션 | 대기 | ✗ | | |
-| 8 | cafe24-fulfillment | 0. 카페24 개발자센터 앱 생성 (사용자 작업 · 1~2-1 과 병행) | 대기 | — | | |
-| 9 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
+| 7 | cafe24-fulfillment | 1. 스키마 + 마이그레이션 | 완료 | ✗ | 2026-09-23 | `4c9a912` / - / - / - / (이 커밋) |
+| 8 | cafe24-fulfillment | 2-1. 서버 — OAuth 왕복 | 대기 | ✗ | | |
+| 9 | cafe24-fulfillment | 0. 카페24 개발자센터 앱 생성 (사용자 작업 · 1~2-1 과 병행) | 대기 | — | | |
+| 10 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 >
@@ -401,33 +405,30 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
 
-### cafe24-fulfillment — 계획 수립 (계획 세션)
+### cafe24-fulfillment 1단계 — 스키마 + 마이그레이션 (완료)
 
-- **한 것**: 트랙 신설. `plan/cafe24-fulfillment/` 3문서(README·flow·implementation-plan) +
-  `§6` 트랙 섹션 · `§7` 8행 · `§0` · 문서 지도 2곳. **코드 변경 0건**
-- **사용자가 정한 것 4개**: 상품 **수동 1:1 매핑** · 주문 **미러 → 선택 → 일괄 전환**(전환 시점
-  차감) · v1 은 **수동 불러오기 버튼만** · **퍼블릭앱 심사까지** 이 트랙에
-- ⚠️⚠️ **`fulfillment` 모듈을 두 군데 건드린다** — `FulfillmentRequest.source` 컬럼(1단계
-  마이그레이션에 **같이** 넣는다)과 브랜드 목록 `since`/`until` 서버 필터(`REQUEST_TAKE = 200`
-  이 몇 주면 잘린다). "EFS·`Order` 는 안 건드린다"와 혼동하지 말 것
-- ⚠️⚠️ **설계 검증에서 나온 함정 넷**(전부 트랙 문서에 스펙으로 박았다): ① 카페24 주문 상태는
-  **품목 단위**라 주문 단위로 접으면 취소 품목이 출고된다 ② 매핑 N:1 이라 전환 전 **productId
-  수량 합산**을 안 하면 zod refine 이 400 ③ `Cafe24ProductMap.productId` 를 Prisma 기본
-  (`Restrict`)으로 두면 **제품 삭제가 P2003 으로 깨진다**(Cascade 필요) ④ 미러 VarChar 를
-  `FulfillmentRequest` 와 동일하게 두면 긴 배송메모 하나가 **import 전체를 22001 로 죽인다**
-- ⚠️ **앱스토어(iframe) 진입은 v1 미지원** — `klow_brand_sid` 가 3rd-party 차단에 걸린다.
-  0단계에서 **심사 요건에 앱 실행 화면이 포함되는지 먼저 확인**할 것(포함되면 계획을 다시 짠다)
-- ⚠️⚠️ **2026-09-23 사용자 결정 둘로 계획을 고쳤다** — ① **3pl 7단계(운영 배포)를 없애고**
-  이 트랙의 배포 단계가 두 트랙을 함께 낸다 ② 개발자센터 가입이 하루 걸려 **코드를 먼저 쓴다**
-  (0단계는 1~2-1 과 병행, 2-2 부터 자격증명 필요)
-- ⚠️⚠️ **DB 브랜치도 git 브랜치도 새로 파지 않는다** — DB 는 `ep-floral-sun`(3pl 마이그레이션이
-  거기에만 있어 staging 기준선에서 새로 파면 `FulfillmentRequest` 가 없다), git 은
-  **`feat/3pl-fulfillment` 에 그대로 이어서 커밋**한다. 그 브랜치가 두 트랙을 담으므로
-  카페24 커밋 제목에 `cafe24` 를 넣는다
-- ⚠️ **대가**: 3pl 이 운영 검증 없이 카페24와 함께 나간다. 배포 확인은 **3pl 왕복 → 카페24 왕복**
-  순서를 지킨다(동시에 켜면 문제의 출처가 분리되지 않는다)
-- **다음 단계가 알 것**: 다음은 **1단계(스키마)** 이고 자격증명 없이 시작한다.
-  cron 은 10 → 12 가 된다(토큰 갱신 · 미러 파기) — `test/app.e2e-spec.ts` 를 함께 고친다
+- **한 것**: `Cafe24Connection`·`Cafe24ProductMap`·`Cafe24Order`·`Cafe24OrderItem` 4모델 +
+  `FulfillmentSource` enum + `FulfillmentRequest.source`. 마이그레이션
+  `20260923052254_add_cafe24_fulfillment` (`CREATE TABLE` ×4 · `CREATE TYPE` ×1 ·
+  `ADD COLUMN` ×1 · FK 7건 · **DROP 0건 · 백필 없음** → 롤링 안전)
+- **검증**: `prisma validate` · `npm run typecheck`(tsconfig 2개) · `npm run test:e2e` 3 pass ·
+  SQL 로 `DROP` 0건 확인 · 실 DB 에서 4테이블 + `source` 컬럼 + enum 3값(`manual|bulk_xlsx|cafe24`) 조회
+- ⚠️⚠️ **FK 동작 셋이 이 마이그레이션의 핵심이다**(설계 검증에서 잡은 것) —
+  `Cafe24ProductMap.productId` **Cascade**(Prisma 기본 `Restrict` 면 매핑 걸린 제품 삭제가
+  P2003 으로 깨진다 = 기존 기능 회귀) · `Cafe24Order.fulfillmentRequestId` **SetNull**
+  (Brand 삭제 캐스케이드 순서를 PG 가 보장하지 않아 Restrict 면 브랜드 삭제 실패) ·
+  `Cafe24OrderItem.productId` **SetNull**(스냅샷 캐시)
+- ⚠️ **미러 문자열 상한을 `FulfillmentRequest` 와 일부러 다르게 넓혔다** — 그쪽 상한은 추정치이고
+  미러는 외부 데이터라, 긴 배송메모 한 건이 불러오기 전체를 22001 로 죽인다.
+  넓게 받아 **잘라 저장하고 `truncatedFields` 에 남긴다**
+- ⚠️ **주문 상태는 품목 단위**(`Cafe24OrderItem.itemStatus`) — 주문 단위로 접으면 취소된 품목까지
+  전환돼 창고에서 나간다. `excluded` 는 사은품 줄을 브랜드가 끄는 스위치다
+- ⚠️⚠️ **DB·git 브랜치를 새로 파지 않는다** — DB 는 `ep-floral-sun`(3pl 마이그레이션이 거기에만
+  있다), git 은 `feat/3pl-fulfillment` 에 이어서 커밋. 그 브랜치가 **두 트랙을 담으므로** 카페24
+  커밋 제목에 `cafe24` 를 넣는다. **push 하지 않았다**
+- **다음 단계가 알 것**: 2-1 은 **자격증명 없이** 간다(끝나도 OAuth 는 한 번도 실행되지 않는다 —
+  "동작한다"고 적지 않는다). cron 은 10 → 12 가 될 예정(2-2 토큰 갱신 · 4-1 미러 파기) —
+  `test/app.e2e-spec.ts` 를 그때 함께 고친다
 
 ### 3pl-fulfillment 3~6단계 — 서버 API · 엑셀 · 어드민 화면 · 브랜드 화면 (완료)
 
