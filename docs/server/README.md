@@ -24,7 +24,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 
 ## 모듈 색인
 
-> 35개 모듈, 약 360여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
+> 36개 모듈, 약 360여 개 엔드포인트. 각 모듈 문서는 [`modules/`](./modules/) 폴더 참고.
 
 | 카테고리   | 모듈                                                                  | 주요 책임                                                |
 |------------|-----------------------------------------------------------------------|----------------------------------------------------------|
@@ -45,6 +45,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [shipments](./modules/shipments.md)                                   | 브랜드별 EFS 송장 발급·취소 + 배송추적                   |
 |            | [seeding](./modules/seeding.md)                                       | 크리에이터 시딩(샘플) 링크 + EMS/DHL 비교요율            |
 |            | [fulfillment](./modules/fulfillment.md)                               | 3PL 창고(콜로세움) 재고 + 브랜드 출고신청 (EFS 와 별개 축) |
+|            | [cafe24](./modules/cafe24.md)                                         | 브랜드 자사몰(카페24) 연동 — OAuth · 상품 매핑 · 주문 불러오기 → 3PL 출고신청 전환 |
 | **브랜드 자체 서비스** | [brand-applications](./modules/brand-applications.md)     | 브랜드 입점 신청 + 자체 상품 등록 (셀프-서비스)          |
 |            | [subscription](./modules/subscription.md)                             | 브랜드 멤버십 정기구독 (NicePay 빌링) + 승인 게이트      |
 |            | [brand-scraper](./modules/brand-scraper.md)                           | 자사몰 URL → AI 자동 데이터 추출                         |
