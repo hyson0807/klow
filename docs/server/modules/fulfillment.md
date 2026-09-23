@@ -84,6 +84,10 @@
 
 - 목록과 내보내기(4단계)는 `FulfillmentService.adminWhere()` **하나**를 공유한다 — 두 곳이 갈리면
   화면에서 센 건수와 실제로 나간 행 수가 어긋난다.
+- ⚠️ **어드민에는 기간 축(`since`/`until`)이 없다** — 브랜드 목록에만 있다(아래). 붙이려면
+  `AdminFulfillmentListQuery` · `AdminFulfillmentExportInput` · `adminWhere` **세 곳을 함께**
+  고쳐야 한다. 한 곳만 고치면 settlement·shipping-rates 에 남아 있는 **미작동 반쪽 구현**이
+  하나 더 늘고, 목록과 내보내기의 건수가 갈린다.
 - `q` 는 수취인명 · 브랜드가 붙인 주문번호(`externalOrderNo`) 부분일치다.
 - ⚠️ 정적 `export` 를 `:id` **앞에** 선언한다(`shipping-countries/export` 선례).
 - ⚠️⚠️ 내보내기가 **GET 이 아니라 POST + `SuperAdminGuard`** 인 이유는 감사 로그다. 수취인
@@ -94,8 +98,8 @@
 
 | Method | Path | 기능 |
 |--------|------|------|
-| GET | `/v1/brand/inventory` | 내 창고 재고 (읽기 전용) |
-| GET | `/v1/brand/fulfillment/requests` | 내 출고신청 목록 (`status`·`take`·`skip`) |
+| GET | `/v1/brand/inventory` | 내 창고 재고 + 제품별 출고 대기 수량 (읽기 전용) |
+| GET | `/v1/brand/fulfillment/requests` | 내 출고신청 목록 (`status`·**`since`·`until`**·`take`·`skip`) |
 | POST | `/v1/brand/fulfillment/requests` | 출고신청 생성 — 재고 차감 |
 | POST | `/v1/brand/fulfillment/requests/:id/cancel` | 취소 — 재고 반납 |
 | GET | `/v1/brand/fulfillment/template` | **KLOW 양식 xlsx** 다운로드 (+ `제품목록` 참조 시트) |
@@ -105,6 +109,44 @@
 - ⚠️ **경로에 brandId 가 없다** — 세션(`requireBrandId`)에서 꺼내므로 남의 브랜드를 가리킬 방법이
   구조적으로 없다(`brand-notices` 와 같은 판단).
 - ⚠️ 브랜드에게 **재고 쓰기는 없다.** 창고에 실제로 무엇이 들어왔는지 아는 쪽은 운영자뿐이다.
+
+#### 목록의 기간 축 — `since` / `until` (스키마는 `BrandFulfillmentListQuery`)
+
+**KST 달력일 'YYYYMMDD'** 한 칸씩이고 **둘 중 하나만 보내도 된다**(화면의 '최근 7일' 은 `since`
+만 쓴다). `until` 은 **그날 끝까지** 포함이다 — 내부적으로 반열림 `[start, endExclusive)` 로
+바뀐다(`common/kst-time.ts` `kstYmdRange`). 달력 유효성(`20260231`)과 `since <= until` 은 zod 가 본다.
+
+응답은 셋이다.
+
+| 키 | 모집단 | 쓰임 |
+|---|---|---|
+| `items` | 기간 **+ 상태** · 페이지(`take`/`skip`) | 목록 |
+| `total` | 기간 **+ 상태** 전체 | `total > items.length` = 상한에 걸림 |
+| `counts` | **기간만** (`{total,requested,exported,cancelled}`) | 상태 칩 건수 |
+
+- ⚠️⚠️ **`counts` 는 상태로 또 좁히지 않는다.** 좁히면 '신청함' 을 고르는 순간 나머지 칩이 전부
+  0 이 되어 고를 이유가 사라진다. 그리고 이 값을 **클라가 페이지 배열에서 세면 `take` 상한
+  안에서만 센 수**가 된다 — 기간을 서버로 옮긴 이유가 화면에서 그대로 되살아난다.
+- ⚠️ **검색어는 서버 축이 아니다.** 브랜드 화면의 수취인명·주문번호·제품명 검색은 받아온
+  페이지 안에서 클라가 건다(어드민의 `q` 와 다르다).
+- ⚠️⚠️ **배포는 klow_server → klow_brand.** 뒤집으면 400 이 아니라 **조용한 strip** 이다 —
+  zod object 는 모르는 키를 버리므로 구 서버가 기간을 무시한 최신 N건을 돌려주고, 화면은
+  "필터가 먹었다"고 믿는다.
+- ⚠️ **인덱스를 추가하지 않았다.** 기존 `@@index([brandId, status])` 로 브랜드 축이 먼저 좁혀지고
+  브랜드당 행 수가 작다. 정렬이 느려지면 그때 `@@index([brandId, createdAt])` 를 **독립 단계**로
+  뗀다(마이그레이션은 독립 단계 규칙).
+
+#### 재고 응답의 `outboundPending`
+
+제품별 **출고 대기 수량**(= 그 제품이 실린 `requested` 신청의 수량 합)을 서버가 `groupBy` 로 낸다.
+
+- ⚠️ "곧 나갈 물량"이지 **"재고에서 더 빠질 물량"이 아니다** — 재고는 신청 시점에 이미 차감됐다.
+  `quantity` 에서 또 빼면 이중 차감이다.
+- ⚠️⚠️ 이 합을 서버가 내는 이유는 **상한**이다. 브랜드 화면이 `requested` 목록을 200건 받아 직접
+  더하던 구조라, 신청이 200건을 넘는 순간 제품마다 실제보다 적은 수가 **조용히** 떴다.
+- `productId` 는 nullable(제품 삭제 시 SetNull)이라 null 그룹은 버린다 — 지워진 제품은 재고 행이 없다.
+- 어드민 `GET /admin/brands/:brandId/inventory` 가 같은 서비스 메서드를 쓰므로 **거기에도 실려
+  나간다**(additive — 어드민 화면은 아직 읽지 않는다).
 
 ## 입력 제약 (`common/validation/fulfillment.ts`)
 
@@ -209,9 +251,13 @@
   ink 한 가지 + 예외색 하나다.
   ⚠️ 상태만 pill 이 아니라 **select** 다(기간 4칸 + 상태 4칸이 375px 한 줄에 안 들어간다).
   ⚠️ 상태별 건수는 **기간만 건 모집단**에서 센다 — 상태로 또 좁힌 뒤 세면 하나를 고르는
-  순간 나머지가 0 이 되어 고를 이유가 사라진다.
-  ⚠️ 기간 필터는 **클라에서** 건다(서버 목록에 날짜 축이 없다). 그래서 목록을 상한 200까지
-  받아온다 — 200건을 넘기기 시작하면 서버에 `since`/`until` 을 붙일 차례다.
+  순간 나머지가 0 이 되어 고를 이유가 사라진다. 그 수는 **서버 `counts` 를 그대로** 쓴다.
+  ⚠️⚠️ **기간 필터는 서버가 건다**(`since`, 위 절). 화면은 기간 pill → `since` 만 만들고
+  `until` 은 보내지 않는다(기간이 전부 "오늘까지"라, 상한을 박으면 자정을 넘긴 탭이 방금 낸
+  신청을 못 본다). **기간은 쿼리키에도 들어간다** — 빼면 '오늘' 응답이 '한달' 화면에 재사용된다.
+  ⚠️ 상태는 **서버로 보내지 않는다** — 서버가 상태로 거르면 `counts` 의 모집단도 그만큼 좁아진다.
+  ⚠️ 상한(200)은 사라진 게 아니라 **보이게** 됐다. `total > items.length` 면 목록 아래가
+  "최근 200건만 표시했어요"를 띄운다. **말없이 자르지 않는 것**이 이 화면의 계약이다.
   ⚠️ 신청·취소 성공 시 **목록과 재고를 함께** 무효화한다(차감·반납이 같은 트랜잭션이다).
   ⚠️ `출고 대기` 는 서버 컬럼이 아니라 `requested` 신청의 합이고, **제품 행 우측 숫자 열**에
   둔다(보조줄 문장으로 흘려 쓰면 제품마다 위치가 달라 세로로 훑을 수 없다). 재고는 신청
