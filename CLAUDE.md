@@ -175,7 +175,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-22` [브랜드 자사몰(카페24) 임베드 버튼 제거](docs/decisions/storefront.md#2026-09-22)
 - `2026-09-28` [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](docs/decisions/storefront.md#2026-09-28)
 - `2026-09-28` [손님 화면 메뉴 서랍 + PC 브랜드관·제품 상세](docs/decisions/storefront.md#2026-09-28-2)
-- `2026-09-28` [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (U/B≠MOQ 서버 가드 · STOREFRONT_SEGMENTS 에 b2b 넣지 않음)](docs/decisions/storefront.md#2026-09-28-3)
+- `2026-09-28` [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (MOQ 열 없으면 U/B = MOQ · STOREFRONT_SEGMENTS 에 b2b 넣지 않음)](docs/decisions/storefront.md#2026-09-28-3)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

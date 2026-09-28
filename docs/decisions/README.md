@@ -92,7 +92,7 @@
 | `2026-09-22` | [브랜드 자사몰(카페24) 임베드 버튼 제거](./storefront.md#2026-09-22) | storefront |
 | `2026-09-28` | [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](./storefront.md#2026-09-28) | storefront |
 | `2026-09-28` | [손님 화면 메뉴 서랍 + PC 브랜드관·제품 상세](./storefront.md#2026-09-28-2) | storefront |
-| `2026-09-28` | [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (U/B≠MOQ 서버 가드)](./storefront.md#2026-09-28-3) | storefront |
+| `2026-09-28` | [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (MOQ 열 없으면 U/B = MOQ)](./storefront.md#2026-09-28-3) | storefront |
 | `2026-09-22` | [3PL 풀필먼트(콜로세움) v1 — 창고 재고 + 출고신청](./shipping-seeding.md#2026-09-22) | shipping-seeding |
 | `2026-09-23` | [카페24 자사몰 연동 — OAuth 실왕복 + 토큰 갱신 직렬화](./shipping-seeding.md#2026-09-23) | shipping-seeding |
 | `2026-09-23` | [카페24 주문 불러오기 → 3PL 출고신청 전환](./shipping-seeding.md#2026-09-23-2) | shipping-seeding |
