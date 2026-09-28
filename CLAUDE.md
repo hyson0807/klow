@@ -56,7 +56,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
 | API 엔드포인트 문서           | `docs/server/README.md` (모듈 색인) + `docs/server/modules/<module>.md` — 컨트롤러 변경 시 함께 갱신     |
-| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, stats, subscription, translation, upload) |
+| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, stats, subscription, translation, upload) |
 | Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | 가격 커널 (공유)              | `klow_server/src/pricing/` (배럴 — formulas/fx/country-price/promotion/price-line/chargeable-brands). **`modules/` 의 형제**이고 6개 모듈이 의존한다 |
 | 카페24 자사몰 연동            | `klow_server/src/modules/cafe24/` (OAuth 왕복 · 상품 매핑 · 주문 미러 → 3PL 출고신청 전환). ⚠️ **`mallId` 가 그대로 API 호스트가 되는 SSRF 축**이라 zod + `cafe24ApiOrigin()` 두 겹으로 막는다. 엔드포인트: `docs/server/modules/cafe24.md` |
@@ -175,6 +175,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-22` [브랜드 자사몰(카페24) 임베드 버튼 제거](docs/decisions/storefront.md#2026-09-22)
 - `2026-09-28` [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](docs/decisions/storefront.md#2026-09-28)
 - `2026-09-28` [손님 화면 메뉴 서랍 + PC 브랜드관·제품 상세](docs/decisions/storefront.md#2026-09-28-2)
+- `2026-09-28` [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (U/B≠MOQ 서버 가드 · STOREFRONT_SEGMENTS 에 b2b 넣지 않음)](docs/decisions/storefront.md#2026-09-28-3)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

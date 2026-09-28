@@ -161,7 +161,7 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
 - **할 일 (골격)**
   - b2bpc 의 `klow_brand/src/app/[slug]/b2b` + `src/components/b2b/` 8파일을
     **klow_web `[brandSlug]/b2b`** 로 이관(README 결정 4)
-  - klow_web `middleware.ts` 의 **`STOREFRONT_SEGMENTS` 에 `'b2b'` 등록** — 커스텀 도메인에서 열리게
+  - ~~klow_web `middleware.ts` 의 `STOREFRONT_SEGMENTS` 에 `'b2b'` 등록~~ ⚠️ **정정(착수 세션): 넣지 않는다** — 그 목록은 최상위 전역 경로라 넣으면 `{도메인}/b2b` 가 `/b2b`(슬러그 "b2b")로 간다. 현행 미들웨어가 이미 `{도메인}/b2b → /{slug}/b2b` 로 rewrite 한다([결정](../../decisions/storefront.md#2026-09-28-3))
   - 전역 `Footer` 숨김 규칙을 klow_web 쪽으로. `noindex` 유지
   - ⚠️⚠️ **`Promotion.slug` 예약 가드를 여기서 넣는다.** 정적 세그먼트 `b2b` 가
     `[brandSlug]/[influencer]` 를 이기므로 **이름이 "b2b" 인 할인 링크가 조용히 죽는다.**

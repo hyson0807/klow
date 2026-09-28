@@ -30,16 +30,16 @@
 |---------------|--------------------------|----------------------------------------------------------------------|
 | `filename`    | `string`                 | 1~255자                                                              |
 | `contentType` | `string`                 | 1자 이상 + 아래 `kind` 별 화이트리스트에 있어야 함                   |
-| `kind`        | `'image' \| 'video'`     | 저장 폴더(`images` / `videos`) 와 허용 MIME 을 동시에 가른다          |
+| `kind`        | `'image' \| 'video' \| 'doc'` | 저장 폴더(`images` / `videos` / `docs`) 와 허용 MIME 을 동시에 가른다 |
 
-- 허용 MIME — image: `image/webp`, `image/jpeg`, `image/png`, `image/gif` / video: `video/mp4`, `video/quicktime`, `video/webm`.
+- 허용 MIME — image: `image/webp`, `image/jpeg`, `image/png`, `image/gif` / video: `video/mp4`, `video/quicktime`, `video/webm` / doc: `application/pdf` 만(2026-09-28 — B2B 브랜드 소개서. 오피스 문서는 매크로·외부 링크를 품을 수 있어 받지 않는다).
 - **SVG 는 의도적으로 제외** — R2 공개 URL 로 서빙되면 스크립트 삽입(XSS) 위험이 있어서다.
 - `kind` 와 `contentType` 이 안 맞으면 `.refine` 이 `contentType` path 로 `unsupported content-type for kind` 400.
 
 **Response** — `{ uploadUrl, publicUrl, key }`
 
 - `uploadUrl`: `PutObjectCommand` presign, **TTL 600초**. `ContentType` 이 서명에 포함되므로 PUT 시 동일 헤더로 보내야 한다.
-- `key`: `<base>/<uuid>-<sanitized filename>` (`base` = `images`/`videos`, 브랜드는 `brands/<scope>/images|videos`). 파일명은 `[^a-zA-Z0-9._-]` 를 `_` 로 치환하고 앞에 `randomUUID()` 를 붙여 충돌·경로조작을 막는다.
+- `key`: `<base>/<uuid>-<sanitized filename>` (`base` = `images`/`videos`/`docs`, 브랜드는 `brands/<scope>/images|videos|docs`). 파일명은 `[^a-zA-Z0-9._-]` 를 `_` 로 치환하고 앞에 `randomUUID()` 를 붙여 충돌·경로조작을 막는다.
 - `publicUrl`: `${R2_PUBLIC_BASE}/${key}`.
 
 ## R2Service 서버측 헬퍼 (라우트 없음)
