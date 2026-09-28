@@ -173,6 +173,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-08-25` [브랜드 스토리](docs/decisions/storefront.md#2026-08-25-2)
 - `2026-09-18` [브랜드관 공지 팝업](docs/decisions/storefront.md#2026-09-18)
 - `2026-09-22` [브랜드 자사몰(카페24) 임베드 버튼 제거](docs/decisions/storefront.md#2026-09-22)
+- `2026-09-28` [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](docs/decisions/storefront.md#2026-09-28)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

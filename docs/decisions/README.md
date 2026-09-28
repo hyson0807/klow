@@ -90,6 +90,7 @@
 | `2026-09-18` | [주문 탭 서브탭·목록 카드를 디자인 탭 톤으로 통일](./brand-account.md#2026-09-18-3) | brand-account |
 | `2026-09-18` | [브랜드관 공지 팝업](./storefront.md#2026-09-18) | storefront |
 | `2026-09-22` | [브랜드 자사몰(카페24) 임베드 버튼 제거](./storefront.md#2026-09-22) | storefront |
+| `2026-09-28` | [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](./storefront.md#2026-09-28) | storefront |
 | `2026-09-22` | [3PL 풀필먼트(콜로세움) v1 — 창고 재고 + 출고신청](./shipping-seeding.md#2026-09-22) | shipping-seeding |
 | `2026-09-23` | [카페24 자사몰 연동 — OAuth 실왕복 + 토큰 갱신 직렬화](./shipping-seeding.md#2026-09-23) | shipping-seeding |
 | `2026-09-23` | [카페24 주문 불러오기 → 3PL 출고신청 전환](./shipping-seeding.md#2026-09-23-2) | shipping-seeding |

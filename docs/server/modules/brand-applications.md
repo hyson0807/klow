@@ -69,12 +69,21 @@
 - `BrandApplicationsModule` 이 `ProductsModule` 을 import 한다(`ProductTranslationService` 사용). `ProductsModule` 은 `TranslationModule` 만 import 하고 그 모듈은 imports 가 없어 순환이 없다 — `SeedingModule` 이 같은 이유로 이미 같은 일을 한다.
 - 동시성: PATCH 는 jsonb read-modify-write 라 `$transaction` 으로 감싸지만 READ COMMITTED 라 **탭 두 개가 동시에 저장하면 lost update 가 가능**하다(`countryPrices` replace-all 과 같은 급의 수용된 위험 — UI 가 한 번에 한 필드만 커밋한다).
 
-### 브랜드 스토리 (2026-08-25)
+### 브랜드 스토리 (2026-08-25) — ⚠️ 이행 어댑터로만 남았다 (2026-09-28)
 
-브랜드관 상단 정중앙의 진입 글자가 여는 소개 페이지(커버 + 챕터 N, 최대 12). 저장은 **신규 라우트 없이** `PUT /v1/brand/applications` 의 `story` 한 칸으로 한다 — 색·폰트·링크와 같은 디자인 자동저장 큐를 타는 문서라, 전용 엔드포인트를 만들면 저장 타이밍이 두 벌로 갈린다. 형식은 `common/validation/brand.ts` 의 `BrandStorySchema`, 저장은 `Brand.story Json?`([brands](./brands.md)).
+⚠️⚠️ **이 PUT 의 `story` 칸은 이제 저장 경로가 아니라 이행 어댑터의 입구다.** 브랜드관 메뉴·페이지의 정본은 `BrandMenuItem`/`BrandPage`/`BrandPageChapter` 테이블이고, 편집은 줄 단위 엔드포인트 `v1/brand/menu/*` 가 한다([brands](./brands.md) 의 `brand-menu.controller.ts` 절). `Brand.story` Json 은 **dormant** 이고 **서버는 거기에 더 이상 쓰지 않는다**.
+
+- **왜 어댑터가 필요한가** — `Brand.story` 를 드롭하지 않았고(`DROP COLUMN` 은 롤링 비안전 + 백필 롤백 여지), 배포 순서가 **klow_server → klow_brand** 라 그 창 동안 구 klow_brand 가 계속 `story` 를 PUT 한다. 무시하면 그 창의 스토리 편집이 조용히 유실되고, Json 에 그대로 쓰면 Json 과 테이블이 갈려 **정본이 둘**이 된다.
+- **무엇을 하는가** — `applyLegacyStory(brandId, raw)` 가 `brands/legacy-story.ts` 의 `legacyStoryToPage()` 로 번역해 `kind='story'` 메뉴 줄 + 페이지 + 챕터를 만들거나 제자리에서 고친다. 이미 줄이 있으면 챕터를 **지우고 다시 만든다**(legacy Json 의 챕터 id 를 저장하지 않는다 — 구 klow_brand 는 자기 Json 을 읽으므로 그쪽 화면은 영향이 없다).
+- ⚠️⚠️ **내용이 빈 스토리는 줄을 만들지 않는다.** 구 klow_brand 는 스토리를 "항상 존재하는 한 줄"로 합성했고 `enabled` 기본값이 `true` 라, 그대로 옮기면 **스토리를 만든 적 없는 브랜드가 빈 페이지로 가는 "Brand Story" 줄**을 얻는다(운영 최대 41곳). 반대로 **있던 줄의 내용을 브랜드가 지우면 줄을 지운다** — 안 그러면 손님 서랍에 빈 줄이 남는다.
+- ⚠️ **알려진 비용** — 그 창 동안 구 klow_brand 가 화면에 그리는 값은 여전히 `Brand.story` Json 인데 그 컬럼이 이제 갱신되지 않으므로, 구 탭이 저장 후 새로고침하면 직전 Json 이 보인다. expand/contract 의 알려진 비용이고 **klow_brand 배포로 닫힌다**(배포 순서가 바로 그 이유다).
+- ⚠️ klow_brand 배포가 끝나면 이 어댑터는 **죽은 코드**가 된다. 그때 걷어낸다.
+- 일회성 백필은 `npm run backfill:brand-menu`(기본 dry-run · `-- --apply` 로만 반영 · 멱등 — 이미 메뉴 행이 있는 브랜드는 건너뛴다). 어댑터와 **같은 `legacy-story.ts` 를 쓴다**.
+
+아래는 그 시절의 서술이고 형식 규칙(zod `BrandStorySchema`·상한)은 어댑터 입구에서 **그대로 유효하다**.
 
 - `null` = 스토리를 만든 적 없음. 공개 노출 조건은 `enabled && 내용 있음`(klow_web `isBrandStoryPublic`).
-- ⚠️⚠️ **`updateApplication` 은 `dto.story === undefined` 면 update data 에서 키를 통째로 뺀다.** 이웃 Json 필드처럼 `?? Prisma.JsonNull` 로 쓰면 안 된다 — 이 PUT 은 delta 가 아니라 **전체 문서 저장**이라, story 를 안 싣는 클라이언트(배포 창에 남은 구버전 탭·브라우저 캐시·klow_brand 롤백)가 **배경색 하나만 바꿔도 저장된 스토리가 통째로 지워진다**. 리뷰어가 "옆 줄과 모양을 맞추려고" 고치기 딱 좋은 자리라 `__tests__/brand-story.spec.ts` 가 이 분기를 잠근다. 같은 이유로 zod 에도 **`.default()` 를 붙이지 않는다**.
+- ⚠️⚠️ **`updateApplication` 은 `dto.story === undefined` 면 어댑터를 아예 부르지 않는다.** 이웃 Json 필드처럼 `?? Prisma.JsonNull` 로 다루면 안 된다 — 이 PUT 은 delta 가 아니라 **전체 문서 저장**이라, story 를 안 싣는 클라이언트(배포 창에 남은 구버전 탭·브라우저 캐시·klow_brand 롤백)가 **배경색 하나만 바꿔도 저장된 스토리가 통째로 지워진다**. 리뷰어가 "옆 줄과 모양을 맞추려고" 고치기 딱 좋은 자리라 `__tests__/brand-story.spec.ts` 가 이 분기를 잠근다. 같은 이유로 zod 에도 **`.default()` 를 붙이지 않는다**.
 - ⚠️⚠️ **`chapters[].id` 는 받은 그대로 왕복해야 한다.** klow_brand 챕터 카드가 `key={chapter.id}` 로 그려져서, 서버가 id 를 새로 만들면 800ms 자동저장이 끝날 때마다 입력칸이 remount 되어 **타이핑 중 커서와 포커스가 날아간다**. 그래서 zod 에 default 가 없다.
 - ⚠️ **이 스키마의 400 은 스토리만 죽이지 않는다** — 전체 문서 PUT 의 한 칸이라 배경색·폰트·링크까지 그 브랜드는 아무것도 저장되지 않는다. 그래서 문자열 상한은 klow_brand 입력칸 `maxLength` 와 **정확히 같은 값**이고(label 24 / title 60 / subtitle 200 / heading 60 / body 1200 / chapters 12), 세 곳이 `STORY_TEXT_LIMITS` 한 표를 본다(편집 입력칸 · 클라 `normalizeBrandStory` 의 slice · 서버 zod).
 - **어드민은 story 를 다루지 않는다** — `BrandInput`/`BrandPatch` 에 없다. 편집 UI 가 없고, `patchOf` 가 미전송을 '변경 없음'으로 만들어 클로버 위험이 0 이라 넣을 이유가 없다. 나중에 어드민 편집이 필요해지면 `BrandInput` 과 `brands.service.ts` 의 `toPrismaBrandData()`(현재 `linkStyle` 만 destructure)를 **같이** 고칠 것.
