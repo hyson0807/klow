@@ -28,8 +28,10 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 이식은 B2B 하나다. 트랙 하나 = 세션 하나(`§6 의 한 트랙 = 한 세션` 이 정본)이고, 안에서 하는
 순서·끊는 경계는 `§6 의 b2bpc 이식 3트랙` + `b2b-wholesale` 섹션, 단계별 본문은 트랙 문서.
 
-- ⚠️⚠️ **마이그레이션을 동반한다 — 시작 전에 Neon DB 브랜치를 판다**(`feat/storefront-b2b` 가
-  쓰는 DB 브랜치에서 fork · `§3` · CLAUDE.md "스키마를 바꾸는 작업은…"). **스키마가 첫 순서**다
+- ✅ **DB 브랜치 준비됨**(2026-09-28 사용자) — Neon **`dev/feat-pc`**(엔드포인트 `ep-solitary-morning-a1rygrkh`)가
+  `klow_server/.env` 의 `DATABASE_URL` 이고 **마이그레이션 진행 승인**을 받았다. 확인 시점
+  `prisma migrate status` = 168개 전부 적용 · up to date. **스키마가 첫 순서**다
+  (⚠️ 1행 메뉴 마이그레이션도 이 DB 에 있다 — 새로 fork 할 필요 없음)
 - git 브랜치는 세 레포 모두 **`feat/storefront-b2b`**(klow_web 도 2행에서 팠다)
 - ⚠️ 넘치면 `서버까지`(스키마·API·AI·공개API) / `화면부터`(대시보드·바이어·배포) 경계에서 끊는다
 - ⚠️ 1·2행이 `운영 배포 ✗` 인 것은 의도된 것이다 — 아래 참고.
