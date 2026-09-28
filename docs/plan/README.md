@@ -11,6 +11,9 @@
 | [3pl-fulfillment/](./3pl-fulfillment/implementation-plan.md) | 콜로세움 3PL — 어드민이 브랜드별 재고를 입력하고, 브랜드가 출고신청하면 재고가 차감되고, 어드민이 콜로세움 주문서 엑셀을 받아 수작업 업로드한다 |
 | [cafe24-fulfillment/](./cafe24-fulfillment/README.md) | 브랜드가 카페24 자사몰을 OAuth 로 연결하고, 카페24 상품을 KLOW 제품에 매핑한 뒤, 자사몰 주문을 불러와 출고신청으로 전환한다. 출고 이후는 3pl-fulfillment 경로 그대로 |
 | [aws-fargate/](./aws-fargate/implementation-plan.md) | `klow_server` 를 Railway 에서 AWS ECS Fargate 로 이전. Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP)과 0~6단계 순서 |
+| [brand-menu-schema/](./brand-menu-schema/README.md) | 브랜드관 **메뉴 서랍(☰)** 과 **PC 설정**을 `Brand.story` Json 에서 정규화 테이블 3벌 + `Brand` 스칼라 3개로 옮긴다. `b2bpc` 목업이 localStorage 에만 저장되던 것을 서버로 올리는 트랙이고 **나머지 두 트랙의 게이트** |
+| [storefront-menu-pc/](./storefront-menu-pc/implementation-plan.md) | 손님이 보는 klow_web 에 메뉴 서랍과 **데스크톱 브랜드관·제품상세**를 신설한다. klow_web 은 지금 브레이크포인트가 0개인 모바일 전용이라 이식이 아니라 신설이다 |
+| [b2b-wholesale/](./b2b-wholesale/README.md) | 해외 바이어가 링크 하나로 **도매가·MOQ·수량구간**을 보고 주문서를 넣는다. 브랜드관 위에 한 겹을 얹는 구조 — 테이블 6벌 + 전용 모듈이 전부 신규다. 결제(PG)는 스코프 밖 |
 
 ## 새 트랙을 만들 때
 

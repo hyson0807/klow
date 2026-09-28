@@ -36,6 +36,9 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/3pl-fulfillment/](./plan/3pl-fulfillment/implementation-plan.md) | 콜로세움 3PL — 브랜드가 창고에 맡긴 재고, 출고신청, 콜로세움 주문서 엑셀(API 가 없어 수작업 업로드) |
 | [plan/cafe24-fulfillment/](./plan/cafe24-fulfillment/README.md) | 브랜드 카페24 자사몰 주문을 KLOW 로 불러와 콜로세움 3PL 로 출고 — OAuth 연결 · 상품 매핑 · 주문 미러 · 출고신청 전환 |
 | [plan/aws-fargate/](./plan/aws-fargate/implementation-plan.md) | **klow_server 를 Railway 에서 AWS ECS Fargate 로 어떻게 옮기나?** Railway 전제로 맞춰진 함정(trust proxy·cron 이중 실행·리전·고정 IP), 0~6단계 순서 |
+| [plan/brand-menu-schema/](./plan/brand-menu-schema/README.md) | 브랜드관 메뉴 서랍(☰)·PC 설정을 정규화 테이블로 — `b2bpc` 목업이 localStorage 에만 저장되던 것을 서버로. **다음 두 트랙의 게이트** |
+| [plan/storefront-menu-pc/](./plan/storefront-menu-pc/implementation-plan.md) | klow_web 손님 화면에 메뉴 서랍 + 데스크톱 브랜드관·제품상세 신설(지금은 브레이크포인트 0개 모바일 전용) |
+| [plan/b2b-wholesale/](./plan/b2b-wholesale/README.md) | B2B 도매 — 바이어 공개 페이지 · 도매가/MOQ/수량구간 · 주문 접수 + 알림메일. 테이블 6벌 신규, 결제는 스코프 밖 |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
 | [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
 

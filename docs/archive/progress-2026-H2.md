@@ -5,6 +5,23 @@
 
 ---
 
+### storefront-sales-analytics — 운영 배포 (완료 · 퇴출)
+
+| 트랙 | 단계 | 완료 | 운영 배포 | 커밋 |
+|---|---|---|---|---|
+| storefront-sales-analytics | 운영 배포 | 2026-09-22 (사용자 확인) | ✓ | ⚠️ 체계 도입 전 배포라 해시 미기록 |
+
+⚠️ `§7` 은 "커밋 해시 없이 `완료` 를 쓸 수 없다"가 규칙이다. 이 행은 **진행표가 생기기 전에 배포된
+건**이라 예외로 사유를 적어 남겼다. 이후 완료되는 단계에는 해시를 채운다.
+
+문서는 [`storefront-sales-analytics.md`](./storefront-sales-analytics.md), 현행 정본은
+[`../server/modules/storefront-stats.md`](../server/modules/storefront-stats.md).
+
+**회수 사유**: 2026-09-28 에 `PROGRESS.md` 가 743줄이 되어 `§7` 예산(40행 / 600줄)을 넘었다.
+트랙 3개(`brand-menu-schema`·`storefront-menu-pc`·`b2b-wholesale`)가 표에 13행을 더한 세션이다.
+
+---
+
 ### 체계 — 진행 관리 체계 전환 (1~3단계 완료 · 다음 단계 없음)
 
 전환 자체를 자기 진행표 위에서 굴렸다. 산출물은 셋이고, 그 이후의 운영 규칙은 `§1` 절차 7번과

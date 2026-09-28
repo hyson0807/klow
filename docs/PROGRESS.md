@@ -103,6 +103,23 @@ staging 으로 받은 심사가 통째로 무의미해질 수 있다 — **카�
 
 막힘: aws-fargate 2단계 (AWS 크레딧 승인 대기, 2026-09-11~)
 
+#### 다음 후보 — brand-menu-schema 1단계 (b2bpc 머지 · 정합)
+
+2026-09-28 계획 세션이 트랙 3개를 추가했다(`§6`). **지금 할 것을 밀어내지 않는다** — 위 cafe24
+6단계가 여전히 첫 줄이고, `§4 WIP 상한`(동시 `진행 중` 2트랙 · 마이그레이션 동반 1개)이 그 이유다.
+
+세 트랙은 `klow_brand` `b2bpc` 브랜치의 목업(브랜드관 메뉴 · PC 버전 · B2B 도매)을 서버와 붙이는
+일이고 **`brand-menu-schema` 가 나머지 둘의 게이트**다. 첫 단계는 배포가 없는 머지·정합이라
+cafe24 배포와 부딪히지 않는다.
+
+- git 브랜치 **`feat/storefront-b2b`**(세 레포 · `staging` 기준) · DB 브랜치
+  **`ep-solitary-morning-a1rygrkh`**(실측 167개 적용 · 드리프트 없음)
+- ⚠️⚠️ **운영 마이그레이션 큐** — 운영은 **164개**로 dev(167)보다 3개 적다
+  (`drop_product_external_product_code` · `add_3pl_fulfillment` · `add_cafe24_fulfillment` 미적용).
+  새 트랙의 마이그레이션은 **그 뒤 4번째**로 줄을 서므로 **cafe24 배포가 선행**이다.
+- ⚠️ 1단계가 건드리는 `studio/page.tsx`·`IdlePanel.tsx` 는 cafe24 5-2·5-3 이 만진 파일과 같은
+  레포다. cafe24 6단계가 `진행 중` 인 동안에는 **머지를 시작하지 않는다**(§1 절차의 경고).
+
 ## 1. 세션 절차
 
 1. **다음 단계 찾기** — `§0 지금 할 것` 의 첫 줄을 한다. 사용자가 다른 것을 지정했으면 그쪽을 한다.
@@ -366,6 +383,99 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 | 7 | 실브랜드 1~2곳 시범 | 5개 몰 한도 안에서 |
 | 8 | 퍼블릭앱 심사 제출 | **외부 대기** |
 
+### brand-menu-schema — 브랜드관 메뉴·PC 설정 정규화
+
+스펙: [`plan/brand-menu-schema/`](./plan/brand-menu-schema/README.md) — 결정 요약은 `README.md`,
+**빌드 스펙 정본은 `implementation-plan.md`** 의 1~4단계.
+
+`klow_brand` 의 `b2bpc` 브랜치가 목업으로 만든 **메뉴 서랍(☰)** 과 **PC 설정 3개**를 서버에 얹는다.
+지금 그 값들은 서버 `BrandStorySchema` 가 `.strict()` 없는 `z.object` 라 **400 없이 조용히 버려지고**
+`localStorage['klow.brand.menu.v1']` 에만 산다.
+
+⚠️⚠️ **이 트랙이 나머지 둘(`storefront-menu-pc` · `b2b-wholesale`)의 게이트다.** 특히 후자는
+바이어 메뉴가 이 트랙의 메뉴를 물려받으므로 직접적이다.
+
+⚠️ **Json 에 더 쌓지 않고 정규화한다**(2026-09-28 사용자 결정) — 테이블 3벌
+(`BrandMenuItem`·`BrandPage`·`BrandPageChapter`) + `Brand` 스칼라 3개(PC). 근거는 ① `BrandTranslation`
+이 스칼라 컬럼 모델이라 Json 배열을 번역할 수 없고(공지 팝업이 테이블을 고른 바로 그 이유), ② `story`
+한 칸의 400 이 색·폰트·링크 저장까지 죽이는 함정이 `8줄 × 12챕터` 로 커지기 때문이다.
+
+⚠️ **정규화가 회귀 하나를 데이터에서 없앤다** — b2bpc 의 손님측 필터는 스토리 줄에 `enabled` 만 보고
+`&& !empty` 가드가 빠져 있어, 그대로 내면 **스토리를 만든 적 없는 브랜드 최대 41곳이 빈 페이지로 가는
+"Brand Story" 줄을 얻는다.** 스토리를 보통 메뉴 행으로 만들고 **내용이 있는 브랜드에만** 백필하면
+행이 없어 줄이 없다. 프론트 가드가 필요 없어진다.
+
+⚠️ `Brand.story` Json 은 **드롭하지 않고 dormant 로 남긴다**(DROP 은 롤링 비안전 + 백필 롤백 여지).
+그래서 **이행 어댑터**가 필요하다 — 배포 창의 구 프론트가 보내는 legacy `story` 를 서버가 테이블로
+번역한다. Json 컬럼에는 더 이상 쓰지 않는다(정본이 둘이 되면 안 된다).
+
+#### 1. b2bpc → `feat/storefront-b2b` 머지 · 정합
+
+본문은 트랙 문서 `§3` 의 1단계. 여기엔 읽을 것과 완료 기준만 둔다.
+
+- **읽을 것**: 트랙 문서 `§1 착수 게이트`·`§3` 1단계, `decisions/brand-account.md` 의 2026-09-18
+  3항목(탭 재편 · 재고 탭 · 주문 탭 톤), `decisions/storefront.md` 의 2026-08-25 브랜드 스토리
+- **건드리는 레포 · 배포 순서**: klow_brand 단독 · **배포 없음**
+- **스키마·데이터 위험**: 없음
+- **할 일**: `staging` 기준 `feat/storefront-b2b` 를 판 뒤 `origin/b2bpc` 머지. 충돌 **7파일**을
+  트랙 문서의 표대로 정합(⚠️ 상위탭 `TABS` 와 `pinnedStudioTab` 의 `'inventory'` 는 **staging 이 정본** —
+  b2bpc 는 재고 탭 복귀를 모른다)
+- **완료 기준**: `npm run build` · `npx tsc --noEmit` · `npx eslint <바꾼 파일>` 통과 · 브라우저로
+  **상위탭 4칸 + 디자인 서브탭 5칸 + 재고 탭 + 헤더 B2B pill** 이 모두 살아 있음을 확인
+- ⚠️ **순수 정합이다. 디자인을 고치지 않는다**(트랙 문서 §1 G1)
+
+#### 남은 단계 (제목과 순서만 — 착수 세션에서 명세한다)
+
+| # | 단계 | 한 줄 |
+|---|---|---|
+| 2 | 스키마 + 마이그레이션 + 백필 | 테이블 3 + 컬럼 3 · 백필 대상 운영 6~9곳 · **마이그레이션 단독 세션** |
+| 3 | 서버 API (메뉴 줄 단위 CRUD · PC 설정 · 공개 응답) | 이행 어댑터 포함 |
+| 4 | klow_brand 재배선 (줄 단위 mutation · 로컬 보관소 은퇴) | 화면은 그대로, 데이터 흐름만 |
+
+### storefront-menu-pc — 손님 화면(klow_web) 메뉴 서랍 + PC 브랜드관
+
+스펙: [`plan/storefront-menu-pc/implementation-plan.md`](./plan/storefront-menu-pc/implementation-plan.md) 의 1~3단계.
+
+b2bpc 의 PC 화면과 메뉴 서랍은 **klow_brand 스튜디오 목업 안에만** 있다. 손님이 보는 정본은 klow_web
+이고 그쪽은 `BrandStorefront`·PDP 전체에 **`md:`/`lg:`/`xl:` 가 0개**이고 `max-w-[580px]` 고정이다 —
+**데스크톱 레이아웃이 아예 없다.** 그래서 "옮겨 붙이기"가 아니라 **데스크톱 경로 신설**이다.
+
+⚠️⚠️ **선행 게이트: `brand-menu-schema` 완료.** 서버가 메뉴·PC 설정을 내려주지 않으면 그릴 것이 없다.
+
+⚠️ **PC 히어로에 circle 폴백을 신설한다**(2026-09-28 사용자 결정) — 운영 approved 26곳 중 **22곳(85%)은
+이미 PC 16:9 에 쓸 사진이 있고** 없는 곳은 4곳이다. 그 4곳을 `엑센트 그라데이션 + 큰 원형 로고 +
+브랜드명` 으로 받는다. ⚠️ **dev DB 브랜치는 정반대 그림(5곳만 보유)을 준다 — 판단 근거는 운영 수치다.**
+
+⚠️ **라우트를 만들지 않는다** — 메뉴는 화면 상태로만 둔다(브랜드 스토리가 `/{slug}/story` 를 포기한
+것과 같은 이유: `[brandSlug]/[influencer]` 충돌 + 단어의 영구 예약).
+
+⚠️ `brand-page-tokens.ts` 는 지금 **모바일 하드코딩 값의 복제**이고 드리프트가 코드로 막혀 있지 않다.
+이식하면서 모바일도 그 토큰을 참조하게 바꾼다 — 안 하면 같은 값이 3벌로 갈린다.
+
+### b2b-wholesale — B2B 도매 (바이어 페이지 + 도매가/MOQ + 주문 접수)
+
+스펙: [`plan/b2b-wholesale/`](./plan/b2b-wholesale/README.md) — 결정 요약은 `README.md`,
+설계 논거는 `flow.md`, **빌드 스펙 정본은 `implementation-plan.md`** 의 1~6단계.
+
+해외 바이어가 링크 하나로 들어와 도매가·MOQ 를 보고 장바구니에 담아 주문서를 넣는다. **브랜드가 이미
+꾸며 둔 브랜드관 위에 "도매가 + MOQ" 한 겹**을 얹는 구조라 브랜드가 입력하는 것은 제품당 넷
+(노출·도매가·통화·MOQ) + 선택적 수량 구간뿐이다.
+
+⚠️⚠️ **선행 게이트: `brand-menu-schema` 완료** — 바이어 메뉴가 브랜드관 메뉴를 물려받는다(두 벌 들지
+않는다). B2B 가 저장하는 것은 "안 보일 줄의 id 목록" 하나다.
+
+⚠️ 서버·어드민에 **B2B 도메인 코드가 0건**이다(전수 grep). 테이블 6벌 + 모듈 하나가 전부 신규다.
+`klow_admin` 은 **무변경**(어드민 관찰 화면은 스코프 밖 — 2026-09-28 사용자 결정).
+
+⚠️ **바이어 공개 페이지는 klow_web 에 둔다** — b2bpc 는 klow_brand `[slug]/b2b` 에 만들었지만
+**커스텀 도메인은 klow_web Vercel 프로젝트에만 붙어서** 브랜드 자기 도메인에서 열리지 않는다.
+
+⚠️⚠️ **`b2b` 를 정적 세그먼트로 만들면 이름이 "b2b" 인 할인 링크가 조용히 죽는다** —
+`Promotion.slug` 는 `name` 에서 자동 생성되고 예약어 검사가 없다. 5단계에서 가드 + 기존 데이터 선조회.
+
+⚠️ 결제(PG)는 스코프 밖이다. 다만 주문이 **금액 스냅샷을 통째로 들고 있어** 나중에 결제를 붙일 때
+스키마 변경이 필요 없다.
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -427,7 +537,20 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 | 19 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 대기 | ✗ | | |
 | 20 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 21 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
-| 22 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
+| 22 | brand-menu-schema | 1. b2bpc 머지 · 정합 | 대기 | ✗ | | |
+| 23 | brand-menu-schema | 2. 스키마 + 마이그레이션 + 백필 | 대기 | ✗ | | |
+| 24 | brand-menu-schema | 3. 서버 API (메뉴 CRUD · PC 설정 · 공개 응답) | 대기 | ✗ | | |
+| 25 | brand-menu-schema | 4. klow_brand 재배선 (로컬 보관소 은퇴) | 대기 | ✗ | | |
+| 26 | storefront-menu-pc | 1. klow_web 메뉴 서랍 + 페이지 렌더 | 대기 | ✗ | | |
+| 27 | storefront-menu-pc | 2. klow_web 브랜드관 PC (+ circle 폴백) | 대기 | ✗ | | |
+| 28 | storefront-menu-pc | 3. klow_web 제품상세 PC + 운영 배포 | 대기 | ✗ | | |
+| 29 | b2b-wholesale | 1. 스키마 + 마이그레이션 | 대기 | ✗ | | |
+| 30 | b2b-wholesale | 2. 서버 — 브랜드 API + PDF 업로드 | 대기 | ✗ | | |
+| 31 | b2b-wholesale | 3. 서버 — 공개 API + 주문 접수 + 알림메일 | 대기 | ✗ | | |
+| 32 | b2b-wholesale | 4. klow_brand /b2b 대시보드 실연결 | 대기 | ✗ | | |
+| 33 | b2b-wholesale | 5. klow_web 바이어 페이지 (모바일 + PC) | 대기 | ✗ | | |
+| 34 | b2b-wholesale | 6. 운영 배포 | 대기 | ✗ | | |
+| 35 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 >
@@ -443,13 +566,15 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 
 | 트랙 | 단계 | 완료 | 운영 배포 | 커밋 |
 |---|---|---|---|---|
-| storefront-sales-analytics | 운영 배포 | 2026-09-22 (사용자 확인) | ✓ | ⚠️ 체계 도입 전 배포라 해시 미기록 |
+| — | (없음) | | | |
 
-> 체계 트랙 3행은 [`archive/progress-2026-H2.md`](./archive/progress-2026-H2.md) 로 내렸다(트랙 퇴출 · `§2`).
+> **비어 있다.** 체계 3행과 storefront-sales-analytics 1행은
+> [`archive/progress-2026-H2.md`](./archive/progress-2026-H2.md) 로 내렸다.
+> 후자는 2026-09-28 에 `§7` 예산(600줄)을 넘겨 회수했다(트랙 3개가 13행을 더한 세션).
 >
-> ⚠️ `§7` 은 "커밋 해시 없이 `완료` 를 쓸 수 없다"가 규칙이다. 이 행은 **진행표가 생기기 전에 배포된
-> 건**이라 예외로 사유를 적어 남긴다. 앞으로 완료되는 단계에는 해시를 채운다.
-> 문서는 `archive/storefront-sales-analytics.md`, 현행 정본은 `server/modules/storefront-stats.md`.
+> ⚠️ **다음 회수 압력은 cafe24 6단계가 끝날 때 온다** — 그때 3pl·cafe24 의 `완료` 12행
+> (`§7` 1~18번 중 운영 배포가 `✗` 로 묶여 있는 것들)이 한꺼번에 퇴출 대상이 되고, `§9` 의 cafe24
+> 인계 메모 5건도 함께 내려간다.
 
 ---
 
