@@ -20,6 +20,14 @@
 - **B6. 메뉴를 두 벌 들지 않는다.** B2B 가 저장하는 것은 "안 보일 줄의 id 목록" 하나다.
 - **B7. 없는 기능에 서버를 만들지 않는다.** `wholesaleUsd`·`wholesaleDiscountPct`·`lowestTierPrice`·
   `tierSavingPct` 는 호출처 0건이고 환율 훅도 B2B 에서 안 쓴다(README 참고).
+- **B7-1. AI 는 레이아웃만, 금액은 서버가 원본 셀에서 읽는다.** `rate-sheet-ai.service.ts` 의 2단계
+  규칙을 그대로 따른다 — LLM 이 숫자를 옮겨 적으면 **자릿수 환각**이 난다. 저장 금액은 파일값과
+  항상 일치해야 한다.
+- **B7-2. `U/B`(박스당 수량)를 MOQ 로 쓰지 않는다.** 실파일에서 44·45·72·180·600 인 열이고
+  **최소주문량이 아니다.** 프롬프트와 미리보기 둘 다에서 갈라 놓는다.
+- **B7-3. 제품 매칭은 사람이 확정한다.** `Product` 에 SKU·바코드 필드가 **없다**
+  (`externalProductCode` 드롭됨). 유사도로 후보만 대고 **못 맞춘 줄은 버리지 않고** `<select>` 로
+  고르게 한다(b2bpc `B2bImportModal` 이 이미 그렇게 한다).
 - **B8. 목업 고지를 저장 경로와 함께 지운다.** "이 브라우저에만 저장돼요" 문구만 지우고 localStorage
   경로를 남기면 로컬분이 서버값을 덮는다(재고 탭 `DEMO_STOCK` 선례: 칩만 지우면 예시가 실데이터로
   읽힌다).
@@ -49,10 +57,10 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
 
 ## §3 단계
 
-⚠️⚠️ **이 트랙 전체가 대화 세션 하나다**(`PROGRESS.md` `§7` 6행) — **셋 중 가장 크다**
-(테이블 6벌 + 컨트롤러 2벌 + 3레포 화면). 아래 1~6은 세션 안의 순서이자 정지점이다.
-⚠️ 마이그레이션(1번)이 첫 순서다. 넘치면 `3번까지`(서버) / `4번부터`(화면) 경계에서 끊는다 —
-그 선이 배포 경계와도 같다.
+⚠️⚠️ **이 트랙 전체가 대화 세션 하나다**(`PROGRESS.md` `§7` 3행) — **셋 중 가장 크다**
+(테이블 6벌 + 컨트롤러 3벌 + **AI 추출** + 3레포 화면). 아래 1~7은 세션 안의 순서이자 정지점이다.
+⚠️ 마이그레이션(1번)이 첫 순서다. 넘치면 **`4번까지`(서버) / `5번부터`(화면)** 경계에서 끊는다 —
+그 선이 배포 경계와도 같다. ⚠️ **AI 추출(3번)이 이 세션의 가장 무거운 조각**이라 거기서 끊길 수 있다.
 
 
 ### 1. 스키마 + 마이그레이션
@@ -87,7 +95,32 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
   - `docs/server/modules/b2b.md` 신규 + `docs/server/README.md` 색인(**필수**)
 - **완료 기준**: curl 로 설정·도매가·자료 왕복 · PDF presign 200 · 검증 3층 · 라우트 수 증가 확인
 
-### 3. 서버 — 공개 API + 주문 접수 + 알림메일
+### 3. 서버 — **AI 도매표 추출** (미리보기 → 적용)
+
+- **읽을 것**: `README.md` 의 "AI 도매표 추출" 절,
+  `klow_server/src/modules/shipping/rate-sheet-ai.service.ts` **전문**(2단계 규칙 · digest 상한 ·
+  `SkippedRow` · `mode:'pairs'` 폴백), `klow_admin/src/components/AiRateImportModal.tsx`(미리보기 UX)
+- **건드리는 레포 · 배포 순서**: klow_server 단독
+- **스키마·데이터 위험**: 없음(추출은 미리보기까지 무상태)
+- **할 일**
+  - `src/modules/b2b/b2b-sheet-ai.service.ts` 신설 — ⚠️ **`shipping` 쪽을 일반화하지 않는다**
+    (축이 다르고 상한 상수가 그 도메인에 박혀 있어, 일반화하면 잘 도는 요율표 코드에 위험이 간다).
+    ⚠️ `src/common/` 에도 올리지 않는다 — 도메인 로직이고 `common/` 은 `modules/` 를 import 하지 않는다
+  - `POST /v1/brand/b2b/import/preview` (multipart) → `{ layout, rows: [{ sourceName, productId|null,
+    moq, currency, price, tiers[] }], skipped: [{ index, reason }] }`
+  - 적용은 기존 `PUT /products/:productId/terms` 를 **그대로 쓴다** — 새 적용 경로를 만들지 않는다
+    (검증이 두 벌이 되면 갈린다)
+  - ⚠️ **열을 잘못 짚었을 때 AI 재호출 없이 재추출**되게 `layout` 과 후보 열을 응답에 싣는다
+    (요율표 쪽이 이미 그 UX 다)
+  - ⚠️ 상한 상수는 `validation/b2b.ts` 와 **같은 것을 본다** — 추출기가 더 좁으면 저장 가능한 행을
+    `skipped[]` 로 조용히 버려서 400 이 아니라 "미리보기에서 행이 사라지는" 형태로 드러난다
+  - ⚠️ 버려진 행은 **사유와 함께 미리보기에 노출**한다(조용히 삼키지 않는다)
+- **완료 기준**: 사용자가 준 `(PRICE LIST) W.SKIN LABORATORY_EXW_Ver 2027 ★.xlsx` 로
+  **`PRIEC LIST` 시트 · 헤더 10행 · `PRICE (USD)` 열**을 맞춰 잡고,
+  ⚠️⚠️ **`U/B` 를 MOQ 로 잡지 않는다** · 제품 라인 구분행이 제품으로 오지 않는다 ·
+  추출 금액이 원본 셀값과 **글자 단위로 일치**
+
+### 4. 서버 — 공개 API + 주문 접수 + 알림메일
 
 *(착수 세션에서 정밀화. 아래는 골격.)*
 
@@ -103,7 +136,7 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
     테스트는 `RESEND_API_KEY= npm run start`
 - **완료 기준**: `published:false` 면 "준비 중" 응답(404 아님) · 주문 1건 → 메일 수신 → `notifiedAt` 기록
 
-### 4. klow_brand `/b2b` 대시보드 실연결
+### 5. klow_brand `/b2b` 대시보드 실연결
 
 *(착수 세션에서 정밀화.)*
 
@@ -116,10 +149,12 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
   - ⚠️ `notifyB2bOrder(order)` 는 지금 인자를 `_order` 로 무시하고 `return false` 다 — 교체 지점
   - PDF 업로드를 `uploadFile(file, 'doc')` 로
   - 상단 "이 브라우저에만 저장돼요 · 서버 연결 준비 중" 문구와 localStorage 경로를 **함께** 제거(B8)
-  - ⚠️ 가격표 임포트(512줄)는 **클라이언트 그대로** — 서버 작업 없음(B7 과 같은 정신)
+  - ⚠️ **가격표 임포트는 두 경로 병존** — KLOW 다운로드 양식은 기존 클라이언트 휴리스틱(512줄)이
+    그대로 받고, **브랜드 원본 파일은 3번의 AI 추출**로 보낸다(배송비용 탭 선례). 휴리스틱을 지우지 않는다
+  - `B2bImportModal` 의 미리보기·`<select>` 제품 고르기 UI 를 **AI 경로에도 재사용**한다(B7-3)
 - **완료 기준**: **다른 기기에서 같은 도매가** · 주문 1건 → 알림메일 수신 → 상태 3단 전이
 
-### 5. klow_web 바이어 페이지 (모바일 + PC)
+### 6. klow_web 바이어 페이지 (모바일 + PC)
 
 *(착수 세션에서 정밀화.)*
 
@@ -139,7 +174,7 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
 - **완료 기준**: `klow.kr/{slug}/b2b` **와 커스텀 도메인 `{domain}/{slug}/b2b` 양쪽에서 열림** ·
   모바일·PC 둘 다 · 장바구니 → 주문서 → 접수 한 바퀴 · **기존 `/{slug}/{할인링크}` 무회귀**
 
-### 6. 운영 배포
+### 7. 운영 배포
 
 - **배포 순서**: klow_server → klow_brand → klow_web · 마이그레이션 먼저(staging → 운영)
 - ⚠️ **운영 마이그레이션 큐** — 운영은 164개로 dev(167)보다 3개 적다. 이 트랙의 것은 3PL·카페24
@@ -160,3 +195,7 @@ enum: `B2bCurrency`(USD KRW EUR JPY CNY) · `B2bDocLang`(en zh ja es etc) ·
 | R6 | 제품 삭제가 과거 주문 줄을 통째로 지운다 | B3 `onDelete: SetNull` |
 | R7 | 바이어 트래픽이 브랜드관 D2C 퍼널에 섞인다 | 집계하지 않는다([`flow.md`](./flow.md) §6) |
 | R8 | dev 에서 알림메일이 실제로 발송된다 | `RESEND_API_KEY=` 로 비워 실행 |
+| R9 | ⚠️⚠️ AI 가 `U/B`(박스당 수량)를 MOQ 로 잡아 최소주문량이 통째로 틀린다 | B7-2 · 3번 완료 기준 |
+| R10 | ⚠️ AI 가 금액을 옮겨 적어 자릿수 환각 | B7-1 (AI=레이아웃 / 서버=원본 셀) |
+| R11 | 제품 매칭 실패분을 조용히 버린다 | B7-3 · `skipped[]` 를 사유와 함께 노출 |
+| R12 | 추출기 상한이 저장 스키마보다 좁아 행이 미리보기에서 사라진다 | 3번에서 같은 상수를 본다 |
