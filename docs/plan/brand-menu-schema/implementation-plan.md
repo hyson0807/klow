@@ -123,6 +123,11 @@ model BrandPageChapter {
 
 ## §3 단계
 
+⚠️⚠️ **이 트랙 전체가 대화 세션 하나다**(`PROGRESS.md` `§7` 4행 · `§6 의 한 트랙 = 한 세션`).
+아래 1~4는 **세션을 나누는 선이 아니라 세션 안에서 지키는 순서이자 넘칠 때의 정지점**이다.
+⚠️ 마이그레이션(2번)을 먼저 치운다 — 넘쳐도 스키마가 끝난 깨끗한 지점에서 멈출 수 있다.
+
+
 ### 1. b2bpc → `feat/storefront-b2b` 머지 · 정합
 
 - **읽을 것**: 이 문서 `§1`, [`decisions/brand-account.md`](../../decisions/brand-account.md) 의
