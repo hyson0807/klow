@@ -62,7 +62,7 @@
 - **금액은 받지 않는다.** 바디는 `{buyer:{company,contact,email,country,note}, lines:[{productId, qty}]}` 뿐이고,
   서버가 **지금의 거래 조건**으로 단가(구간 적용)를 다시 계산해 스냅샷으로 굳힌다(B3). 계산은 최소단위 정수.
 - 400: `b2b_product_unavailable`(없음·숨김·가격 0) · `b2b_mixed_currency`(한 주문서 = 한 통화) ·
-  `b2b_invalid_qty`(MOQ 배수가 아님 — 바이어 화면 `clampQty` 와 같은 규칙) · `b2b_duplicate_line`.
+  `b2b_invalid_qty`(MOQ 미만 — 배수 조건은 없다. 바이어 화면 `clampQty` 와 같은 규칙) · `b2b_duplicate_line`.
   409: `b2b_not_published`.
 - 알림메일은 **저장 뒤에** 보낸다(`EmailService.sendB2bOrderNotice`, replyTo = 바이어). 실패해도 주문은 남고
   `notifiedAt` 이 null 로 남아 대시보드가 그대로 고지한다. `orderEmail` 이 빈 값이면 보내지 않는다.
