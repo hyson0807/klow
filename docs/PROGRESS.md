@@ -28,9 +28,8 @@ b2bpc 이식 3트랙(`§7` 1·2·3행)이 **2026-09-28 에 전부 끝났다** �
 아래 한 줄(staging → main)로 묶여 있다. 남은 일의 대부분은 **사용자 작업**(staging 왕복·운영 배포·카페24
 콘솔)이라 세션이 할 수 있는 것은 그 확인·기록이다.
 
-- ⚠️⚠️ **B2B 운영 배포 전에 운영 SELECT 한 줄** — `SELECT id, "brandId" FROM "Promotion" WHERE slug IN ('b2b','opengraph-image');`
-  1건이라도 있으면 klow_web 배포 순간 그 할인 링크가 B2B 페이지에 먹힌다(`§9` b2b 메모). 세션이 Neon MCP 에서
-  운영 프로젝트를 특정하지 못해 **하지 않았다**
+- ✅ **B2B 할인 링크 슬러그 충돌 없음**(2026-09-28 운영 SELECT) — `Promotion.slug IN ('b2b','opengraph-image')` 및
+  `b2b-%` **0건**(운영 할인 링크 전체 2건). klow_web 배포가 기존 링크를 죽이지 않는다. 신규 생성은 서버 가드가 막는다
 - git 브랜치는 세 레포 모두 **`feat/storefront-b2b`**(push 안 함), DB 는 Neon `dev/feat-pc`
 
 #### ⚠️⚠️ 운영 배포는 여전히 한 줄로 묶여 있다
@@ -677,15 +676,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 - **문서를 고친 것**: `server/modules/b2b.md`(신규) + `README.md` 색인 · `upload.md`(kind doc) · `promotions.md`(예약 슬러그) ·
   `decisions/storefront.md` 2026-09-28-3 + 색인 2곳 · 계획서 6단계 `STOREFRONT_SEGMENTS` 정정 · 이 문서 `§0`/`§7`
-- **확인한 것**: 서버 curl 왕복(설정·조건·자료·PDF presign 200/400·주문·상태) · 실파일 W.SKIN 으로 AI 추출 5회(37행 · 원본 셀과
+- **확인한 것**: 운영 `Promotion` 슬러그 충돌 0건(SELECT) · 서버 curl 왕복(설정·조건·자료·PDF presign 200/400·주문·상태) · 실파일 W.SKIN 으로 AI 추출 5회(37행 · 원본 셀과
   글자 단위 일치 · **5회 모두 AI 가 U/B 를 MOQ 로 짚고 서버가 되돌림**) · klow_brand 대시보드 브라우저(:3012 worktree — 입력 2칸 →
   PUT 1회 · 주문 모달 · AI 임포트 → 적용 PUT) · klow_web 바이어 페이지 브라우저(390px·1440px — 목록·상세·서랍·주문 접수
   600개×$11.20=$6,720 · `/blink`·`/blink/{할인코드}` 200 무회귀) · 검증 3층 + 두 프론트 `next build`. 테스트 데이터는 지웠다
-- **확인하지 못한 것**: ⚠️ **운영 `Promotion.slug='b2b'` SELECT**(`§0`) · ⚠️ 실제 Resend 발송(dev 는 `RESEND_API_KEY=` 로 콘솔 로그만) ·
+- **확인하지 못한 것**: ⚠️ 실제 Resend 발송(dev 는 `RESEND_API_KEY=` 로 콘솔 로그만) ·
   커스텀 도메인 `{domain}/b2b` 실접속(코드로만 — 미들웨어 무변경) · AI 줄별 경고(`rows[].warnings`)는 미리보기에 아직 안 그린다 ·
   사용자 :3002 klow_brand dev 서버는 청크 404 로 깨져 있다(내 것 아님, 건드리지 않았다)
-- **남은 일 (이 순서로)**: ① 운영 SELECT · ② staging → 운영 배포(`§0` 표 5번 마이그레이션, server → brand → web) ·
-  ③ 실브랜드 1곳으로 도매가·자료·주문 한 바퀴(계획 7단계 완료 기준)
+- **남은 일 (이 순서로)**: ① staging → 운영 배포(`§0` 표 5번 마이그레이션, server → brand → web) ·
+  ② 실브랜드 1곳으로 도매가·자료·주문 한 바퀴(계획 7단계 완료 기준)
 - **다음 단계가 알 것**: 바이어 링크 = klow_web `/{slug}/b2b`(klow_brand `[slug]/b2b` 는 지웠다). klow_web `[brandSlug]/` 에 정적
   세그먼트를 더하면 서버 `RESERVED_PROMOTION_SLUGS` 에도 넣을 것. 대시보드 저장은 `useB2bConfig` 의 디바운스 큐이고, 편집 중에는
   `me` 를 다시 시드하지 않는다(다른 기기의 변경은 탭을 다시 열면 보인다)
