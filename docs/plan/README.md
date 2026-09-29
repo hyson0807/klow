@@ -14,6 +14,7 @@
 | [brand-menu-schema/](./brand-menu-schema/README.md) | 브랜드관 **메뉴 서랍(☰)** 과 **PC 설정**을 `Brand.story` Json 에서 정규화 테이블 3벌 + `Brand` 스칼라 3개로 옮긴다. `b2bpc` 목업이 localStorage 에만 저장되던 것을 서버로 올리는 트랙이고 **나머지 두 트랙의 게이트** |
 | [storefront-menu-pc/](./storefront-menu-pc/implementation-plan.md) | 손님이 보는 klow_web 에 메뉴 서랍과 **데스크톱 브랜드관·제품상세**를 신설한다. klow_web 은 지금 브레이크포인트가 0개인 모바일 전용이라 이식이 아니라 신설이다 |
 | [b2b-wholesale/](./b2b-wholesale/README.md) | 해외 바이어가 링크 하나로 **도매가·MOQ·수량구간**을 보고 주문서를 넣는다. 브랜드관 위에 한 겹을 얹는 구조 — 테이블 6벌 + 전용 모듈이 전부 신규다. **브랜드 원본 가격표 엑셀에서 AI 로 MOQ·도매가 추출**(`rate-sheet-ai` 2단계 규칙 재사용). 결제(PG)는 스코프 밖 |
+| [brand-shipping-fee/](./brand-shipping-fee/README.md) | 브랜드가 **국가별 고객 부담 배송비**를 직접 정한다. 지금은 무료배송 `ON/OFF` 두 칸뿐이라 전액 부담 아니면 전액 전가뿐 — `ProductCountryPrice` 컬럼 하나로 0원~임의 금액을 고르게 한다. `NULL` = 지금과 같은 500g 요율이라 미설정 브랜드는 동작 불변 |
 
 ## 새 트랙을 만들 때
 
