@@ -142,9 +142,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 72건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 73건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 72건 중 56건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 73건 중 57건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -177,6 +177,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-28` [브랜드관 메뉴·페이지·PC 설정 정규화 — `Brand.story` Json 은 dormant](docs/decisions/storefront.md#2026-09-28)
 - `2026-09-28` [손님 화면 메뉴 서랍 + PC 브랜드관·제품 상세](docs/decisions/storefront.md#2026-09-28-2)
 - `2026-09-28` [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (MOQ 열 없으면 U/B = MOQ · STOREFRONT_SEGMENTS 에 b2b 넣지 않음)](docs/decisions/storefront.md#2026-09-28-3)
+- `2026-09-29` [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](docs/decisions/storefront.md#2026-09-29)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 
