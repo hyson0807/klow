@@ -165,15 +165,19 @@ shippingKrwOverride: z.coerce.number().int().min(0).max(1_000_000).nullish()
   - ⚠️ `mapBrandProduct` 왕복 — 무료배송을 켠 제품을 구 스튜디오 형식으로 읽으면
     `freeShippingCountries` 에 그 국가가 그대로 들어온다
 
-### 2. 청구 커널
+### 2. 청구 커널 + 어드민
 
-- **읽을 것**: `§1` G1·G3·G4·G5, `server/modules/orders.md` 의 `quote`/`create` 절,
+⚠️ **두 레포가 한 단계인 이유**: 어드민 제품 폼은 **파괴적 쓰기 경로**(G2)라, 브랜드가 금액을
+설정하기 시작하기 전에 먼저 숫자를 표현할 수 있어야 한다. 커널과 같은 배포 창에 묶어야
+"서버는 새 값을 받는데 어드민이 그걸 지우는" 구간이 생기지 않는다.
+
+- **읽을 것**: `§1` G1·G2·G3·G4·G5, `server/modules/orders.md` 의 `quote`/`create` 절,
   [`reference/pricing-model.md`](../../reference/pricing-model.md) 의 배송비 절,
   [`decisions/settlement.md` 2026-09](../../decisions/settlement.md#2026-09)
-- **건드리는 레포 · 배포 순서**: **klow_server**(단독 선배포. 프론트가 아직 구버전이어도
-  이행 어댑터가 받는다)
+- **건드리는 레포 · 배포 순서**: **klow_server → klow_admin**
+  (뒤집으면 어드민이 서버가 모르는 필드를 보내 zod 가 **조용히 버린다**)
 - **스키마·데이터 위험**: **없음**
-- **할 일**
+- **할 일 — klow_server**
   - `country-price.ts` — `resolveShippingKrw(row, iso2, defaultRateKrw): number`
     (행 없음·`NULL` → `defaultRateKrw`). `resolveFreeShipping` 은 여기서 **파생**시키거나 제거
   - `chargeable-brands.ts` — **2패스 재작성**(G1). `chargeableBrandIds` 흡수.
@@ -181,27 +185,41 @@ shippingKrwOverride: z.coerce.number().int().min(0).max(1_000_000).nullish()
   - `orders.service.ts:884` — `chargeableBrands` 를 **KRW 기준**으로(G3)
   - `price-line.ts:305` — `freeShipping: cp?.shippingKrwOverride === 0`
     (⚠️ onsite 경로의 고정 `false` 는 그대로 — `onsite-pricing.spec.ts` 가 잠그고 있다)
-  - 어드민 주문 상세 응답에 `Order.shippingFeeByBrand` 를 싣는다(3단계가 그릴 표의 재료)
+  - 어드민 주문 상세 응답에 `Order.shippingFeeByBrand` 를 싣는다
   - `server/modules/orders.md`·`products.md` 갱신
-- **완료 기준** — 기존 스펙 3개(`chargeable-brands` · `onsite-pricing` · `promotion-pricing`)를
-  의미 보존한 채 번역하고, **새 회귀 잠금 5개**를 넣는다.
-  ⚠️ `test/app.e2e-spec.ts` 는 DB 없는 부팅 스모크라 이 변경을 **잡아 주지 않는다** — 잠금은
-  전부 유닛 스펙이다
-  1. 혼합 라인(0원 + 5,000원) → 브랜드 금액 **5,000원** (max)
-  2. **라인 순서를 뒤집어도 `byBrand` 동일** (G1 직격)
-  3. `NULL` / 행 없음 → 기본 요율 (fail-closed 유지)
-  4. 다른 국가 행만 있으면 목적국은 기본 요율
-  5. **브랜드마다 금액이 다를 때도 `Σ byBrand === total`**
+- **할 일 — klow_admin**
+  - `components/forms/ProductForm.tsx` — 국가별 무료배송 토글 → **숫자 입력**.
+    `buildCountryPrices` 와 state(`freeShippings: string[]` → 금액 맵), `ProductEditor.tsx` 역매핑
+    ⚠️ 미설정 국가에 **그 나라 기본 요율을 placeholder 로** 보여준다(빈칸 = 요율표 추종)
+  - 주문 상세에 **브랜드별 배송비 표**
+- **완료 기준**
+  - 기존 스펙 3개(`chargeable-brands` · `onsite-pricing` · `promotion-pricing`)를 의미 보존한 채
+    번역하고 **새 회귀 잠금 5개**를 넣는다. ⚠️ `test/app.e2e-spec.ts` 는 DB 없는 부팅 스모크라
+    이 변경을 **잡아 주지 않는다** — 잠금은 전부 유닛 스펙이다
+    1. 혼합 라인(0원 + 5,000원) → 브랜드 금액 **5,000원** (max)
+    2. **라인 순서를 뒤집어도 `byBrand` 동일** (G1 직격)
+    3. `NULL` / 행 없음 → 기본 요율 (fail-closed 유지)
+    4. 다른 국가 행만 있으면 목적국은 기본 요율
+    5. **브랜드마다 금액이 다를 때도 `Σ byBrand === total`**
+  - 어드민에서 제품 하나에 국가별로 **다른 금액**을 넣고 저장 → 다시 열었을 때 그대로
+  - ⚠️ **어드민이 배송비를 건드리지 않고 제품을 저장해도 금액이 보존된다**(G2-a 실측)
+- **(넘치면) 정지점**: klow_server 까지 끝내고 커밋 → `진행 중(부분 완료)`. 어드민은 다음 세션
 
-### 3~5 (제목과 순서만 — 착수 세션에서 명세한다)
+### 3. 브랜드·손님 화면 + 문서 정정 + 운영 배포 (제목과 순서만 — 착수 세션에서 명세한다)
 
 앞 단계가 끝나야 전제가 확정되므로 지금 정밀하게 쓰지 않는다 — **틀린 명세는 없는 명세보다 나쁘다.**
 
-| # | 단계 | 한 줄 | 레포 |
-|---|---|---|---|
-| 3 | **klow_admin** | 제품 폼 국가별 토글 → 숫자 입력(기본값 표시 포함) · 주문 상세에 브랜드별 배송비 표 | klow_admin |
-| 4 | **klow_brand** | `PriceModal` 스위치 → 금액 입력+슬라이더 · `PriceStep` 일괄/카드 · `ProductForm` state · `cost-pricing` 왕복 · **`prepaidKrw` 산식(R8)** · **max 경고 문구(R7)** | klow_brand |
-| 5 | **klow_web + 마무리** | 견적 전 추정 제거(R4) · 주석/문서 전수 정정(R9) · `freeShipping` 드롭 예약 · **운영 배포** | klow_web |
+- **건드리는 레포 · 배포 순서**: **klow_brand → klow_web**
+- **세션 안 순서 (= 넘칠 때의 정지점)**
+
+| 순서 | 무엇 | 한 줄 |
+|---|---|---|
+| ① | **klow_brand** | `PriceModal` 스위치 → 금액 입력+슬라이더 · `PriceStep` 일괄/카드 · `ProductForm` state · `cost-pricing` 왕복 · **`prepaidKrw` 산식(R8)** · **max 경고 문구(R7)** · 너무 작은 금액 경고(G3) |
+| ② | **klow_web** | 견적 전 추정 제거(R4) |
+| ③ | **문서·주석** | R9 전수 정정 (특히 efs-billing 의 *"고칠 곳은 요율표"* 문장) · `freeShipping` 드롭 예약 · 보존 shim 제거 예약 |
+| ④ | **운영 배포** | 마이그레이션은 cafe24·b2b 5개 **뒤 6번째**. 배포는 `server → admin → brand → web` |
+
+⚠️ **①이 이 단계에서 가장 무겁다.** 넘치면 ① 끝에서 끊고 `진행 중(부분 완료)` 로 기록한다.
 
 ---
 
@@ -228,7 +246,7 @@ shippingKrwOverride: z.coerce.number().int().min(0).max(1_000_000).nullish()
 
 브랜드가 금액을 직접 정하면 이 식의 `prepaidKrw` 는 **브랜드가 설정한 값**이어야 한다. 안 고치면
 브랜드가 *"배송비를 올렸는데 손익 표시가 안 움직인다"* 를 보거나, 더 나쁘게 **잘못된 손익을 보고
-가격을 결정**한다. **4단계 필수 항목.**
+가격을 결정**한다. **3단계 ① 필수 항목.**
 
 ### R4 — klow_web 낙관적 추정의 "상한 보장"이 깨진다
 
@@ -243,7 +261,7 @@ shippingKrwOverride: z.coerce.number().int().min(0).max(1_000_000).nullish()
 ⚠️ **카트 라인에 금액을 스냅샷하지 말 것** — 무료배송 불린을 카트에서 뺀 이유
 (`useCartStore` v2 마이그레이션)와 정확히 같은 이유로 배송지 변경 시 어긋난다.
 
-### R9 — 주석·문서 드리프트 (5단계에서 전수 정정)
+### R9 — 주석·문서 드리프트 (3단계 ③에서 전수 정정)
 
 `freeShipping` 또는 *"브랜드당 같은 금액"* 을 단언하는 곳:
 `prisma/schema.prisma`(`ProductCountryPrice` · `Order` 주석) · `src/pricing/` 4파일
