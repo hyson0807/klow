@@ -810,7 +810,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 5 | brand-shipping-fee | 2. 청구 커널(2패스 재작성) + 어드민 | 완료 | ✗ | 2026-09-30 | 5473216 / 3a8b7a1 / - / - / (이 커밋) |
 | 6 | brand-shipping-fee | 3. 브랜드·손님 화면 + 문서 정정 + **staging 배포** | 완료 | ✗ | 2026-09-30 | 5a02548 / - / 27a314a / 0b91560 / (이 커밋) |
 | 7 | seeding-bulk-invoice | A. klow_server — 송장 캐리어 = 국가 고정 캐리어(무게 분기는 예상 배송비 전용) + `POST /v1/brand/seeding/bulk-issue` | 완료 | ✗ | 2026-09-30 | c309ee1 / - / - / - / (이 커밋) |
-| 8 | seeding-bulk-invoice | B. klow_admin 분기 문구 + klow_web 캐리어 미러 + klow_brand 엑셀 일괄 송장(taeyoung30 목업) 실연결 — 코드 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | c309ee1 / 93fd71c / bb51637 · a7d19d9 / 6da7ee9 / (이 커밋) |
+| 8 | seeding-bulk-invoice | B. klow_admin 분기 문구 + klow_web 캐리어 미러 + klow_brand 엑셀 일괄 송장(taeyoung30 목업) 실연결 + **후속: 새 송장 위로 정렬·캠페인명 변경·엑셀 자동 캠페인** — 코드 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | c309ee1 · f42f69b / 93fd71c / bb51637 · a7d19d9 · 89570ee / 6da7ee9 / (이 커밋) |
 | 9 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 진행 중(부분 완료) | ⚠️ 코드만 | 2026-09-30 | **운영 마이그레이션 5개 적용됨 · 라우트 살아 있음 · ⚠️ `backfill:brand-menu` 미실행** |
 | 10 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
@@ -871,6 +871,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### seeding-bulk-invoice — B행 후속 (완료 · push 대기, 사용자 요청)
+
+- "새로 만든 게 아래로 간다"의 원인: `groupByCampaign` 이 **'미분류'를 맨 아래에 고정**했다 → 제거(섹터 = 최근 건이 든 순). 발송 대기는 **링크 발급 시각** 순이라 옛 다인원 링크의 새 신청자가 아래에 깔렸다 → 신청 시각 + 캠페인 섹터(이름 있는 캠페인 안은 발급 순 = 엑셀 순, 미분류 안은 최신순).
+- 캠페인명 변경 `PATCH campaigns/rename`(서버 `f42f69b`) + 섹터 헤더 ✏️(`CampaignSectorHeader`). 이미 있는 이름이면 "합칠까요?".
+- 엑셀 발급은 이름을 비우면 `엑셀 발송 M/D HH:mm` 을 **클라가 배치당 1번** 만든다(서버가 만들면 10행 청크마다 분이 바뀌어 배치가 갈라진다).
+- 검증: 서버 typecheck · seeding jest 61 · 브랜드 tsc·eslint·build · `check:bulk-invoice` ALL PASS. 🔲 **화면 확인 못 함** — 로컬 :3002 `next dev` 가 켜진 채로 `npm run build` 를 돌려 `.next` 가 덮여 dev 서버가 '불러오는 중'에서 멈췄다(사용자에게 재시작 안내).
 
 ### seeding-bulk-invoice — B행 (완료 · push 대기)
 

@@ -66,6 +66,7 @@
 | POST   | `/v1/brand/seeding/links`                   | 시딩 링크 발급 — single 은 `count`(1~100) 개, multi 는 `maxClaims`(2~500) 정원 링크 1개 |
 | POST   | `/v1/brand/seeding/reissue`                 | **같은 주소로 다시 보내기** — 소스 주문 배송지 복사 + 링크·확정 claim·주문·EFS 송장 생성, `SeedingLinkDTO` 1개 반환 (`THROTTLE_REISSUE` 10회/분) |
 | POST   | `/v1/brand/seeding/bulk-issue`              | **엑셀 일괄 송장** — `{campaignName?, rows[1..20]}`, 행마다 링크·확정 claim·주문·EFS 송장 생성. **행 단위 격리**라 늘 200 + `results[]`(`clientRowId`, `ok`, 실패면 `error` / 성공이면 `linkId`·`orderId`·`shipmentStatus`) (`THROTTLE_BULK_ISSUE` 30회/분) |
+| PATCH  | `/v1/brand/seeding/campaigns/rename`        | **캠페인 이름 변경** — `{from, to}`(1~40자). 캠페인은 링크마다 적힌 `campaignName` 문자열이라 이 브랜드에서 `from` 이름을 가진 링크 **전부**를 바꾼다. 이미 있는 이름이면 **합쳐진다**(확인은 klow_brand). 바꿀 링크가 없으면 404. '미분류'(null)는 대상 아님 |
 | DELETE | `/v1/brand/seeding/links/:id`               | 신청자 없는 링크 취소(soft, `cancelled`)                        |
 | PATCH  | `/v1/brand/seeding/links/:id/close`         | 다인원 링크 수동 마감/재개방(`closed`) — 정원이 남아도 신청을 닫는다 |
 | PATCH  | `/v1/brand/seeding/claims/:id/review`       | "후기 제작 완료" 토글 — **신청자 단위**(`reviewCompleted`)      |
