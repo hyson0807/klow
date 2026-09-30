@@ -22,14 +22,17 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 10행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
+**`§7` 7·8행 — seeding-bulk-invoice**(엑셀 일괄 송장 + 송장 캐리어 고정화). 2026-09-30 사용자 지시로
+**6행 뒤에 끼워 넣고 바로 진행 중**이다 — 기존 7~11행은 9~13행으로 밀렸다(아래 서술의 행 번호는 새 번호로 고쳤다).
+
+**`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
-그다음이 **`§7` 7행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
+그다음이 **`§7` 9행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
 ⚠️ **사용자 확인이 필요한 운영 작업**이라 이 세션에서도 손대지 않았다.
 
 **brand-shipping-fee 트랙(4·5·6행)은 2026-09-30 에 끝났고 ✅ staging 배포까지 확인했다.**
 사용자가 네 레포를 push 했고(로컬 `staging` == `origin/staging`), staging 에서 **새 코드가 도는
-것을 실측**했다 — 트랙의 종착점(2026-09-30 사용자 결정)에 도달했다. **운영 배포는 7행이 함께
+것을 실측**했다 — 트랙의 종착점(2026-09-30 사용자 결정)에 도달했다. **운영 배포는 9행이 함께
 끌고 나간다.**
 
 | 면 | 확인 방법 | 결과 |
@@ -66,7 +69,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ### ⚠️⚠️ 2026-09-30 우선순위 변경 (사용자)
 
 **brand-shipping-fee 를 cafe24 운영 배포보다 앞으로** 올렸고, 그 트랙의 종착점을 **staging 배포까지**로
-잡았다(운영 배포는 나중에 7행이 함께 끌고 나간다). cafe24 3단계(구 4·5·6행)는 **7·8·9행**으로 내려갔다.
+잡았다(운영 배포는 나중에 9행이 함께 끌고 나간다). cafe24 3단계(구 4·5·6행)는 **9·10·11행**으로 내려갔다.
 
 ### ⚠️⚠️ 운영 상태가 이 문서보다 앞서 있었다 (2026-09-30 실측)
 
@@ -85,7 +88,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 → klow_web 이 배포돼 있다면 **전 브랜드의 메뉴 서랍이 `상점` 한 줄뿐**이다.
 **`npm run backfill:brand-menu`**(dry-run 먼저 → `-- --apply`)를 돌려야 한다. 대상 6~9곳 · 멱등.
-⚠️ 이건 `§7` 7행(cafe24 운영 배포)의 항목이고 **이 세션에서는 손대지 않았다** — 사용자 확인이 필요하다.
+⚠️ 이건 `§7` 9행(cafe24 운영 배포)의 항목이고 **이 세션에서는 손대지 않았다** — 사용자 확인이 필요하다.
 
 🔲 **운영 배포 때 함께 가는 마이그레이션이 둘 생겼다**(순서대로) —
 `20260930042335_add_product_country_shipping_override` → `20260930065107_shipping_override_to_usd_cents`.
@@ -396,7 +399,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.
 - ⚠️ 되돌릴 때도 함께다. 카페24만 빼려면 **`DROP TABLE` 이라 롤링 안전하지 않다**
 - **불변식**: 트랙 문서 §1-A (브랜치·DB 를 새로 파지 않는다)
 
-#### 6단계(운영 배포)에 남은 일 — `§7` **7행**
+#### 6단계(운영 배포)에 남은 일 — `§7` **9행**
 
 명세는 트랙 문서 §8 의 **6단계** + `§1-A`.
 
@@ -733,16 +736,30 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | **4** | 스키마 · 마이그레이션 · 쓰기 경로 | klow_server (**배포 없음**) | 완료 2026-09-30 |
 | **5** | 청구 커널(2패스) + 어드민 | klow_server → klow_admin | 완료 2026-09-30 |
 | **6** | 브랜드·손님 화면 + 문서 정정 + **staging 배포** | klow_brand → klow_web (+ 서버 주석) | 완료 2026-09-30 · ✅ staging 배포 확인 |
-| **10** | **단위 전환 — 원 → USD 센트** (사용자 요청) | klow_server → klow_admin → klow_brand | 완료 2026-09-30 · push 대기 |
+| **12** | **단위 전환 — 원 → USD 센트** (사용자 요청) | klow_server → klow_admin → klow_brand | 완료 2026-09-30 · push 대기 |
 
-⚠️ **종착점이 staging 배포다**(2026-09-30 사용자 결정) — 운영 배포는 `§7` 7행이 함께 끌고 나간다.
+⚠️ **종착점이 staging 배포다**(2026-09-30 사용자 결정) — 운영 배포는 `§7` 9행이 함께 끌고 나간다.
 ⚠️ **`staging` 브랜치 위에서 직접 작업했고 staging DB(`ep-icy-flower`)에 직접 마이그레이션했다**
 (사용자 결정) — 이 트랙에는 별도 git·DB 브랜치가 없다.
 
-**세 단계가 다 끝났고 staging 배포까지 확인했다(2026-09-30).** 남은 것은 `§7` 7행이 함께 끌고
+**세 단계가 다 끝났고 staging 배포까지 확인했다(2026-09-30).** 남은 것은 `§7` 9행이 함께 끌고
 나가는 운영 배포뿐이다(확인 방법과 결과는 `§0` 표). ⚠️ **보존 shim 과 `freeShipping` 드롭은 아직 예약 상태다** —
 걷어내는 시점은 `klow_admin`·`klow_brand`·`klow_web` **운영 배포가 끝난 뒤**이고, 조건과 근거는
 [`decisions/shipping-seeding.md` 2026-09-30](./decisions/shipping-seeding.md#2026-09-30) 이 갖는다.
+
+### seeding-bulk-invoice — 엑셀로 자동 국제 송장 발급
+
+스펙: [`plan/seeding-bulk-invoice/`](./plan/seeding-bulk-invoice/README.md) — 결정 요약은 `README.md`,
+**빌드 스펙 정본은 `implementation-plan.md`**.
+
+브랜드가 링크 대신 **수령인 명단 엑셀**을 올려 바로 EFS 송장을 발급한다(klow_brand `taeyoung30` 목업 `ceba630` 을 실연결).
+같은 트랙에서 **송장 캐리어를 국가 고정 캐리어로 고정**한다 — 무게 분기는 예상 배송비 확인용으로만 남는다(2026-09-30 사용자 결정).
+마이그레이션 0건 · **`staging` 브랜치 + staging DB 에서 직접**(사용자 결정).
+
+| `§7` | 단계 | 레포 · 배포 순서 |
+|---|---|---|
+| **7** | A. 캐리어 고정화 + `POST /v1/brand/seeding/bulk-issue` | klow_server |
+| **8** | B. 분기 문구 + 엑셀 모달 실연결 + staging push | klow_admin → klow_brand (서버 뒤) |
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -790,14 +807,16 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 4 | brand-shipping-fee | 1. 스키마 · 마이그레이션 · 쓰기 경로 | 완료 | ✗ | 2026-09-30 | e387cda / - / - / - / (이 커밋) |
 | 5 | brand-shipping-fee | 2. 청구 커널(2패스 재작성) + 어드민 | 완료 | ✗ | 2026-09-30 | 5473216 / 3a8b7a1 / - / - / (이 커밋) |
 | 6 | brand-shipping-fee | 3. 브랜드·손님 화면 + 문서 정정 + **staging 배포** | 완료 | ✗ | 2026-09-30 | 5a02548 / - / 27a314a / 0b91560 / (이 커밋) |
-| 7 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 진행 중(부분 완료) | ⚠️ 코드만 | 2026-09-30 | **운영 마이그레이션 5개 적용됨 · 라우트 살아 있음 · ⚠️ `backfill:brand-menu` 미실행** |
-| 8 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
-| 9 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
-| 10 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
-| 11 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
+| 7 | seeding-bulk-invoice | A. klow_server — 송장 캐리어 = 국가 고정 캐리어(무게 분기는 예상 배송비 전용) + `POST /v1/brand/seeding/bulk-issue` | 완료 | ✗ | 2026-09-30 | c309ee1 / - / - / - / (이 커밋) |
+| 8 | seeding-bulk-invoice | B. klow_admin 분기 문구 + klow_brand 엑셀 일괄 송장(taeyoung30 목업) 실연결 + **staging push** | 대기 | ✗ | | |
+| 9 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 진행 중(부분 완료) | ⚠️ 코드만 | 2026-09-30 | **운영 마이그레이션 5개 적용됨 · 라우트 살아 있음 · ⚠️ `backfill:brand-menu` 미실행** |
+| 10 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
+| 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
+| 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
+| 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
-> (7·8·9행)보다 **앞**이다. 큐가 뒤집혀도 안전한 이유는 `§0` 이 갖는다(운영 마이그레이션 5개가
+> (9·10·11행)보다 **앞**이다. 큐가 뒤집혀도 안전한 이유는 `§0` 이 갖는다(운영 마이그레이션 5개가
 > 이미 소진됐다).
 >
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
@@ -851,6 +870,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
 
+### seeding-bulk-invoice — A행 (완료 · klow_server `c309ee1`, push 안 함)
+
+- **캐리어 고정화**: `countryCarrier()` = `productCarrier`. 무게 인자 제거(`resolveCarrier(iso2, addr)` · `resolveProductShipping(iso2, addr, brandIds)`), 발급 가능국은 `productCarrier` 필수, `isDirect` = EFS. `orders/brand-weights.ts` 삭제. staging VN(고정 EFS·분기 1250g) 3kg 견적이 `carrier:"EFS"` — 실측 확인.
+- **bulk-issue**: `issueDirect` 코어를 reissue 와 공유. 행 단위 격리는 **요청 스키마가 아니라 서비스의 행별 safeParse** 로 한다(스키마는 `clientRowId` 만).
+- 검증: typecheck 2개 · jest **1447**(+ bulk spec 14) · e2e · 부팅 라우트 **398**. ⚠️ **성공 행 실발급은 안 해 봤다** — 로컬 `.env` 의 EFS 가 실계정이라 실제 송장이 나간다. 인증 없는 호출 403 까지만 확인.
+- ⚠️ 로컬 `:4010` 에 **다른 세션의 `nest start --watch`** 가 떠 있다(같은 디렉터리를 감시해 새 코드로 재빌드됨). 새로 띄우면 EADDRINUSE.
+- 결정 기록 앵커는 `2026-09-30-4`(캐리어) · `-5`(엑셀) — `-3` 은 병렬 세션이 먼저 썼다.
+- B행 추가 범위: **klow_web `resolveCarrierAndRate`** 도 고정 캐리어 기준으로 맞춘다(안 맞추면 분기국 제외구역 주소를 웹이 과하게 막을 뿐 — 안전 방향).
+
 ### brand-shipping-fee — 1~4단계 (완료 · 4단계 staging push 만 남음)
 
 - **문서를 고친 것**: `decisions/shipping-seeding.md` **2026-09-30 신설** + 색인 2곳(`decisions/README.md`·
@@ -867,7 +895,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - **확인하지 못한 것**: ⚠️ **구 스튜디오(배포 전 탭)로 실제 저장해 보지는 않았다** — 보존 shim 은 유닛 스펙
   5개가 잠근다 · PC 폭(1440px)에서 모달·일괄 칸 레이아웃 · 실제 주문 결제까지 태워 본 것은 아니다(견적까지)
 - **남은 일 (이 순서로)**: ① ~~staging 배포~~ **완료 · 실측 확인**(1~3단계분, `§0` 표. klow_admin 만 미확인) ·
-  ② **단위 전환(4단계)의 staging push** — `server → admin → brand` 순 · ③ 운영 배포는 `§7` 7행이 함께
+  ② **단위 전환(4단계)의 staging push** — `server → admin → brand` 순 · ③ 운영 배포는 `§7` 9행이 함께
   (**마이그레이션 2개를 순서대로** · 백필 동봉 · 적용 후 `shippingUsdOverride = 0` **445행** 확인) ·
   ④ 운영 배포가 끝나면 **보존 shim 제거** + `freeShipping`·`shippingKrwOverride` **드롭 마이그레이션**
   (⚠️ DROP COLUMN 은 롤링 비안전)

@@ -79,8 +79,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 > `SeedingRate`(어드민 배송비용 탭) 하나**로 통합됐다 — 시딩과 일반 주문이 같은 표를 쓴다.
 > 고객 결제 배송비는 (당시) 그 표의 **2kg 티어 절반**(공개 응답 `logisticsCost2kgKrw`)으로 계산식은 그대로이고,
 > **값만 요율표 기준으로 바뀐다**(국가별로 오르내림 — 배포 전 델타 확인 필요).
-> 캐리어도 시딩과 동일한 **무게 분기**(`seedingCarrierSplitWeightG`)를 타는데, 일반 주문은
-> **브랜드별 박스 청구중량**으로 갈리므로 한 주문 안에서 브랜드마다 캐리어가 다를 수 있다.
+> (당시) 캐리어도 시딩과 동일한 **무게 분기**(`seedingCarrierSplitWeightG`)를 탔다. ⚠️ **2026-09-30 부터는
+> 아니다** — 송장 캐리어는 국가 고정 `productCarrier` 하나이고 분기는 예상 배송비 확인용이다.
 > 어드민 **물류비용** 탭은 제거됐고 캐리어 편집은 **배송비용** 탭으로 이관됐다.
 > 구 컬럼 `productLogisticsCostKrw` 는 과거 백필 스크립트 참조용으로 dormant 잔존.
 >
@@ -127,8 +127,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
   2026-09-30 전환). 그래서 이 요율은 *"브랜드가 정하지 않은 국가"* 에 붙는 금액이다.
   **판매가/정산가와 무관** — 그 값 그대로가 결제 배송비(청구 대상 브랜드당 1회)로 쓰이고,
   **그 결제액 전액이 브랜드 정산으로 지급**된다(2026-09 전환). 실측 물류비 + 수수료는 별도로 전액 후청구되므로,
-  이 요율표가 실비를 덮는지 여부가 곧 **브랜드의 배송 손익**이다. 캐리어는 국가 고정(`productCarrier`)이되 무게 분기
-  (`seedingCarrierSplitWeightG`)가 있으면 **브랜드별 박스 무게**로 갈린다(한 주문 안에서 브랜드마다 다를 수 있음).
+  이 요율표가 실비를 덮는지 여부가 곧 **브랜드의 배송 손익**이다. 캐리어는 국가 고정(`productCarrier`) 하나다 —
+  무게 분기(`seedingCarrierSplitWeightG`)는 **예상 배송비 확인용**이고 송장 캐리어를 바꾸지 않는다(2026-09-30).
   500g 티어·캐리어 미설정국과 **배송지원(`enabled`) 제외국**은 구매 차단 — **전 브랜드가 0원이어도 마찬가지**
   (요금 게이트가 아니라 배송 가능 여부 게이트). (구 `ShippingCountry.productLogisticsCostKrw` 는 2026-07-29 요율표 통합으로 dormant.)
 - 표시 기본 국가는 `US`. 공개 read 는 `?country=` 로 목적국을 받는다(미지정 US).
@@ -198,8 +198,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
   의 1라인 단일 출처. 표시(`attachCustomerPricing`)·주문 생성·견적(`quote`)이 모두 이 함수를 거쳐 "표시가 == 청구가"를 보장한다.
 - `attachCustomerPricing(row, fxRate, ctx)` / `resolvePricingCtx(prisma, country)`(→ **currencyUsdRate** + promotion. 물류비는 없다) /
   `writeProductCountryPrices(tx, productId, rows)` — `pricing/country-price.ts`. 공개 응답은 `costKrw`/`countryPrices`/`basePriceUsd`/`basePriceFxRate`/`salePrice`/`brandRef` strip(`StrippedPricingKeys`).
-- 물류비·캐리어: `resolveProductShipping(iso2, address, brandWeights)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
-  요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`), 브랜드별 박스 무게는 `orders/brand-weights.ts` `brandChargeableWeights`.
+- 물류비·캐리어: `resolveProductShipping(iso2, address, brandIds)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
+  요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`). 캐리어는 국가 고정값(`countryCarrier`).
   환율: `resolveFxRate(prisma)` — `pricing/fx.ts`.
 - 배송비 실효값: `resolveShippingCents(row, iso2, defaultCents)` — `pricing/country-price.ts`
   (목적국 `ProductCountryPrice` 행의 `shippingUsdOverride`, `??` 로 폴백 — ⚠️ `||` 로 쓰면 브랜드가 정한

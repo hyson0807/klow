@@ -213,7 +213,7 @@ Source of truth: `klow_server/prisma/schema.prisma` (47 models, 22 native enums)
 
 - **`Shipment`** — 브랜드 단위 EFS 송장(주문×브랜드, `(orderId, brandId)` → 최대 1). `carrier`/`efsServiceType`(스냅샷), `efsTrackingNumber @unique`, 로컬 캐리어/추적번호, `status`(ShipmentStatus), 트래킹 캐시, `brandConfirmedShippedAt`, `settledAt`, `requestPayload`/`responseRaw`(audit). Order·Brand·Admin(created/settled)·ShipmentItem[].
 - **`ShipmentItem`** — 송장↔OrderItem 조인. `orderItemId @unique`(한 라인 최대 1 송장, 동시 발급 race 방지). Shipment cascade.
-- **`ShippingCountry`** — 국가별 지원 화이트리스트 + 캐리어 정본(PK `iso2`). `enabled`(일반 주문 게이트), `productCarrier`(국가 고정 폴백: 직통 EFS / 나머지 EMS), `seedingCarrierSplitWeightG`(무게 분기 — 시딩·일반주문 공용). ShippingExclusion[]. **배송비 자체는 여기 없다** — `SeedingRate` 국가×무게 요율표가 정본이다(`productLogisticsCostKrw` 는 2026-07-29 부터 dormant).
+- **`ShippingCountry`** — 국가별 지원 화이트리스트 + 캐리어 정본(PK `iso2`). `enabled`(일반 주문 게이트), `productCarrier`(국가 고정 폴백: 직통 EFS / 나머지 EMS), `seedingCarrierSplitWeightG`(무게 분기 — **예상 배송비 확인용**, 2026-09-30 부터 송장 캐리어 판정에 안 쓴다). ShippingExclusion[]. **배송비 자체는 여기 없다** — `SeedingRate` 국가×무게 요율표가 정본이다(`productLogisticsCostKrw` 는 2026-07-29 부터 dormant).
 - **`ShippingRate`** — 국가×캐리어×무게 티어 요율(시딩 EMS/DHL 비교가; `rateKrw` = 업로드 요율표의 통합 최종가). `@@unique([carrier, iso2, weightG])`.
 - **`ShippingExclusion`** — EFS 배송불가 지역(`kind`: zip/city/state + 범위). ShippingCountry cascade. (해당 구역은 구매 차단.)
 - **`SeedingRate`** — 시딩 배송비 표(국가×무게 정본, 무게 올림 조회). `iso2`, `weightG`(상한), `costKrw`. `@@unique([iso2, weightG])`.

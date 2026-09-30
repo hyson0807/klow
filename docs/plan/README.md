@@ -15,6 +15,7 @@
 | [storefront-menu-pc/](./storefront-menu-pc/implementation-plan.md) | 손님이 보는 klow_web 에 메뉴 서랍과 **데스크톱 브랜드관·제품상세**를 신설한다. klow_web 은 지금 브레이크포인트가 0개인 모바일 전용이라 이식이 아니라 신설이다 |
 | [b2b-wholesale/](./b2b-wholesale/README.md) | 해외 바이어가 링크 하나로 **도매가·MOQ·수량구간**을 보고 주문서를 넣는다. 브랜드관 위에 한 겹을 얹는 구조 — 테이블 6벌 + 전용 모듈이 전부 신규다. **브랜드 원본 가격표 엑셀에서 AI 로 MOQ·도매가 추출**(`rate-sheet-ai` 2단계 규칙 재사용). 결제(PG)는 스코프 밖 |
 | [brand-shipping-fee/](./brand-shipping-fee/README.md) | 브랜드가 **국가별 고객 부담 배송비**를 직접 정한다. 지금은 무료배송 `ON/OFF` 두 칸뿐이라 전액 부담 아니면 전액 전가뿐 — `ProductCountryPrice` 컬럼 하나로 0원~임의 금액을 고르게 한다. `NULL` = 지금과 같은 500g 요율이라 미설정 브랜드는 동작 불변 |
+| [seeding-bulk-invoice/](./seeding-bulk-invoice/README.md) | 브랜드가 **수령인 명단 엑셀**로 링크 없이 EFS 송장을 일괄 발급한다(taeyoung30 목업 실연결). 같은 트랙에서 **송장 캐리어 = 국가 고정 캐리어**로 고정 — 무게 분기는 예상 배송비 전용 |
 
 ## 새 트랙을 만들 때
 

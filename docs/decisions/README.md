@@ -99,3 +99,5 @@
 | `2026-09-29` | [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](./storefront.md#2026-09-29) | storefront |
 | `2026-09-30` | [고객 부담 배송비를 브랜드가 정한다 — 무료배송 불린 → 금액](./shipping-seeding.md#2026-09-30) | shipping-seeding |
 | `2026-09-30` | [고객 부담 배송비의 단위를 원 → USD 센트로 옮긴다](./shipping-seeding.md#2026-09-30-2) | shipping-seeding |
+| `2026-09-30` | [송장 캐리어 = 국가 고정 캐리어 — 무게 분기는 예상 배송비 전용](./shipping-seeding.md#2026-09-30-4) | shipping-seeding |
+| `2026-09-30` | [엑셀로 자동 국제 송장 발급 — 링크 없이 명단으로](./shipping-seeding.md#2026-09-30-5) | shipping-seeding |

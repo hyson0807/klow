@@ -40,6 +40,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/storefront-menu-pc/](./plan/storefront-menu-pc/implementation-plan.md) | klow_web 손님 화면에 메뉴 서랍 + 데스크톱 브랜드관·제품상세 신설(지금은 브레이크포인트 0개 모바일 전용) |
 | [plan/b2b-wholesale/](./plan/b2b-wholesale/README.md) | B2B 도매 — 바이어 공개 페이지 · 도매가/MOQ/수량구간 · **AI 가격표 추출** · 주문 접수 + 알림메일. 테이블 6벌 신규, 결제는 스코프 밖 |
 | [plan/brand-shipping-fee/](./plan/brand-shipping-fee/README.md) | 브랜드가 국가별 고객 부담 배송비를 직접 정한다 — 무료배송 토글을 **0원~임의 금액**으로. 정산·청구 산식은 무변경(`Order.shippingFeeByBrand` 가 이미 브랜드별 맵) |
+| [plan/seeding-bulk-invoice/](./plan/seeding-bulk-invoice/README.md) | 엑셀 명단으로 시딩 송장 일괄 발급 + 송장 캐리어를 국가 고정 캐리어로 고정(무게 분기는 예상 배송비 전용) |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
 | [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
 

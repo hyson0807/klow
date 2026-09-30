@@ -27,7 +27,7 @@
   표기 모두 서버값을 쓴다. ⚠️ `chargeableBrands` 판정은 커널 안에서 **KRW 기준**(`> 0`)이다 —
   센트로 세면 5원짜리 설정이 0센트로 반올림돼 손님 화면에 "무료배송" 이 뜬다. 배송 불가(제외국·요율/캐리어 미설정·EFS 제외구역)면 `create` 는 400 으로 차단하지만
   `quote` 는 throw 없이 `shippable:false` + 나머지 0/빈 배열로 응답한다.
-  캐리어 분기는 브랜드별 청구중량(`brandChargeableWeights` = Σ max(실무게, L×W×H/6) × 수량)으로 갈리며
+  캐리어는 **국가 고정 캐리어(`productCarrier`) 하나**다(2026-09-30 — 무게 분기는 예상 배송비 전용, 구 `brandChargeableWeights` 제거).
   create/quote 가 같은 헬퍼를 공유해 견적 캐리어 == 청구 캐리어가 보장된다.
 - **과청구 가드**: 현지통화 핀(`priceLocal`) 상품인데 목적국 통화의 유효 환율이 없으면 `OrdersService.billingRate`가
   주문/견적을 차단한다(1로 폴백해 현지가를 USD로 오인 → 과청구하는 사고 방지). 핀 없는 상품은 영향 없음. 자세히는 [`../../reference/pricing-model.md`](../../reference/pricing-model.md).
@@ -59,7 +59,7 @@
     실제로 섞일 수 있었다(A 브랜드관에서 담아 둔 채 B 부스 QR 을 찍는 흐름). ⚠️ `brandId` 가
     null 인 legacy 제품은 **별도 버킷**으로 센다 — 묶으면 legacy 와 정상 브랜드가 섞인 주문이
     통과한다(fail-closed). 자세히는 [`settlement.md`](./settlement.md) 의 같은 항목.
-- **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `chargeable-brands.ts`(청구 대상 브랜드·배송비 스냅샷·읽기 짝), `brand-weights.ts`(브랜드별 청구중량 → 캐리어 분기), `onsite-brand.ts`(현장 주문 단일 브랜드 판정), `guest-order-token.ts`(비회원 주문 HMAC 토큰)
+- **관련 파일**: `orders.service.ts`, `admin-orders.controller.ts`, `public-orders.controller.ts`, `chargeable-brands.ts`(청구 대상 브랜드·배송비 스냅샷·읽기 짝), `onsite-brand.ts`(현장 주문 단일 브랜드 판정), `guest-order-token.ts`(비회원 주문 HMAC 토큰)
 
 ## admin-orders.controller.ts (`@Controller('admin/orders')`)
 
