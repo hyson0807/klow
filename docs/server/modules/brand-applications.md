@@ -138,9 +138,17 @@
   (`countryPrices[].freeShipping`)이 됐고, 박스 규격(`weightG`/`box*Cm`)과 함께 제품 create/PATCH payload 에
   실려 저장된다 — 가격 탭 저장 한 번에 전부 반영된다.
   ⚠️ `countryPrices` 저장은 **replace-all** 이라 클라는 언제나 그 제품의 **전체 국가 배열**을 보내야 한다
-  (한 국가만 고치려고 부분 배열을 보내면 나머지 국가의 핀·할인·무료배송이 전부 삭제된다).
-- **응답의 국가별 설정**: 목록/단건은 `pins{iso:priceLocal}` · `discounts{iso:pct}` · `freeShippingCountries[iso]`
-  세 맵으로 국가별 원본을 돌려준다(폼 재구성용). 자세히는 [`../../reference/pricing-model.md`](../../reference/pricing-model.md).
+  (한 국가만 고치려고 부분 배열을 보내면 나머지 국가의 핀·할인·배송비가 전부 삭제된다).
+  ⚠️⚠️ **보존 shim (2026-09-30, 임시)** — 그 replace-all 이 구버전 프론트에게 파괴적이라
+  (배송비 금액을 모르는 구 클라가 한 번 저장하면 그 제품 배송비가 통째로 날아간다),
+  `writeProductCountryPrices` 는 **배열의 어느 행에도 `shippingKrwOverride` 키가 없으면** 구 클라로 보고
+  기존 행의 `> 0` 금액을 캐리오버하고 구 `freeShipping: true` 를 `0` 으로 번역한다. 행 하나라도 키를
+  보내면(`null` 이라도) 신 클라이고 payload 가 정본이다. **klow_admin·klow_brand 배포가 끝나면 걷어낸다.**
+  ⚠️ 기존 `0` 은 일부러 보존하지 않는다 — `0` 은 `freeShipping` 이 정확히 표현할 수 있는 값이라
+  보존하면 구 UI 의 *무료배송 끄기*가 조용히 먹히지 않는다.
+- **응답의 국가별 설정**: 목록/단건은 `pins{iso:priceLocal}` · `discounts{iso:pct}` · `shippingKrws{iso:원}`
+  세 맵으로 국가별 원본을 돌려준다(폼 재구성용). 구 스튜디오 호환용 `freeShippingCountries[iso]` 도 함께
+  실리지만 **`shippingKrws[iso] === 0` 의 파생**이다. 자세히는 [`../../reference/pricing-model.md`](../../reference/pricing-model.md).
 - **초안 일괄 등록(`POST /v1/brand/products/bulk`)은 `countryPrices` 를 아예 받지 않는다** —
   `createMany` 라 `writeProductCountryPrices` 를 못 타므로 `BrandProductDraftInput` 에서 omit 했다
   (받아놓고 버리지 않는다). 국가별 설정은 발행 전 편집 폼에서 채운다.

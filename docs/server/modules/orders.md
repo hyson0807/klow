@@ -6,17 +6,26 @@
   `Zod literal(true)`, 같은 시각으로 `termsAgreedAt`/`refundAgreedAt`/`pgDataSharingAgreedAt` 기록) + IP +
   `fxRateSnapshot` (결제 시점 환율 고정용). 라인 단가·정산가·원가는
   `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
-- **배송비 + 무료배송**: `shippingFeeUsd = 500g 요율/fx × 청구 대상 브랜드수`(산식 정본은 [pricing-model](../../reference/pricing-model.md)). 배송비는 브랜드 단위(한 브랜드 = 한 송장)라
-  **그 브랜드 라인이 전부 무료배송일 때만** 면제된다. 무료배송은 **국가별**(`ProductCountryPrice.freeShipping`,
-  목적국 행이 없으면 유료)이라 배송지 국가가 판정의 입력이다 — `chargeableBrandIds(lines, iso2)`
-  (`pricing/chargeable-brands.ts`, 생성·견적 공유). create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.
-  브랜드별 금액은 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 무료 브랜드는 0, Σ == `shippingFeeUsd`)에
-  스냅샷해 송장 발급이 EFS 27번을 정확히 안분한다.
+- **배송비 (브랜드별 금액, 2026-09-30~)**: `shippingFeeUsd = Σ 브랜드별 배송비`(산식 정본은 [pricing-model](../../reference/pricing-model.md)).
+  배송비는 브랜드 단위(한 브랜드 = 한 송장 = 한 박스)로 1회 청구되고, 금액은 **그 브랜드 라인의
+  최댓값**이다 — 라인 금액은 `ProductCountryPrice.shippingKrwOverride` 로 제품×국가마다 갈릴 수 있고,
+  설정이 없으면(NULL·행 없음) 그 국가 500g 요율이다. `0` 이면 무료. **⚠️ 브랜드마다 금액이 다를 수 있으므로
+  `요율 × 브랜드수` 로 복원하지 말 것.** 판정의 단일 출처는 `shippingFeeByBrand(lines, iso2, defaultRateKrw, fxRate)`
+  (`pricing/chargeable-brands.ts`, 생성·견적 공유)이고 라인 해석은 `resolveShippingKrw(row, iso2, defaultRateKrw)` 다.
+  create/quote 둘 다 `countryPrices` 를 `where: { iso2 }` 로 필터해 넘긴다.
+  ⚠️⚠️ 커널은 **2패스**(KRW 에서 브랜드별 max → 브랜드별로 정확히 1회 센트 변환)다. 한 패스로 되돌리면
+  "배열 순서상 첫 제품의 배송비"가 되어 **견적가 ≠ 청구가**가 된다(create/quote 가 `products` 를 각자
+  `findMany` 로 만들고 `where id in` 은 순서를 보장하지 않는다). 반올림도 브랜드당 1회여야 한다 —
+  `max(round(a), round(b)) ≠ round(max(a, b))`.
+  브랜드별 금액은 `Order.shippingFeeByBrand`(`{brandId: 센트}`, 0원 브랜드는 0, Σ == `shippingFeeUsd`)에
+  스냅샷해 송장 발급이 EFS 27번을 정확히 안분한다. 어드민 주문 상세(`GET /admin/orders/:id`)도
+  이 맵을 그대로 싣는다(`ADMIN_ORDER_INCLUDE` 가 select 없이 Order 스칼라를 전부 내린다).
   `quote` 응답은 `{ shippable, carrier, fxRate, lines, itemsTotalUsd, shippingFeeUsd, chargeableBrands,
   totalUsd }`(금액은 모두 USD 센트)이고 라인은 `{productId, quantity, unitPriceUsd}` 뿐이다. 배송비 표기에 필요한
-  `shippingFeeUsd`·`shippable`·`chargeableBrands`(실제 배송비가 붙은 브랜드 수 — 무료배송 브랜드 제외)는
-  응답 최상위에 있다 — 무료배송이 국가별이라 클라는 면제 여부를 못 구하므로 "무료" 판정과 "N개 브랜드"
-  표기 모두 서버값을 쓴다. 배송 불가(제외국·요율/캐리어 미설정·EFS 제외구역)면 `create` 는 400 으로 차단하지만
+  `shippingFeeUsd`·`shippable`·`chargeableBrands`(실제 배송비가 붙은 브랜드 수 — 0원 브랜드 제외)는
+  응답 최상위에 있다 — 금액이 국가별이라 클라는 면제 여부를 못 구하므로 "무료" 판정과 "N개 브랜드"
+  표기 모두 서버값을 쓴다. ⚠️ `chargeableBrands` 판정은 커널 안에서 **KRW 기준**(`> 0`)이다 —
+  센트로 세면 5원짜리 설정이 0센트로 반올림돼 손님 화면에 "무료배송" 이 뜬다. 배송 불가(제외국·요율/캐리어 미설정·EFS 제외구역)면 `create` 는 400 으로 차단하지만
   `quote` 는 throw 없이 `shippable:false` + 나머지 0/빈 배열로 응답한다.
   캐리어 분기는 브랜드별 청구중량(`brandChargeableWeights` = Σ max(실무게, L×W×H/6) × 수량)으로 갈리며
   create/quote 가 같은 헬퍼를 공유해 견적 캐리어 == 청구 캐리어가 보장된다.

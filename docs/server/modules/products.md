@@ -17,8 +17,15 @@
   가 이미 실어 오고, `attachCustomerPricing` 이 `resolveFreeShipping(row, ctx.iso2)` 로 **목적국 값**을 파생해
   공개 응답 `freeShipping` 에 싣는다(`?country=` 미지정이면 US). 행이 없는 국가는 유료 — fail-closed.
   ⚠️ 응답의 `freeShipping` 은 **그 한 나라에 대한 값**이라 카트/스토어에 스냅샷하면 배송지를 바꿀 때 어긋난다(배지 표시 전용).
-  ⚠️ 브랜드 스튜디오용 `mapBrandProduct` 는 대신 **국가 목록** `freeShippingCountries: string[]` 을 돌려준다 —
+  ⚠️ 브랜드 스튜디오용 `mapBrandProduct` 는 대신 **국가별 원본 맵** `shippingKrws{iso:원}` 을 돌려준다 —
   스튜디오는 국가별 원본이 필요한데 파생값은 한 나라 기준이라(국가 미지정 → US) 폼 재구성에 쓸 수 없다.
+  구 스튜디오 호환용 `freeShippingCountries: string[]` 도 함께 실리지만 **`shippingKrwOverride === 0` 의 파생**이다.
+- **고객 부담 배송비 오버라이드 (2026-09-30~)**: 정본은 `ProductCountryPrice.shippingKrwOverride`(원, nullable)
+  이고 구 `freeShipping` 불린은 **`=== 0` 의 파생 미러**로 쓰기만 한다(읽지 않는다 · `[dormant]`).
+  세 상태가 서로 다른 뜻이다 — **`NULL`/행 없음 = 그 국가 500g 요율 추종** / **`0` = 무료** / **`>0` = 브랜드 지정액**.
+  ⚠️ zod(`BrandProductCountryPriceInput.shippingKrwOverride`)에 **`.default()` 를 주면 안 된다** —
+  `undefined`(키 없음)는 *"구 클라이언트 → 기존 값 보존"* 이라는 네 번째 뜻이라 기본값을 주는 순간
+  `writeProductCountryPrices` 의 보존 shim 이 조용히 죽는다. 상한 `1_000_000` 은 정책이 아니라 자릿수 오타 방어다.
 - **공개 응답의 가격 필드 (2026-07-28~30 가격 모델)**: 모든 공개 read 는 `?country=`(미지정 US)를 받아
   `attachCustomerPricing` 으로 **목적국 기준 파생값** `customerPriceUsd` / `listPriceUsd` /
   `customerDiscountPercent` / `freeShipping` 을 싣는다(앞의 두 금액은 **USD 센트**). 사업 기밀인 내부 가격
