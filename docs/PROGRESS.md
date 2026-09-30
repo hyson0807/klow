@@ -22,13 +22,16 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 6행 — brand-shipping-fee 3단계** (브랜드·손님 화면 + 문서 정정 + staging 배포).
-명세는 [`plan/brand-shipping-fee/implementation-plan.md`](./plan/brand-shipping-fee/implementation-plan.md) `§3` 의 3단계 +
-`§4` 의 **R4·R7·R8·R9**. 세션 안 순서 = 넘칠 때의 정지점: ① klow_brand → ② klow_web → ③ 문서·주석.
+**`§7` 7행 — cafe24-fulfillment 6단계(운영 배포)를 마저 닫는다.** 남은 것은 아래 🔲 **백필 하나**와
+그 확인이다. ⚠️ **사용자 확인이 필요한 운영 작업**이라 이 세션에서도 손대지 않았다.
 
-`§7` **4·5행(brand-shipping-fee 1·2단계)이 2026-09-30 에 끝났다** — 서버 커널·어드민까지 `staging`
-브랜치에 들어갔고 staging DB(Neon `ep-icy-flower`)에 마이그레이션도 적용됐다. **push 는 안 했다** —
-staging 배포는 사용자가 push 할 때 일어난다.
+**brand-shipping-fee 트랙(4·5·6행)은 2026-09-30 에 세 단계가 다 끝났다** — 서버 커널·어드민·
+브랜드 스튜디오·손님 체크아웃·문서 정정까지 `staging` 브랜치에 들어갔고 staging DB
+(Neon `ep-icy-flower`)에 마이그레이션도 적용됐다. **push 는 안 했다** — staging 배포는 사용자가
+`git push` 할 때 일어나고, **운영 배포는 7행이 함께 끌고 나간다**(2026-09-30 사용자 결정).
+
+→ **사용자가 할 일: 네 레포(`klow_server` → `klow_admin` → `klow_brand` → `klow_web`)를 이 순서로
+push.** 뒤집으면 어드민·스튜디오가 서버가 모르는 필드를 보내 zod 가 조용히 버린다.
 
 ### ⚠️⚠️ 2026-09-30 우선순위 변경 (사용자)
 
@@ -54,7 +57,12 @@ staging 배포는 사용자가 push 할 때 일어난다.
 **`npm run backfill:brand-menu`**(dry-run 먼저 → `-- --apply`)를 돌려야 한다. 대상 6~9곳 · 멱등.
 ⚠️ 이건 `§7` 7행(cafe24 운영 배포)의 항목이고 **이 세션에서는 손대지 않았다** — 사용자 확인이 필요하다.
 
-### brand-shipping-fee 1·2단계 — 확인한 것
+🔲 **운영 배포 때 함께 가는 마이그레이션이 하나 더 생겼다** —
+`20260930042335_add_product_country_shipping_override`(brand-shipping-fee). `ADD COLUMN` nullable +
+**같은 SQL 안의 멱등 백필**이라 롤링 안전하고 별도 스크립트가 없다. **적용 후 운영에서
+`shippingKrwOverride = 0` 이 445행**이어야 한다(아래 기준선).
+
+### brand-shipping-fee — 확인한 것
 
 **운영 기준선**(`freeShipping = true` 실측, 2026-09-30):
 
@@ -67,10 +75,18 @@ staging 배포는 사용자가 push 할 때 일어난다.
 → 운영 배포 시 백필 후 `shippingKrwOverride = 0` 이 **445행**이어야 한다.
 staging 에서는 13 → 13 으로 일치를 확인했다.
 
-**staging 실왕복** — 견적 API 6종(혼합 라인 max · 라인 순서 반전 동일 · 5원→0센트지만
+**staging 실왕복 (1·2단계)** — 견적 API 6종(혼합 라인 max · 라인 순서 반전 동일 · 5원→0센트지만
 `chargeableBrands=1` · 목적국별 분기) + 어드민 제품 폼(4개국 서로 다른 금액 저장·재진입·
 빈칸으로 되돌리기 · **배송비를 안 건드린 저장에서 금액 보존**) + 주문 상세 브랜드별 2줄 합 = 총액.
-테스트 데이터·임시 어드민은 전부 지웠다(`§9` 인계 메모).
+
+**staging 실왕복 (3단계, Playwright · 로컬 :4010/:3012/:3011 · staging DB)** — 브랜드 스튜디오
+가격 탭: 미설정 placeholder(₩9,150) → 3,000 입력 → **5원에 "너무 작은 금액" 경고**(G3) → 0 →
+무료배송 문구·배지 · 일괄 칸 set-all/clear(14개국) · **저장 → DB 확인(SG 3000 / JP 0+미러 true /
+US 할인행 무변경) → 재진입 그대로 → 비우고 저장하니 행이 사라짐**(= "요율표 추종으로 되돌리기"가
+실제로 저장된다) · **R8 실측**: 20,000 입력 시 `정산받는 배송비 ₩19,000` · `내 부담 +₩8,400 남음`
+(요율 9,150 을 쓰던 예전 식이면 안 움직였다). klow_web 체크아웃: 견적 전 `配送 計算中…` · 총액 =
+소계 · *"송료 미포함"* 한 줄 · **결제 버튼 비활성 + "배송비 계산 중"**, 견적 후 `配送 ¥991` ·
+`合計 ¥10,649` · 버튼 라벨 동일. 테스트 데이터·임시 세션은 전부 지웠다.
 
 ---
 
@@ -685,45 +701,16 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 |---|---|---|---|
 | **4** | 스키마 · 마이그레이션 · 쓰기 경로 | klow_server (**배포 없음**) | 완료 2026-09-30 |
 | **5** | 청구 커널(2패스) + 어드민 | klow_server → klow_admin | 완료 2026-09-30 |
-| **6** | 브랜드·손님 화면 + 문서 정정 + **staging 배포** | klow_brand → klow_web | 다음 |
+| **6** | 브랜드·손님 화면 + 문서 정정 + **staging 배포** | klow_brand → klow_web (+ 서버 주석) | 완료 2026-09-30 |
 
 ⚠️ **종착점이 staging 배포다**(2026-09-30 사용자 결정) — 운영 배포는 `§7` 7행이 함께 끌고 나간다.
 ⚠️ **`staging` 브랜치 위에서 직접 작업했고 staging DB(`ep-icy-flower`)에 직접 마이그레이션했다**
 (사용자 결정) — 이 트랙에는 별도 git·DB 브랜치가 없다.
 
-#### 6행 — 3단계 (다음 세션)
-
-- **읽을 것**: 트랙 문서 `§3` 의 3단계 + `§4` 의 **R4·R7·R8·R9**, `§9` 의 이 트랙 인계 메모
-- **건드리는 레포 · 배포 순서**: **klow_brand → klow_web**
-- **스키마·데이터 위험**: **없음**
-- **세션 안 순서 (= 넘칠 때의 정지점)**
-
-| 순서 | 무엇 | 한 줄 |
-|---|---|---|
-| ① | **klow_brand** | `PriceModal` 스위치 → 금액 입력 · `PriceStep` 일괄/카드 · `ProductForm` payload · **`prepaidKrw` 산식(R8)** · **max 경고 문구(R7)** · 너무 작은 금액 경고(G3) |
-| ② | **klow_web** | 견적 전 추정 제거(R4) |
-| ③ | **문서·주석** | R9 전수 정정 · `decisions/shipping-seeding.md` 항목 + 색인 2곳 · `freeShipping` 드롭 예약 · 보존 shim 제거 예약 |
-
-⚠️ **①이 가장 무겁다.** 넘치면 ① 끝에서 끊고 `진행 중(부분 완료)` 로 기록한다.
-⚠️ **klow_brand 가 배포되기 전까지 보존 shim 이 브랜드 저장을 지키고 있다** — 걷어내는 것은
-klow_admin·klow_brand 배포가 **둘 다** 끝난 뒤다.
-
-⚠️ **G1~G4 는 4·5행에서 이미 처리됐다**(트랙 문서 `§1`). 3단계에서 되살아나는 것은 둘이다.
-
-- **G2 (보존 shim)** — 아직 살아 있고 **klow_brand 를 지키는 중이다.** 구 스튜디오가 제품을
-  저장해도 배송비가 날아가지 않는 것은 이 shim 덕분이다. klow_brand 가 새 payload(`shippingKrwOverride`
-  키를 **null 이라도** 실어 보내기)로 바뀌는 순간 그 제품에 한해 payload 가 정본이 된다 —
-  ⚠️ **키를 빼면 "요율표 추종으로 되돌리기"가 영영 저장되지 않는다.**
-- **G3 (작은 금액)** — 커널 판정은 KRW 기준으로 옮겼지만 **입력 단계 경고는 아직 없다.**
-  5원을 넣으면 0센트로 청구된다(브랜드는 유료로 설정했는데 손님은 $0.00 을 본다).
-  브랜드 UI 가 "너무 작은 금액" 경고를 내야 한다.
-
-⚠️ **이름을 `customerShippingKrw` 로 짓지 않는다** — 그건 이미 세 프론트에서 *"그 나라 500g 요율"*
-이라는 뜻이고, 새 UI 는 기본값과 오버라이드를 **한 화면에서 동시에** 쓴다.
-
-⚠️ **운영 배포는 이 트랙이 하지 않는다**(2026-09-30 사용자 결정) — 종착점은 staging 배포까지고,
-운영은 `§7` 7행이 함께 끌고 나간다. 마이그레이션 `20260930042335_add_product_country_shipping_override`
-는 `ADD COLUMN` nullable + 같은 SQL 안의 백필이라 **롤링 안전**이고, 운영 백필 대상은 **445행**이다.
+**세 단계가 다 끝났다(2026-09-30).** 남은 것은 push(=staging 배포)와, 그 뒤 `§7` 7행이 함께
+끌고 나가는 운영 배포뿐이다. ⚠️ **보존 shim 과 `freeShipping` 드롭은 아직 예약 상태다** —
+걷어내는 시점은 `klow_admin`·`klow_brand`·`klow_web` **운영 배포가 끝난 뒤**이고, 조건과 근거는
+[`decisions/shipping-seeding.md` 2026-09-30](./decisions/shipping-seeding.md#2026-09-30) 이 갖는다.
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -770,7 +757,7 @@ klow_admin·klow_brand 배포가 **둘 다** 끝난 뒤다.
 | 3 | b2b-wholesale | **트랙 전체** (1~6단계 — 스키마 → 서버 API → **AI 도매표 추출** → 공개 API·주문 → 대시보드 → 바이어 페이지) | 완료 | ✓ | 2026-09-28 | d4e823e · deb41cb · 3b267be / - / 73a8893 / b4adb5d / (이 커밋) |
 | 4 | brand-shipping-fee | 1. 스키마 · 마이그레이션 · 쓰기 경로 | 완료 | ✗ | 2026-09-30 | e387cda / - / - / - / (이 커밋) |
 | 5 | brand-shipping-fee | 2. 청구 커널(2패스 재작성) + 어드민 | 완료 | ✗ | 2026-09-30 | 5473216 / 3a8b7a1 / - / - / (이 커밋) |
-| 6 | brand-shipping-fee | 3. 브랜드·손님 화면 + 문서 정정 + **staging 배포** | 대기 | ✗ | | |
+| 6 | brand-shipping-fee | 3. 브랜드·손님 화면 + 문서 정정 + **staging 배포** | 완료 | ✗ | 2026-09-30 | 5a02548 / - / 27a314a / 0b91560 / (이 커밋) |
 | 7 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 진행 중(부분 완료) | ⚠️ 코드만 | 2026-09-30 | **운영 마이그레이션 5개 적용됨 · 라우트 살아 있음 · ⚠️ `backfill:brand-menu` 미실행** |
 | 8 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 9 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
@@ -831,25 +818,29 @@ klow_admin·klow_brand 배포가 **둘 다** 끝난 뒤다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
 
-### brand-shipping-fee 1·2단계 — 스키마·쓰기 경로 + 청구 커널·어드민 (완료)
+### brand-shipping-fee — 트랙 전체 1~3단계 (완료 · staging push 만 남음)
 
-- **문서를 고친 것**: `server/modules/{orders,products,brand-applications}.md` · 이 문서 `§0`/`§6`/`§7`.
-  ⚠️ **`decisions/` 승격은 3단계 완료 때 한다** — 2패스 max·보존 shim 둘 다 3단계가 끝나야 최종형이다
-- **확인한 것**: staging DB 백필 13→13 · 견적 API 6종(혼합 max · 순서 반전 동일 · 5원→0센트+`chargeableBrands=1`
-  · 목적국 분기) · 어드민 제품 폼 4개국 서로 다른 금액 왕복 · **배송비 안 건드린 저장에서 금액 보존**(G2-a 실측) ·
-  빈칸으로 지우면 행 삭제 · 주문 상세 브랜드별 2줄 합=총액 · 검증 3층(typecheck 2개 · jest 226 · e2e · 부팅 397라우트)
-- **확인하지 못한 것**: ⚠️ **klow_brand 스튜디오는 아직 구 payload** 를 보낸다 — 보존 shim 이 지키는 중이고
-  실제로 구 스튜디오를 태워 보지는 않았다(유닛 스펙 5개가 잠근다) · ⚠️ **klow_web 체크아웃의 낙관적 추정(R4)은
-  그대로** 라 브랜드가 요율표보다 비싸게 매기면 결제 직전에 총액이 **올라간다** · efs-billing 의 *"고칠 곳은 요율표"*
-  주석은 아직 거짓인 채다(R9, 3단계 ③)
-- **남은 일 (이 순서로)**: ① `§7` 6행(klow_brand → klow_web → 문서) · ② 사용자 `git push` 로 staging 배포 ·
-  ③ 운영 배포는 7행이 함께(백필 대상 **445행**)
-- **다음 단계가 알 것**: ⚠️⚠️ **`shippingKrwOverride` 키는 값이 null 이어도 반드시 보낸다** — 어느 행에도 키가
-  없으면 서버가 구 클라로 보고 기존 금액을 캐리오버해서, *"요율표 추종으로 되돌리기"* 가 영영 저장되지 않는다.
+- **문서를 고친 것**: `decisions/shipping-seeding.md` **2026-09-30 신설** + 색인 2곳(`decisions/README.md`·
+  `CLAUDE.md`) + 구 2026-07-28 항목에 "여기부터 거짓" 표시 · `reference/pricing-model.md`(배너·표·함수·스키마·
+  마이그레이션) · `server/modules/{shipping,products,orders,brand-applications}.md` · `CLAUDE.md` 가격 문단 ·
+  이 문서 `§0`/`§6`/`§7`. 코드 주석 R9 전수(schema.prisma · `pricing/{formulas,price-line,country-price,
+  chargeable-brands}` · `cart.service` · `orders.service` · `shipping.service` · `logistics-rate.service` ·
+  `product-selects` · `common/validation/product` · **`efs-billing.service` 의 "고칠 곳은 요율표" 2곳**)
+- **확인한 것 (Playwright · 로컬 :4010/:3012/:3011 · staging DB)**: 스튜디오 가격 탭 — placeholder ₩9,150 →
+  3,000 → **5원 경고(G3)** → 0(무료배송 문구·배지) · 일괄 칸 set-all/clear(14개국) · **저장 → DB(SG 3000 /
+  JP 0+미러 / US 할인행 무변경) → 재진입 그대로 → 비우고 저장하니 행이 사라짐** · **R8 실측**(20,000 →
+  정산 ₩19,000 · 내 부담 +₩8,400 남음). klow_web 체크아웃 — 견적 전 `計算中…`·총액=소계·결제 버튼 비활성,
+  견적 후 ¥991/¥10,649. 검증: typecheck 2개 · jest 1441 · e2e · 두 프론트 `next build`
+- **확인하지 못한 것**: ⚠️ **구 스튜디오(배포 전 탭)로 실제 저장해 보지는 않았다** — 보존 shim 은 유닛 스펙
+  5개가 잠근다 · PC 폭(1440px)에서 모달·일괄 칸 레이아웃 · 실제 주문 결제까지 태워 본 것은 아니다(견적까지)
+- **남은 일 (이 순서로)**: ① **사용자 `git push` × 4레포**(`server → admin → brand → web`) = staging 배포 ·
+  ② 운영 배포는 `§7` 7행이 함께(마이그레이션 1개 · 백필 동봉 · 적용 후 0원 **445행** 확인) ·
+  ③ 운영 배포가 끝나면 **보존 shim 제거** + `freeShipping` **드롭 마이그레이션**(⚠️ DROP COLUMN 은 롤링 비안전)
+- **다음 단계가 알 것**: ⚠️⚠️ `shippingKrwOverride` 키는 **값이 null 이어도 반드시 보낸다**(세 프론트 공통) —
+  빼면 서버가 구 클라로 보고 캐리오버해서 *"요율표 추종으로 되돌리기"* 가 영영 저장되지 않는다.
   ⚠️ 판정은 전부 `!= null` — truthy 로 쓰면 0(무료배송)이 미설정으로 되살아난다.
-  ⚠️ `freeShipping` 은 읽지 않는다(dormant 미러). 세 상태의 뜻은 `schema.prisma` 주석이 정본이다
-- ⚠️ **staging 검증 중 사용자 dev 서버 2개(:4000 klow_server · :3002 klow_brand)를 실수로 죽였다** —
-  `pkill -f "nest start"` / `"next dev"` 가 내 것만 잡지 않았다. 다음 세션은 `pkill -f "PORT=<내 포트>"` 로 좁힐 것
+  ⚠️ **klow_web 은 이제 배송비를 추정하지 않는다** — 견적 전 결제 버튼도 막혀 있으니 "버튼이 안 눌린다"는
+  제보가 오면 먼저 `/v1/orders/quote` 응답을 본다
 
 ### b2b-wholesale — 트랙 전체 (완료 · 운영 배포만 남음)
 
