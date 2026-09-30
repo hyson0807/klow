@@ -198,6 +198,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-23` [카페24 주문 불러오기 → 3PL 출고신청 전환](docs/decisions/shipping-seeding.md#2026-09-23-2)
 - `2026-09-30` [고객 부담 배송비를 브랜드가 정한다 — 무료배송 불린 → 금액](docs/decisions/shipping-seeding.md#2026-09-30)
 - `2026-09-30` [고객 부담 배송비의 단위를 원 → USD 센트로 옮긴다](docs/decisions/shipping-seeding.md#2026-09-30-2)
+- `2026-09-30` [일본 배송 영문 주소 칸이 첫 글자에 사라졌다 — 조건부 렌더에 자기 값을 넣지 말 것](docs/decisions/shipping-seeding.md#2026-09-30-3)
 
 ### 정산 — `settlement.md`
 
