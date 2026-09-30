@@ -22,8 +22,10 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 7·8행 — seeding-bulk-invoice**(엑셀 일괄 송장 + 송장 캐리어 고정화). 2026-09-30 사용자 지시로
-**6행 뒤에 끼워 넣고 바로 진행 중**이다 — 기존 7~11행은 9~13행으로 밀렸다(아래 서술의 행 번호는 새 번호로 고쳤다).
+**`§7` 7·8행 — seeding-bulk-invoice 의 staging push**(= 사용자 `git push`). 코드·문서는 2026-09-30 에
+끝났다. ⚠️ **push 순서: `klow_server` → `klow_admin`·`klow_web` → `klow_brand`**(brand 가 먼저면 새 버튼이
+404). push 뒤 **실발급 1건으로 확인**할 것 — 로컬 EFS 가 실계정이라 이 세션은 성공 행을 보내지 않았다(`§9`).
+2026-09-30 사용자 지시로 6행 뒤에 끼워 넣었다 — 기존 7~11행은 9~13행으로 밀렸다(아래 서술의 행 번호는 새 번호로 고쳤다).
 
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
@@ -808,7 +810,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 5 | brand-shipping-fee | 2. 청구 커널(2패스 재작성) + 어드민 | 완료 | ✗ | 2026-09-30 | 5473216 / 3a8b7a1 / - / - / (이 커밋) |
 | 6 | brand-shipping-fee | 3. 브랜드·손님 화면 + 문서 정정 + **staging 배포** | 완료 | ✗ | 2026-09-30 | 5a02548 / - / 27a314a / 0b91560 / (이 커밋) |
 | 7 | seeding-bulk-invoice | A. klow_server — 송장 캐리어 = 국가 고정 캐리어(무게 분기는 예상 배송비 전용) + `POST /v1/brand/seeding/bulk-issue` | 완료 | ✗ | 2026-09-30 | c309ee1 / - / - / - / (이 커밋) |
-| 8 | seeding-bulk-invoice | B. klow_admin 분기 문구 + klow_brand 엑셀 일괄 송장(taeyoung30 목업) 실연결 + **staging push** | 대기 | ✗ | | |
+| 8 | seeding-bulk-invoice | B. klow_admin 분기 문구 + klow_web 캐리어 미러 + klow_brand 엑셀 일괄 송장(taeyoung30 목업) 실연결 — 코드 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | c309ee1 / 93fd71c / bb51637 · a7d19d9 / 6da7ee9 / (이 커밋) |
 | 9 | cafe24-fulfillment | **6. 운영 배포 (3PL + 카페24 한 번에)** | 진행 중(부분 완료) | ⚠️ 코드만 | 2026-09-30 | **운영 마이그레이션 5개 적용됨 · 라우트 살아 있음 · ⚠️ `backfill:brand-menu` 미실행** |
 | 10 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
@@ -869,6 +871,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### seeding-bulk-invoice — B행 (완료 · push 대기)
+
+- klow_brand: taeyoung30 `ceba630` 을 staging 에 cherry-pick(`bb51637`, 작성자 보존) 후 실연결(`a7d19d9`). 목(예시 업로드·타이머) 제거.
+- 행 결과 처리: `ok` 행은 명단에서 즉시 제거(재전송 = 두 장), 거절 행은 `BulkRow.serverError` 로 사유를 굳혀 '수정 대기'로(localStorage 에 따라가고 칸을 고치면 지움). 요청 자체 실패는 거기서 멈춤.
+- 규칙: 서버 4종만 error, 나머지 warn. 현지어 이름·주소 허용(목업은 막았다). 이용계약서 게이트는 **추가하지 않았다** — 시딩 페이지 전체가 이미 `contractAlways` 게이트 안이다(계획서 5번은 불필요했다).
+- klow_admin(`93fd71c`) 문구 · klow_web(`6da7ee9`) 캐리어 미러. 세 레포 `npm run build` 통과, `check:bulk-invoice` 30건 ALL PASS.
+- 🔲 **브라우저 확인 못 함** — 브랜드 로그인(OTP)이 필요하고 성공 발급은 실제 EFS 송장이다. push 후 staging 에서: 양식 받기 → JP/CN/MX/US 섞은 명단 업로드 → 오류 표시·수정 → 1건 발급 → 발송대기 탭에 행·바코드 → 어드민에서 그 송장 취소.
 
 ### seeding-bulk-invoice — A행 (완료 · klow_server `c309ee1`, push 안 함)
 
