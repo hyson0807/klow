@@ -1,13 +1,13 @@
 # 결정 기록 색인
 
-주제별 파일에 과거 결정 74건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
+주제별 파일에 과거 결정 75건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
 `CLAUDE.md` 의 `## 결정 기록` 에 같은 색인이 실려 매 세션 자동 로드된다 — 거기서 항목을 찾고 여기서 본문을 읽는다.
 
 | 주제 | 파일 | 건수 |
 |---|---|---|
 | 제품 · 가격 · 번역 | [`products.md`](./products.md) | 10 |
 | 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 12 |
-| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 13 |
+| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 14 |
 | 정산 | [`settlement.md`](./settlement.md) | 10 |
 | EFS 배송비 후청구 | [`efs-billing.md`](./efs-billing.md) | 2 |
 | 결제 (PG) | [`payment.md`](./payment.md) | 3 |
@@ -98,3 +98,4 @@
 | `2026-09-23` | [카페24 주문 불러오기 → 3PL 출고신청 전환](./shipping-seeding.md#2026-09-23-2) | shipping-seeding |
 | `2026-09-29` | [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](./storefront.md#2026-09-29) | storefront |
 | `2026-09-30` | [고객 부담 배송비를 브랜드가 정한다 — 무료배송 불린 → 금액](./shipping-seeding.md#2026-09-30) | shipping-seeding |
+| `2026-09-30` | [고객 부담 배송비의 단위를 원 → USD 센트로 옮긴다](./shipping-seeding.md#2026-09-30-2) | shipping-seeding |

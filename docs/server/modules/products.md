@@ -13,7 +13,7 @@
   - **마이그레이션·백필 없음** · 라우트·cron 불변. 회귀 잠금은 `products/__tests__/onsite-hidden-gate.spec.ts`(9) — 특히 **두 게이트의 차이가 `hidden` 하나뿐임을 구조로 단언**한다(한쪽에만 조건이 늘면 "부스에서만 안 팔린다"가 되는데 그건 화면 어디에도 신호가 없다).
 - **`Product.hidden` 토글**: 노출/판매만 끄고 status 는 유지. **브랜드 셀프 토글은 [brand-applications](./brand-applications.md) `PATCH /v1/brand/products/:id/hidden`** 에 있다(이 모듈엔 hidden 라우트 없음). 어드민 목록 응답은 `approvedHiddenReason()` 결과를 **`hiddenReason` 필드**로 실어 뱃지에 쓴다 — `hidden_by_brand` / `incomplete` / `brand_unapproved` / `subscription_inactive`, 정상 노출이면 `null`. `status='approved'` 인 행에만 계산하고 pending/rejected 는 항상 `null`.
 - **공통 select**: `product-selects.ts` 의 `PRODUCT_LIST_SELECT`/`isPurchasable`/`approvedHiddenReason` 등을 모든 surface 가 공유.
-- **무료배송 노출**: 배송비 설정은 **국가별 금액**(`ProductCountryPrice.shippingKrwOverride`)이라
+- **무료배송 노출**: 배송비 설정은 **국가별 금액(USD 센트)**(`ProductCountryPrice.shippingUsdOverride`)이라
   `PRODUCT_COUNTRY_PRICE_SELECT` 가 이미 실어 오고, `attachCustomerPricing` 이 **`=== 0`** 을 파생해
   공개 응답 `freeShipping` 에 싣는다(`?country=` 미지정이면 US). 행이 없거나 `NULL` 인 국가는 그 나라
   500g 요율을 고객이 낸다 — fail-closed. ⚠️ 배지는 **0원일 때만** 뜨고 `> 0` 금액은 공개 응답에
@@ -21,13 +21,13 @@
   ⚠️ **배지와 청구가 어긋날 수 있다** — 배지는 제품 단위 파생인데 청구는 **브랜드 단위 max** 다
   (같은 브랜드의 다른 제품이 유료면 그 브랜드는 청구된다). 브랜드 모달이 그 사실을 고정 문구로 알린다.
   ⚠️ 응답의 `freeShipping` 은 **그 한 나라에 대한 값**이라 카트/스토어에 스냅샷하면 배송지를 바꿀 때 어긋난다(배지 표시 전용).
-  ⚠️ 브랜드 스튜디오용 `mapBrandProduct` 는 대신 **국가별 원본 맵** `shippingKrws{iso:원}` 을 돌려준다 —
+  ⚠️ 브랜드 스튜디오용 `mapBrandProduct` 는 대신 **국가별 원본 맵** `shippingUsds{iso:센트}` 를 돌려준다 —
   스튜디오는 국가별 원본이 필요한데 파생값은 한 나라 기준이라(국가 미지정 → US) 폼 재구성에 쓸 수 없다.
-  구 스튜디오 호환용 `freeShippingCountries: string[]` 도 함께 실리지만 **`shippingKrwOverride === 0` 의 파생**이다.
-- **고객 부담 배송비 오버라이드 (2026-09-30~)**: 정본은 `ProductCountryPrice.shippingKrwOverride`(원, nullable)
+  구 스튜디오 호환용 `freeShippingCountries: string[]` 도 함께 실리지만 **`shippingUsdOverride === 0` 의 파생**이다.
+- **고객 부담 배송비 오버라이드 (2026-09-30~)**: 정본은 `ProductCountryPrice.shippingUsdOverride`(**USD 센트**, nullable)
   이고 구 `freeShipping` 불린은 **`=== 0` 의 파생 미러**로 쓰기만 한다(읽지 않는다 · `[dormant]`).
   세 상태가 서로 다른 뜻이다 — **`NULL`/행 없음 = 그 국가 500g 요율 추종** / **`0` = 무료** / **`>0` = 브랜드 지정액**.
-  ⚠️ zod(`BrandProductCountryPriceInput.shippingKrwOverride`)에 **`.default()` 를 주면 안 된다** —
+  ⚠️ zod(`BrandProductCountryPriceInput.shippingUsdOverride`)에 **`.default()` 를 주면 안 된다** —
   `undefined`(키 없음)는 *"구 클라이언트 → 기존 값 보존"* 이라는 네 번째 뜻이라 기본값을 주는 순간
   `writeProductCountryPrices` 의 보존 shim 이 조용히 죽는다. 상한 `1_000_000` 은 정책이 아니라 자릿수 오타 방어다.
 - **공개 응답의 가격 필드 (2026-07-28~30 가격 모델)**: 모든 공개 read 는 `?country=`(미지정 US)를 받아

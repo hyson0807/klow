@@ -3,14 +3,28 @@
 KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 기준** 문서다. 결제 흐름은
 [`payment-integration.md`](./payment-integration.md) 참고.
 
+> **2026-09-30 전환-2 (배송비 단위를 원 → USD 센트로)**: 브랜드가 정하는 배송비를
+> **`ProductCountryPrice.shippingUsdOverride`(USD 센트)** 로 옮겼다. PG 청구 통화가 USD 라
+> 원화로 고정하면 같은 설정이 환율 따라 **$2.17 ↔ $2.23 으로 흔들렸다.** 이제 브랜드가 정한
+> 숫자가 손님 화면에 그대로 뜨고, 환율 리스크는 브랜드 정산(원화) 쪽으로 간다 — **판매가가
+> 이미 그렇게 동작한다**(2026-07 전환). 배송비만 반대였다.
+> ⚠️ **미설정 국가(NULL)는 여전히 원화 요율표를 따른다**(의도된 구분) — 그쪽만 환율에 움직인다.
+> ⚠️ 커널 2패스의 도메인이 센트로 바뀌었다 — **기본 요율만 루프 밖에서 1회 환산**하고 max 는
+> 이미 센트인 값들 사이에서 일어난다. 브랜드 값은 환산이 없어 `max(round) ≠ round(max)` 함정이
+> 구조적으로 사라졌고, **5원 → 0센트 함정(G3)** 도 함께 사라졌다(입력 최소 단위가 1센트).
+> zod 천장은 `.max(100_000)`($1,000). 구 원화 키는 **일부러 안 받는다**(받아 환산하면 서버가
+> 환율을 정하게 된다). 마이그레이션 `shipping_override_to_usd_cents` — ADD COLUMN + 단위 전환
+> 백필(`0 → 0`), **운영엔 `0` 뿐이라 사실상 항등**. 구 `shippingKrwOverride` 는 dormant.
+> 상세는 [`../decisions/shipping-seeding.md` 2026-09-30-2](../decisions/shipping-seeding.md#2026-09-30-2).
+>
 > **2026-09-30 전환 (고객 부담 배송비를 브랜드가 정한다)**: 무료배송 `ON/OFF` 불린이
-> **금액**(`ProductCountryPrice.shippingKrwOverride`, 원)이 됐다. `NULL`/행 없음 = 그 국가 **500g
+> **금액**(당시 `shippingKrwOverride`, 원 — 같은 날 위 전환으로 USD 센트가 됐다)이 됐다. `NULL`/행 없음 = 그 국가 **500g
 > 요율 추종**(기본 — 동작 불변) / `0` = 무료배송 / `> 0` = 브랜드 지정액이고, 상한 정책은 없다
 > (zod `.max(1_000_000)` 은 자릿수 오타 방어). 즉 **요율표는 이제 "브랜드가 정하지 않은 국가"의
 > 기본값**이다. 청구는 여전히 브랜드 단위(한 브랜드=한 송장)지만 라인마다 금액이 다를 수 있어
 > **그 브랜드 라인의 max 1회**이고, 총액은 브랜드별 값의 **합**이다(`× 브랜드수` 가 아니다).
-> ⚠️ `resolveFreeShipping`·`chargeableBrandIds` 는 사라졌다 — `resolveShippingKrw(row, iso2,
-> defaultRateKrw)` 와 `shippingFeeByBrand(...)` 의 2패스(KRW max → 브랜드별 1회 센트 변환)가 정본.
+> ⚠️ `resolveFreeShipping`·`chargeableBrandIds` 는 사라졌다 — `resolveShippingCents(row, iso2,
+> defaultCents)` 와 `shippingFeeByBrand(...)` 의 2패스가 정본.
 > 구 `freeShipping` 컬럼은 `=== 0` 의 **dormant 파생 미러**(쓰기만, 읽지 않음)이고 드롭은 예약.
 > 정산·청구 산식은 **한 줄도 안 바뀌었다**(`Order.shippingFeeByBrand` 가 이미 브랜드별 금액 맵).
 > 마이그레이션 `add_product_country_shipping_override`(nullable ADD COLUMN + 같은 SQL 안의 멱등
@@ -109,7 +123,7 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
   실시간 아님 — 어드민 갱신 시 계단식. (구 `ShopSettings.usdKrwRate` 는 dormant, 후속 릴리스에서 드롭.)
 - **국가별 고객 배송비의 기본값**은 `SeedingRate` 국가×무게 요율표의 **기준 무게(500g) 티어**(어드민 **배송비용** 탭,
   엑셀 `KLOW_시딩_가격표` 고객_가격표). 공개 응답엔 `customerShippingKrw` 로 실린다.
-  ⚠️ **브랜드가 제품×국가로 금액을 정하면 그 값이 앞선다**(`ProductCountryPrice.shippingKrwOverride` —
+  ⚠️ **브랜드가 제품×국가로 금액을 정하면 그 값이 앞선다**(`ProductCountryPrice.shippingUsdOverride`, USD 센트 —
   2026-09-30 전환). 그래서 이 요율은 *"브랜드가 정하지 않은 국가"* 에 붙는 금액이다.
   **판매가/정산가와 무관** — 그 값 그대로가 결제 배송비(청구 대상 브랜드당 1회)로 쓰이고,
   **그 결제액 전액이 브랜드 정산으로 지급**된다(2026-09 전환). 실측 물류비 + 수수료는 별도로 전액 후청구되므로,
@@ -135,8 +149,8 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 | **손님 판매가** (취소선) | 서버 계산 | USD | 응답 `listPriceUsd`(센트) | 핀 국가 `priceLocal/rate`, 미핀 default(신모델=정산가+frozenFx 파생 / legacy `basePriceUsd`). **미핀은 전 국가 동일** |
 | **실제 결제가** | 서버 계산 | USD | 응답 `customerPriceUsd`(센트) | 할인 적용가 |
 | 정산가 (개당 브랜드 몫) | 서버 역산 | KRW | 응답엔 미노출(편집기만) | `= 청구USD × fx × 0.95`(물류비 차감 없음). **유동**(표시 시점 환율) |
-| **고객 부담 배송비** | 브랜드/어드민 입력 | KRW | `ProductCountryPrice.shippingKrwOverride` **저장**(국가별) | `NULL`/행 없음 = 그 국가 500g 요율 추종 / `0` = 무료 / `>0` = 지정액. 실효값은 `resolveShippingKrw(row, iso2, defaultRateKrw)`. 공개 응답 `freeShipping` 은 `=== 0` 파생(`?country=` 기준) — **배지용이고 청구액의 정본이 아니다**(청구는 브랜드 max) |
-| 무료배송 불린(구) | — | — | `ProductCountryPrice.freeShipping` | **[dormant]** 위 컬럼 `=== 0` 의 파생 미러 — 쓰기만 하고 읽지 않는다. 드롭 예약 |
+| **고객 부담 배송비** | 브랜드/어드민 입력 | **USD 센트** | `ProductCountryPrice.shippingUsdOverride` **저장**(국가별) | `NULL`/행 없음 = 그 국가 500g 요율 추종(원화 → 환율 탐) / `0` = 무료 / `>0` = 지정액(**환율 무관 고정**). 실효값은 `resolveShippingCents(row, iso2, defaultCents)`. 공개 응답 `freeShipping` 은 `=== 0` 파생(`?country=` 기준) — **배지용이고 청구액의 정본이 아니다**(청구는 브랜드 max) |
+| 무료배송 불린(구) · 원화 오버라이드(구) | — | — | `ProductCountryPrice.freeShipping` · `shippingKrwOverride` | **[dormant]** 앞의 것은 `=== 0` 파생 미러(쓰기만), 뒤의 것은 단위 전환으로 읽지도 쓰지도 않는다. 둘 다 드롭 예약 |
 | 배송 박스 규격 | 브랜드 입력 | cm/g | `Product.{weightG,boxLengthCm,boxWidthCm,boxHeightCm}` **저장** | 예상 청구 배송비(실측 후청구 미리보기)용. **가격 무관** |
 
 > 핀·할인·배송비가 **셋 다 없는** 국가는 `ProductCountryPrice` 행을 만들지 않고 default(신모델=정산가+frozenFx 국가별 파생 / legacy=basePriceUsd, 할인=글로벌 discount, 배송비=고객 부담)를 상속한다.
@@ -187,16 +201,17 @@ KLOW의 가격·통화·할인 모델을 한 곳에 정리한 **현재 상태 �
 - 물류비·캐리어: `resolveProductShipping(iso2, address, brandWeights)` — `shipping.service.ts`(배송비 산출 전용, 가격 무관).
   요율표 조회는 `LogisticsRateService`(`shipping/logistics-rate.service.ts`), 브랜드별 박스 무게는 `orders/brand-weights.ts` `brandChargeableWeights`.
   환율: `resolveFxRate(prisma)` — `pricing/fx.ts`.
-- 배송비 실효값: `resolveShippingKrw(row, iso2, defaultRateKrw)` — `pricing/country-price.ts`
-  (목적국 `ProductCountryPrice` 행의 `shippingKrwOverride`, `??` 로 폴백 — ⚠️ `||` 로 쓰면 브랜드가 정한
-  **0원이 기본 요율로 되살아난다**).
+- 배송비 실효값: `resolveShippingCents(row, iso2, defaultCents)` — `pricing/country-price.ts`
+  (목적국 `ProductCountryPrice` 행의 `shippingUsdOverride`, `??` 로 폴백 — ⚠️ `||` 로 쓰면 브랜드가 정한
+  **0(무료배송)이 기본 요율로 되살아난다**). `defaultCents` 는 호출부가 원화 요율을 1회 환산해 넘긴다.
   **`(cp)` 가 아니라 `(row, iso2)` 를 받는 건 fail-closed 를 위해서다** — 호출부가 `countryPrices` 를 목적국으로
   필터하는 걸 깜빡해도 iso2 가 안 맞아 기본 요율로 떨어진다(cp 를 받으면 다른 나라 설정으로 배송비가 샌다).
   `shippingFeeByBrand(lines, iso2, defaultRateKrw, fxRate)` — `pricing/chargeable-brands.ts`.
   **주문 생성·견적이 공유하는 브랜드 단위 청구 규칙**이고 `{byBrand, total, chargeableBrands}` 를 한 번에 낸다.
-  ⚠️ **2패스다**(① KRW 에서 브랜드별 max → ② 브랜드별로 정확히 1회 센트 변환) — 한 패스로 되돌리면
-  배열 순서에 따라 청구액이 달라지고, 센트로 먼저 바꾸면 `max(round) ≠ round(max)` 로 어긋난다.
-  ⚠️ `chargeableBrands` 판정은 **KRW 기준**이다(센트로 세면 5원이 "무료배송"으로 표시된다).
+  ⚠️ **2패스다**(① 기본 요율을 루프 밖에서 1회 센트 환산 → ② 센트 도메인에서 브랜드별 max) —
+  한 패스로 되돌리면 배열 순서에 따라 청구액이 달라진다. 브랜드가 정한 값은 이미 센트라 환산이
+  없어 `max(round) ≠ round(max)` 함정은 구조적으로 없다.
+  ⚠️ `chargeableBrands` 판정은 센트 `> 0` 이다(입력 최소 단위가 1센트라 반올림 0 구간이 없다).
 
 ## 프론트
 
@@ -230,8 +245,9 @@ model ProductCountryPrice {
   priceLocal   Float?  // 국가별 고정 현지통화 판매가(major). null = 기본 USD 상속
   marginKrw    Int?    // [dormant] 구 모델 마진. priceLocal 백필 소스만 — prod 백필 후 드롭 가능
   discountPct  Int     @default(0)
-  shippingKrwOverride Int? // 이 국가 고객 부담 배송비(원). NULL/행 없음 = 500g 요율 추종 / 0 = 무료 / >0 = 지정액
-  freeShipping Boolean @default(false) // [dormant] 위 컬럼 === 0 의 파생 미러. 쓰기만 하고 읽지 않는다(드롭 예약)
+  shippingUsdOverride Int? // 이 국가 고객 부담 배송비(USD 센트). NULL/행 없음 = 500g 요율 추종 / 0 = 무료 / >0 = 지정액
+  shippingKrwOverride Int? // [dormant] 구 원화 입력. 단위 전환(2026-09-30)으로 읽지도 쓰지도 않는다(드롭 예약)
+  freeShipping Boolean @default(false) // [dormant] 위 USD 컬럼 === 0 의 파생 미러. 쓰기만 한다(드롭 예약)
   @@unique([productId, iso2])
 }
 model Order {
@@ -258,7 +274,8 @@ model OrderItem {
 - `ShippingRate` 모델은 시딩 EMS/DHL **비교 표 전용** — 주문/제품 가격(정산·판매가) 계산엔 쓰이지 않는다.
 마이그레이션: `add_country_currency_and_fx`(통화) + 판매가 고정 전환 + `pricing_free_shipping`(무료배송·박스규격·브랜드별 배송비 스냅샷)
 + `country_free_shipping`(무료배송을 국가별로 — `ProductCountryPrice.freeShipping` 추가 / `Product.freeShipping`·`Brand.freeShippingAll` 드롭)
-+ `20260930042335_add_product_country_shipping_override`(무료배송 불린 → 금액 — nullable ADD COLUMN + **같은 SQL 안의 멱등 백필**(`freeShipping=true → 0`), 롤링 안전 · 운영 대상 445행).
++ `20260930042335_add_product_country_shipping_override`(무료배송 불린 → 금액 — nullable ADD COLUMN + **같은 SQL 안의 멱등 백필**(`freeShipping=true → 0`), 롤링 안전 · 운영 대상 445행)
++ `20260930065107_shipping_override_to_usd_cents`(같은 칸의 단위를 원 → **USD 센트**로 — ADD COLUMN + 단위 전환 백필(`0 → 0`), 운영엔 `0` 뿐이라 사실상 항등).
 
 > **`country_free_shipping` 배포 주의**: `Product`/`Brand` 의 DROP COLUMN 은 롤링 배포에 안전하지 않다
 > (Prisma 가 SELECT 에 컬럼을 명시하므로 구 파드가 마이그레이션 직후 500). 컷오버 시 단일 레플리카로

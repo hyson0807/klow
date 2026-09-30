@@ -1,5 +1,7 @@
 # brand-shipping-fee — 브랜드가 정하는 고객 부담 배송비
 
+> ⚠️⚠️ **단위가 바뀌었다 — 이 문서의 `shippingKrwOverride`(원)는 지금 `shippingUsdOverride`(USD 센트)다.** PG 청구 통화가 USD 라 원화 고정은 손님 화면에서 환율 따라 흔들렸다(2026-09-30 후속 전환). 결정 5(이름)와 결정 3(입력 통화)만 그만큼 낡았고 **나머지 결정은 전부 그대로 참이다**. 현행 사양은 [`decisions/shipping-seeding.md` 2026-09-30-2](../../decisions/shipping-seeding.md#2026-09-30-2).
+
 ## 읽는 순서
 
 1. 이 문서 — **무엇을 왜 이렇게 정했나** (결정 요약)

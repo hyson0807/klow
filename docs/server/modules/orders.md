@@ -8,7 +8,7 @@
   `OrderItem`에 주문 시점 스냅샷(`unitPriceUsd`/`settlementPriceKrw`/`costKrw`). 가격은 표시·견적과 동일한 `priceLine` 사용.
 - **배송비 (브랜드별 금액, 2026-09-30~)**: `shippingFeeUsd = Σ 브랜드별 배송비`(산식 정본은 [pricing-model](../../reference/pricing-model.md)).
   배송비는 브랜드 단위(한 브랜드 = 한 송장 = 한 박스)로 1회 청구되고, 금액은 **그 브랜드 라인의
-  최댓값**이다 — 라인 금액은 `ProductCountryPrice.shippingKrwOverride` 로 제품×국가마다 갈릴 수 있고,
+  최댓값**이다 — 라인 금액은 `ProductCountryPrice.shippingUsdOverride`(USD 센트)로 제품×국가마다 갈릴 수 있고,
   설정이 없으면(NULL·행 없음) 그 국가 500g 요율이다. `0` 이면 무료. **⚠️ 브랜드마다 금액이 다를 수 있으므로
   `요율 × 브랜드수` 로 복원하지 말 것.** 판정의 단일 출처는 `shippingFeeByBrand(lines, iso2, defaultRateKrw, fxRate)`
   (`pricing/chargeable-brands.ts`, 생성·견적 공유)이고 라인 해석은 `resolveShippingKrw(row, iso2, defaultRateKrw)` 다.
