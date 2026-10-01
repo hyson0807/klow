@@ -63,6 +63,8 @@ klow_brand 의 비교/견적 화면에 분기 캐리어를 "실제 캐리어"처
    - BR/TW/CA/AU state·우편번호 정규식 → **`warn`** 으로 강등(발급은 되고 확인만 권유). HK/MO 우편번호 빈칸 허용 삭제(서버 `min(2)`)
    - 비영문 이름/주소 전면 차단 **제거**(서버·EFS 가 현지어 허용, JP 는 영문 칸이 따로). 품명만 ASCII 유지(`brandItemsIssue` 재사용)
    - 전화번호: 공백·점 제거해 `^[+\-()0-9]+$` 로 정규화, 남는 문자 있으면 error. 이메일은 형식 틀리면 error(서버 zod 400 방지), 비면 OK
+     - (2026-10-01) 엑셀이 숫자로 저장한 번호는 과학표기(`8.21037E+11`)로 들어오므로 원본 숫자에서 자릿수를 복구하고 **warn** 을 띄운다 — 양식은 데이터 칸을 텍스트 서식으로 깔아 애초에 안 바뀌게 한다([결정](../../decisions/shipping-seeding.md#2026-10-01))
+   - (2026-10-01) **우리 양식이 아닌 파일**은 `POST /v1/brand/seeding/bulk-columns` 가 AI 로 열 매핑만 돌려주고, 매핑 확인 화면에서 열을 고치면 AI 재호출 없이 로컬 재추출한다([결정](../../decisions/shipping-seeding.md#2026-10-01-2))
    - 가이드 시트·`COUNTRY_RULE_GUIDE` 문구를 위 4종으로 갱신
 3. **`api.ts`** `seeding.bulkIssue({campaignName, rows})` + `api-types.ts` 결과 타입.
 4. **`BulkInvoiceModal.tsx`**

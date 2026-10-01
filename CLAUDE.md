@@ -203,6 +203,8 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-30` [일본 배송 영문 주소 칸이 첫 글자에 사라졌다 — 조건부 렌더에 자기 값을 넣지 말 것](docs/decisions/shipping-seeding.md#2026-09-30-3)
 - `2026-09-30` [송장 캐리어 = 국가 고정 캐리어 — 무게 분기는 예상 배송비 전용](docs/decisions/shipping-seeding.md#2026-09-30-4)
 - `2026-09-30` [엑셀로 자동 국제 송장 발급 — 링크 없이 명단으로](docs/decisions/shipping-seeding.md#2026-09-30-5)
+- `2026-10-01` [엑셀 명단의 전화번호가 `8.21037E+11` 로 올라왔다 — 양식 칸을 텍스트 서식으로 깐다](docs/decisions/shipping-seeding.md#2026-10-01)
+- `2026-10-01` [엑셀 일괄 송장이 KLOW 양식을 벗어난다 — 브랜드 자기 양식은 AI 가 열을 짚는다](docs/decisions/shipping-seeding.md#2026-10-01-2)
 
 ### 정산 — `settlement.md`
 
