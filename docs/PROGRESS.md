@@ -47,21 +47,21 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ⚠️ **staging DB 는 이미 마이그레이션이 적용돼 있다**(Neon `ep-icy-flower`) — push 로 새로 도는 건
 코드뿐이다.
 
-### customer-reviews — 다음은 `§7` **16행**(C. 손님 작성 페이지 + PDP 배지 + 브랜드 읽기 전용)
+### customer-reviews — 트랙 코드 완료(14·15·16행), 남은 것은 사용자 작업 3가지
 
-**14행(A)·15행(B)은 2026-10-01 에 끝났다**(klow_server `1f4cb6e`·`b282b9d`, klow_admin `b5cbe59`,
-push 안 함). 사용자 지시로 이 트랙은 **git `staging` 브랜치 + staging DB(`ep-icy-flower`)에서 직접**
-진행한다 — 트랙 문서의 "`feat/customer-reviews` + Neon DB 브랜치" 지시를 이 트랙에 한해 대체한다.
-마이그레이션 `add_customer_reviews` 는 **staging DB 에 이미 적용**됐다. 16행 명세는 `§6` + 트랙 문서
-[C행](./plan/customer-reviews/implementation-plan.md) — 착수 전에 `§9` 의 15행 메모를 읽는다.
+**16행(C)은 2026-10-01 에 끝났다**(klow_server `d6e3344` · klow_brand `9adbd0d` · klow_web `ae56ffc`, push 안 함).
+트랙 전체가 **git `staging` + staging DB 에서 직접** 진행됐다(사용자 지시). 마이그레이션 `add_customer_reviews`
+는 staging DB 에 이미 적용돼 있다. **남은 것은 전부 사용자 작업이고 이 순서다** —
 
-⚠️ **위 세 줄(7·8 → 12 → 9행)의 우선순위를 밀지 않는다** — 그건 전부 사용자 `git push` 와
-운영 확인이 필요한 일이다. ⚠️ 단 14·15행 커밋이 klow_server·klow_admin `staging` 에 쌓였으므로
-7·8·12행의 `git push` 에 **함께 실려 나간다** — 라우트 3개 + `/admin/reviews?source=` 필터 +
-cron 1개가 추가되지만 **cron 은 기본 off**(`REVIEW_REQUEST_CRON_ENABLED === 'true'` 일 때만)라
-메일은 나가지 않는다. ⚠️⚠️ **staging·운영 어디서든 16행 klow_web 배포 전에 그 env 를 켜지 말 것**
-— 손님에게 404 링크가 나가고 되돌릴 수 없다. ⚠️ 운영 배포 때는 `add_customer_reviews`
-마이그레이션 + `REVIEW_LINK_SECRET` env 가 **먼저** 있어야 한다(없으면 운영 부팅 거부 — fail-closed).
+1. **push** — `klow_server → klow_admin → klow_brand → klow_web`(7·8·12행 push 에 함께 실린다)
+2. ⚠️⚠️ **R2 버킷 CORS 에 klow_web 오리진 추가**(PUT · `content-type`) — 2026-10-01 실측: staging 버킷
+   `klow-staging` 은 `localhost:3001`·`brand-staging.klow.kr` 만 허용하고 `klow.kr` 은 **403** 이다. 안 하면
+   **리뷰 사진 업로드만** 실패한다(글은 제출된다). 운영 버킷도 같은 확인이 필요하다
+3. **`REVIEW_REQUEST_CRON_ENABLED=true`** — ⚠️⚠️ **klow_web 배포를 눈으로 확인한 뒤에만**(`/review/preview` 가 뜨면
+   배포된 것). 거꾸로면 손님에게 404 링크가 나가고 되돌릴 수 없다. 운영은 `add_customer_reviews` +
+   `REVIEW_LINK_SECRET` 이 **먼저**(없으면 부팅 거부)
+
+⚠️ **위 세 줄(7·8 → 12 → 9행)의 우선순위를 밀지 않는다** — customer-reviews 의 push 는 그 push 에 함께 실린다.
 
 ### ⚠️⚠️ 2026-09-30 후속 — 배송비 단위를 원 → USD 센트로 옮겼다 (사용자 요청)
 
@@ -896,7 +896,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
 | 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 (**staging 브랜치·staging DB 에서 직접** — 사용자 지시) | 완료 | ✗ | 2026-10-01 | 1f4cb6e / - / - / - / (이 커밋) |
 | 15 | customer-reviews | B. klow_server 요청 큐·cron(**기본 off**)·8개국어 메일 + klow_admin 출처 배지·필터 | 완료 | ✗ | 2026-10-01 | b282b9d / b5cbe59 / - / - / (이 커밋) |
-| 16 | customer-reviews | C. klow_web 작성 페이지 + PDP `구매 확인` 배지 + klow_brand 읽기 전용 + 문서·결정 기록 | 대기 | ✗ | | |
+| 16 | customer-reviews | C. klow_web 작성 페이지 + PDP `구매 확인` 배지 + klow_brand 읽기 전용 + 문서·결정 기록 — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 / - / 9adbd0d / ae56ffc / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -960,6 +960,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### customer-reviews — 16행 C (완료 · klow_server `d6e3344` · klow_brand `9adbd0d` · klow_web `ae56ffc`, push 안 함)
+
+- **트랙 문서와 다르게 한 것**: ① **`npm run i18n:fill` 을 못 돌렸다** — 로컬 어디에도 `GOOGLE_TRANSLATE_API_KEY` 가 없다. 7개 언어를 **수동 번역**해 `review` 네임스페이스·`pdp.verifiedPurchase` 만 **추가**했다(기존 값 0건 변경 — fill 의 큐레이션 되돌림 문제도 없음) ② `review`·`reviews` 를 **브랜드 slug 예약어**에 넣었다(klow_server 1커밋 — `/review` 가 `[brandSlug]` 를 가린다. staging DB·운영 API 에 그 slug 없음 확인) ③ PDP 배지 문구는 `Verified purchase`(pdp ns).
+- **실측(로컬 :4010/:3001 · staging DB · Chrome)**: JP 일반 주문 `cdemoblnk…3760` 에 `reviewLinkUrl()`(메일과 같은 함수) + `ReviewRequest` 1행(locale=`countryToLocale('JP')`)을 만들어 진입 → 일본어 화면 · 받은 제품 2 + 다른 제품 1 선택 · 사진 1장 R2 업로드 · 제출 → DB `source=customer`·`sourceLocale=ja`·집계 5/4/3·`submittedAt` → 재방문 `レビュー済み` 3개 비활성 → PDP `Verified purchase` 배지 + 사진 렌더 → `/review/preview?lang=th` API 호출 0 · 위조 토큰은 invalid 화면. **전부 원복**(리뷰 3·요청 1·집계 0/0·R2 객체 2 삭제).
+- ⚠️ cron 경유 실제 메일 링크는 다시 찍지 않았다(15행에서 확인됨) — 링크 생성 함수는 같다.
+- **확인 못 한 것**: klow_brand 리뷰 탭의 `고객 작성` 배지(로그인 필요 — `build` 만) · 실제 klow_web 배포 오리진에서의 사진 업로드(**R2 CORS 가 막는다** — `§0` 2번).
+- ⚠️ 로컬 dev 에서 사진을 시험하려면 klow_web 을 **포트 3001** 로 띄울 것(3011 은 R2 CORS 403). 화면 우하단 둥근 버튼은 TanStack Query devtools(dev 전용)다.
+- 검증: klow_web `type-check`(⚠️ 그 전에 `npm install` 필요했다 — sentry·googlemaps·sharp 가 node_modules 에 없었다)·`build`·eslint · klow_brand `build`·eslint · klow_server `typecheck`·부팅 라우트 402.
 
 ### customer-reviews — 15행 B (완료 · klow_server `b282b9d` · klow_admin `b5cbe59`, push 안 함)
 

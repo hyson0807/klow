@@ -98,6 +98,21 @@ mock 으로 렌더**하는 개발/디자인 전용 페이지 모음이다. 백�
 
 ---
 
+## 4. 고객 리뷰 작성 프리뷰 — `/review/{preview orderId}`
+
+리뷰 요청 메일 링크로 들어오는 작성 화면을 토큰·백엔드 없이 본다(`enabled: !preview`). 운영 orderId 는 cuid 라 겹치지 않는다.
+`?lang=ja` 등으로 언어를, `?state=success` 로 제출 완료 화면을 강제한다.
+
+| 경로 | 화면 |
+|---|---|
+| `/review/preview` | 일반 주문 — 받은 제품 2 + 다른 제품 4 |
+| `/review/preview-seeding` | 시딩 — 받은 제품이 카탈로그와 안 맞아 다른 제품만 |
+| `/review/preview-done` | 전부 작성 완료 |
+
+- **위치:** `klow_web/src/app/review/[orderId]/page.tsx` (`previewForm()`). 사진은 업로드 대신 로컬 미리보기 URL.
+
+---
+
 ## 유지보수 메모
 
 - checkout/tracking 은 **공유 뷰 컴포넌트**를 고치면 실물·프리뷰가 함께 바뀐다. 시딩은 페이지 자체를

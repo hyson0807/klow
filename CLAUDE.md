@@ -92,6 +92,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
 | 서버 인증 모듈                | `klow_server/src/modules/web-auth/` (service, controller, password/session, email/phone OTP, Solapi SMS, google strategy) |
 | UserGuard + CurrentUser       | `klow_server/src/modules/web-auth/user.guard.ts`, `klow_server/src/modules/web-auth/current-user.decorator.ts` |
+| 고객 직접 리뷰                | 서버 `klow_server/src/modules/reviews/`(`customer-review.service.ts` 토큰 게이트 · `review-request.{service,cron}.ts` 메일 큐 — cron **기본 off**) · 손님 작성 페이지 `klow_web/src/app/review/[orderId]/` + `src/lib/upload.ts` · PDP 배지 `components/product/ReviewCard.tsx` · klow_brand `studio/_components/product-reviews/ReviewListItem.tsx`(고객 작성은 읽기 전용). 엔드포인트: `docs/server/modules/reviews.md` |
 | Admin toast feedback          | `klow_admin/src/components/Toast.tsx` (`useToast()`) + wired into `klow_admin/src/hooks/useFormState.ts` |
 
 ## klow_server 코드 구조 규칙 (2026-08 정리에서 확정)
@@ -142,9 +143,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 75건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 76건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 75건 중 59건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 76건 중 60건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -160,6 +161,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-08-19` [제품 태그·핵심 성분 드래그 정렬](docs/decisions/products.md#2026-08-19)
 - `2026-08-25` [브랜드 수동 번역 — 목업 인라인 편집](docs/decisions/products.md#2026-08-25)
 - `2026-09-10` [제품 가리기(`hidden`)는 온라인 전용 — 현장은 안 가려진다](docs/decisions/products.md#2026-09-10)
+- `2026-10-01` [고객 직접 리뷰 — 배송완료 메일 링크 + 작성 페이지 + `구매 확인` 배지 (cron 기본 off · 사진은 R2 CORS 필요)](docs/decisions/products.md#2026-10-01)
 
 ### 브랜드관 · 프로모션 · 방문 통계 — `storefront.md`
 
