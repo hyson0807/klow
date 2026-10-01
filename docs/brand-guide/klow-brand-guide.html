@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>KLOW Brand 시작 가이드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  :root {
+    --ink: #111;
+    --sub: #555;
+    --mute: #8a8a8a;
+    --line: #e4e4e4;
+    --soft: #f5f5f5;
+    --red: #E5262B;
+    --brand: #3d2a4f;
+  }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body {
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    color: var(--ink);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    word-break: keep-all;
+  }
+  .page {
+    width: 210mm; height: 297mm;
+    padding: 16mm 16mm 14mm;
+    position: relative; overflow: hidden;
+    page-break-after: always; break-after: page;
+    display: flex; flex-direction: column;
+  }
+  .page > * { flex-shrink: 0; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .foot {
+    position: absolute; left: 16mm; right: 16mm; bottom: 8mm;
+    display: flex; justify-content: space-between;
+    font-size: 8pt; color: var(--mute);
+    border-top: 1px solid var(--line); padding-top: 2.5mm;
+  }
+  .foot .pn { font-weight: 700; color: var(--ink); }
+
+  /* chapter head */
+  .chap { display: flex; align-items: baseline; gap: 4mm; border-bottom: 2px solid var(--ink); padding-bottom: 3mm; margin-bottom: 5mm; }
+  .chap .no { font-size: 11pt; font-weight: 800; color: var(--red); }
+  .chap h1 { font-size: 20pt; margin: 0; letter-spacing: -0.02em; }
+  .chap .crumb { margin-left: auto; font-size: 8.5pt; color: var(--sub); }
+  h2 { font-size: 13.5pt; margin: 0 0 2mm; letter-spacing: -0.01em; }
+  h2 .sub { font-size: 9pt; color: var(--mute); font-weight: 500; margin-left: 2mm; }
+  .lead { font-size: 10pt; color: var(--sub); margin: 0 0 3.5mm; line-height: 1.55; }
+  .where { display: inline-flex; gap: 1.5mm; align-items: center; font-size: 8.5pt; background: var(--ink); color: #fff; border-radius: 99px; padding: 1mm 3mm; margin-bottom: 3mm; }
+  .where b { font-weight: 700; }
+
+  /* screenshot */
+  .shot { position: relative; margin: 0 auto 3mm; border: 1px solid var(--line); border-radius: 3mm; overflow: hidden; box-shadow: 0 1.5mm 4mm rgba(0,0,0,.07); background: #f7f6fa; }
+  .shot > img { position: absolute; display: block; max-width: none; }
+  .shot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .shot .bx { position: absolute; border: 2.6px solid var(--red); border-radius: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+  .shot .bn { position: absolute; width: 6.2mm; height: 6.2mm; border-radius: 50%; background: var(--red); color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%); box-shadow: 0 0 0 1.5px #fff; z-index: 2; }
+
+  .row { display: flex; gap: 5mm; align-items: flex-start; }
+  .row > .col { flex: 1; min-width: 0; }
+  .row > .col:has(> figure) { flex: 1.75; }
+  .page.overflow { outline: 6px solid red; outline-offset: -6px; }
+
+  ol.steps { list-style: none; padding: 0; margin: 0 0 3mm; }
+  ol.steps li { display: flex; gap: 2.5mm; align-items: flex-start; font-size: 10pt; line-height: 1.5; margin-bottom: 1.6mm; }
+  ol.steps li .n { flex: none; width: 5.2mm; height: 5.2mm; border-radius: 50%; background: var(--red); color: #fff; font-weight: 800; font-size: 8pt; display: flex; align-items: center; justify-content: center; margin-top: .4mm; }
+  ol.steps li b { font-weight: 700; }
+
+  .note { background: var(--soft); border-radius: 2.5mm; padding: 3.2mm 4mm; font-size: 9pt; line-height: 1.6; color: #333; margin-bottom: 3mm; }
+  .note .t { font-weight: 800; font-size: 9pt; margin-bottom: 1mm; display: block; color: var(--ink); }
+  .note.warn { background: #fff4f2; }
+  .note.warn .t { color: var(--red); }
+  .note ul { margin: 0; padding-left: 4mm; }
+  .note li { margin: .5mm 0; }
+
+  .formula { display: flex; align-items: center; gap: 2mm; flex-wrap: wrap; font-size: 9.5pt; margin: 1mm 0; }
+  .formula span { background: #fff; border: 1px solid var(--line); border-radius: 2mm; padding: 1mm 2.5mm; font-weight: 700; }
+  .formula i { font-style: normal; color: var(--mute); }
+
+  .badge-soon { display: inline-block; background: #fff1d6; color: #9a6300; font-size: 8.5pt; font-weight: 800; padding: 1mm 3mm; border-radius: 99px; margin-left: 2mm; vertical-align: middle; }
+
+  /* flow strip */
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 2mm 0 4mm; }
+  .flow .st { flex: 1; border: 1.5px solid var(--ink); border-radius: 3mm; padding: 3mm 2.5mm; text-align: center; font-size: 9pt; line-height: 1.4; background: #fff; }
+  .flow .st b { display: block; font-size: 10pt; margin-bottom: 1mm; }
+  .flow .st .k { display: inline-flex; width: 6mm; height: 6mm; border-radius: 50%; background: var(--red); color: #fff; font-weight: 800; font-size: 8.5pt; align-items: center; justify-content: center; margin-bottom: 1.5mm; }
+  .flow .ar { flex: none; width: 6mm; display: flex; align-items: center; justify-content: center; color: var(--red); font-weight: 900; font-size: 13pt; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 3mm; }
+  table.t th { background: var(--soft); text-align: left; font-weight: 700; padding: 2mm 2.5mm; border-bottom: 1px solid #ccc; }
+  table.t td { padding: 2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.t td.r, table.t th.r { text-align: right; }
+
+  /* cover */
+  .cover { justify-content: space-between; padding: 24mm 20mm 20mm; background: #0f0f10; color: #fff; }
+  .cover .logo { font-size: 30pt; font-weight: 900; letter-spacing: -0.02em; }
+  .cover h1 { font-size: 36pt; line-height: 1.2; margin: 0 0 6mm; letter-spacing: -0.03em; }
+  .cover p { font-size: 12pt; color: #bbb; line-height: 1.6; margin: 0; }
+  .cover .meta { font-size: 9.5pt; color: #888; border-top: 1px solid #333; padding-top: 4mm; display: flex; justify-content: space-between; }
+  .cover .accent { width: 18mm; height: 2mm; background: var(--red); margin-bottom: 8mm; }
+
+  /* toc */
+  .toc { list-style: none; padding: 0; margin: 0; }
+  .toc li { display: flex; align-items: baseline; gap: 3mm; padding: 2.6mm 0; border-bottom: 1px solid var(--line); font-size: 11pt; }
+  .toc li .no { width: 9mm; font-weight: 800; color: var(--red); }
+  .toc li .tt { font-weight: 700; }
+  .toc li .ds { color: var(--mute); font-size: 9pt; margin-left: 2mm; }
+  .toc li .pg { margin-left: auto; font-weight: 700; }
+  .toc li.soon .tt::after { content: '서비스 준비중'; font-size: 7.5pt; background: #fff1d6; color: #9a6300; padding: .5mm 2mm; border-radius: 99px; margin-left: 2mm; vertical-align: middle; font-weight: 800; }
+
+  /* pricing */
+  .plans { display: flex; gap: 5mm; margin: 2mm 0 5mm; }
+  .plan { flex: 1; border: 1px solid #d6d6d6; border-radius: 4mm; padding: 5mm 6mm; position: relative; }
+  .plan.best { border: 2px solid var(--ink); }
+  .plan .tag { position: absolute; top: -3mm; right: 5mm; background: var(--ink); color: #fff; font-size: 8pt; font-weight: 700; padding: 1mm 3mm; border-radius: 99px; }
+  .plan .nm { font-size: 10.5pt; font-weight: 700; color: #333; margin-bottom: 3mm; }
+  .plan .pr { font-size: 22pt; font-weight: 900; letter-spacing: -0.02em; }
+  .plan .pr small { font-size: 9pt; font-weight: 500; color: var(--sub); margin-left: 1mm; }
+  .plan .vat { font-size: 8.5pt; color: var(--sub); margin: 2mm 0 3mm; }
+  .plan .mo { border-top: 1px dashed #ccc; padding-top: 3mm; font-size: 10pt; }
+  .plan .mo b { font-size: 12pt; }
+  .plan .mo span { color: var(--mute); font-size: 9pt; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm; margin-bottom: 4mm; }
+  .card { border: 1px solid var(--line); border-radius: 3mm; padding: 4mm; }
+  .card .ic { font-size: 15pt; margin-bottom: 1.5mm; }
+  .card b { display: block; font-size: 10.5pt; margin-bottom: 1mm; }
+  .card span { font-size: 9pt; color: var(--sub); line-height: 1.5; }
+
+  .menu-map td:first-child { width: 8mm; }
+  .dot { display: inline-flex; width: 5.2mm; height: 5.2mm; border-radius: 50%; background: var(--red); color: #fff; font-weight: 800; font-size: 8pt; align-items: center; justify-content: center; }
+
+  .faq dt { font-weight: 800; font-size: 10pt; margin-top: 3mm; }
+  .faq dt::before { content: 'Q. '; color: var(--red); }
+  .faq dd { margin: 1mm 0 0; font-size: 9.5pt; color: #333; line-height: 1.6; }
+  .faq dd::before { content: 'A. '; font-weight: 800; color: var(--mute); }
+  .gloss { display: grid; grid-template-columns: 26mm 1fr; gap: 1.8mm 4mm; font-size: 9.5pt; line-height: 1.5; }
+  .gloss b { font-weight: 800; }
+  .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page cover">
+  <div class="logo">KLOW</div>
+  <div>
+    <div class="accent"></div>
+    <h1>KLOW Brand<br>시작 가이드</h1>
+    <p>가입부터 첫 해외 판매, 발송, 정산까지.<br>처음 쓰는 브랜드를 위한 화면별 안내서입니다.</p>
+  </div>
+  <div class="meta"><span>brand.klow.kr</span><span>2026년 10월판</span></div>
+</section>
+
+<!-- ============ TOC ============ -->
+<section class="page">
+  <div class="chap"><h1>목차</h1></div>
+  <ul class="toc">
+    <li><span class="no">01</span><span class="tt">KLOW Brand 한눈에 보기</span><span class="ds">하는 일 · 메뉴 지도 · 5단계 흐름</span><span class="pg" data-toc="c1"></span></li>
+    <li><span class="no">02</span><span class="tt">시작하기</span><span class="ds">가입 · 브랜드 주소 · 정보 등록 · 결제</span><span class="pg" data-toc="c2"></span></li>
+    <li><span class="no">03</span><span class="tt">브랜드관 꾸미기</span><span class="ds">홈 › 디자인</span><span class="pg" data-toc="c3"></span></li>
+    <li><span class="no">04</span><span class="tt">제품 등록하기</span><span class="ds">AI 등록 · 가격 · 리뷰 · 번역</span><span class="pg" data-toc="c4"></span></li>
+    <li><span class="no">05</span><span class="tt">주문 받고 발송하기</span><span class="ds">홈 › 주문</span><span class="pg" data-toc="c5"></span></li>
+    <li><span class="no">06</span><span class="tt">국제배송 &amp; 링크 (시딩)</span><span class="ds">링크 발급 · 엑셀 일괄 송장</span><span class="pg" data-toc="c6"></span></li>
+    <li><span class="no">07</span><span class="tt">할인 링크</span><span class="ds">인플루언서 · VIP 전용 할인가</span><span class="pg" data-toc="c7"></span></li>
+    <li><span class="no">08</span><span class="tt">현장 QR</span><span class="ds">박람회 · 팝업 현장 판매</span><span class="pg" data-toc="c8"></span></li>
+    <li><span class="no">09</span><span class="tt">B2B 도매</span><span class="ds">해외 바이어 도매가 · 주문서</span><span class="pg" data-toc="c9"></span></li>
+    <li><span class="no">10</span><span class="tt">통계 보기</span><span class="ds">홈 › 통계</span><span class="pg" data-toc="c10"></span></li>
+    <li class="soon"><span class="no">11</span><span class="tt">재고 · 출고신청 (3PL)</span><span class="ds">홈 › 재고</span><span class="pg" data-toc="c11"></span></li>
+    <li><span class="no">12</span><span class="tt">정산 · 물류비 청구</span><span class="ds">매월 15일 정산</span><span class="pg" data-toc="c12"></span></li>
+    <li><span class="no">13</span><span class="tt">설정</span><span class="ds">계정 · 공지 팝업 · 구독 관리</span><span class="pg" data-toc="c13"></span></li>
+    <li><span class="no">14</span><span class="tt">자주 묻는 질문 · 용어집</span><span class="ds"></span><span class="pg" data-toc="c14"></span></li>
+  </ul>
+  <div class="spacer"></div>
+  <div class="note"><span class="t">이 책자 보는 법</span>
+    화면 속 <b style="color:var(--red)">빨간 박스</b>가 누를 곳이고, <b style="color:var(--red)">빨간 번호</b>가 순서입니다. 번호 아래 설명을 한 줄씩 따라 하면 됩니다.
+    화면은 예시 브랜드 <b>BLINK</b> 계정이며, 받는 사람 이름·주소 등은 예시 값으로 바꿨습니다.
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section class="page" data-chap="c1">
+  <div class="chap"><span class="no">01</span><h1>KLOW Brand 한눈에 보기</h1></div>
+  <h2>KLOW가 대신 해주는 일</h2>
+  <p class="lead">브랜드는 제품을 등록하고 박스를 국내 물류센터로 보내기만 하면 됩니다. 해외 결제·통관 송장·국제 배송·정산은 KLOW가 처리합니다.</p>
+  <div class="cards">
+    <div class="card"><div class="ic">🛍️</div><b>글로벌 브랜드관</b><span>klow.kr/브랜드주소 하나로 전 세계 손님이 그 나라 언어·통화로 구매합니다.</span></div>
+    <div class="card"><div class="ic">💳</div><b>해외 결제 대행</b><span>카드·PayPal·Alipay 등 해외 결제를 KLOW가 받고 매월 원화로 정산합니다.</span></div>
+    <div class="card"><div class="ic">✈️</div><b>국제 송장 · 배송</b><span>국제 송장은 자동 발급됩니다. 바코드만 붙여 인천 물류센터로 보내세요.</span></div>
+    <div class="card"><div class="ic">🎁</div><b>시딩 · 현장 · 도매</b><span>인플루언서 시딩 링크, 박람회 현장 QR, 해외 바이어 도매 페이지까지 한 곳에서.</span></div>
+  </div>
+  <h2>시작부터 첫 정산까지 5단계</h2>
+  <div class="flow">
+    <div class="st"><span class="k">1</span><b>가입</b>브랜드 주소·업종 정하기</div><div class="ar">›</div>
+    <div class="st"><span class="k">2</span><b>정보·결제</b>송화인·계좌 등록, 멤버십 결제</div><div class="ar">›</div>
+    <div class="st"><span class="k">3</span><b>브랜드관</b>디자인 꾸미고 제품 등록</div><div class="ar">›</div>
+    <div class="st"><span class="k">4</span><b>판매</b>링크·QR 공유하고 주문 받기</div><div class="ar">›</div>
+    <div class="st"><span class="k">5</span><b>발송·정산</b>바코드 붙여 발송, 매월 15일 정산</div>
+  </div>
+  <div class="note"><span class="t">결제 전에도 해볼 수 있어요</span>
+    브랜드관 꾸미기와 제품 등록은 가입 직후 바로 됩니다. 주문·정산·국제배송 메뉴는 멤버십 결제 후 열립니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">01</span><h1>메뉴 지도</h1><span class="crumb">화면 맨 위 메뉴 7개</span></div>
+  <p class="lead">어느 화면에서든 맨 위 메뉴로 이동합니다. 번호별로 이 책자의 몇 장을 보면 되는지 정리했습니다.</p>
+  <figure class="shot" style="width:100%" data-src="images/home-stats.jpg" data-crop="340,8,1100,78">
+    <i data-box="481,25,533,60" data-n="1" data-p="b"></i>
+    <i data-box="547,25,660,60" data-n="2" data-p="b"></i>
+    <i data-box="673,25,756,60" data-n="3" data-p="b"></i>
+    <i data-box="769,25,848,60" data-n="4" data-p="b"></i>
+    <i data-box="860,25,919,60" data-n="5" data-p="b"></i>
+    <i data-box="931,25,994,60" data-n="6" data-p="b"></i>
+    <i data-box="1004,25,1066,60" data-n="7" data-p="b"></i>
+  </figure>
+  <table class="t menu-map" style="margin-top:4mm">
+    <tr><th></th><th>메뉴</th><th>여기서 하는 일</th><th class="r">장</th></tr>
+    <tr><td><span class="dot">1</span></td><td><b>홈</b></td><td>브랜드관 미리보기 + 통계 · 디자인 · 주문 · 재고 탭. 제품 등록도 여기서</td><td class="r">03·04·05·10</td></tr>
+    <tr><td><span class="dot">2</span></td><td><b>국제배송 &amp; 링크</b></td><td>인플루언서·바이어에게 해외 무료(또는 고객 부담) 배송 링크 발급</td><td class="r">06</td></tr>
+    <tr><td><span class="dot">3</span></td><td><b>할인 링크</b></td><td>특정 사람에게만 보이는 할인가 브랜드관 만들기</td><td class="r">07</td></tr>
+    <tr><td><span class="dot">4</span></td><td><b>현장 QR</b></td><td>박람회 부스에서 QR로 바로 결제 받기</td><td class="r">08</td></tr>
+    <tr><td><span class="dot">5</span></td><td><b>정산</b></td><td>월별 판매 금액·입금 상태, 물류비 청구서</td><td class="r">12</td></tr>
+    <tr><td><span class="dot">6</span></td><td><b>B2B</b></td><td>해외 바이어 전용 도매가 페이지와 주문서</td><td class="r">09</td></tr>
+    <tr><td><span class="dot">7</span></td><td><b>설정</b></td><td>로그인·송화인·계좌·공지 팝업·구독 관리</td><td class="r">13</td></tr>
+  </table>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="page" data-chap="c2">
+  <div class="chap"><span class="no">02</span><h1>시작하기</h1><span class="crumb">가입 → 주소 → 업종</span></div>
+  <h2>① 회원가입</h2>
+  <p class="lead"><b>brand.klow.kr</b> 에서 <b>‘글로벌 진출하기’</b>를 누르고 휴대폰 번호로 인증하면 가입이 끝납니다. 구글 계정이나 이메일로도 가입할 수 있어요. 이용약관·개인정보·구독 환불 정책·자동결제 동의에 체크해 주세요.</p>
+  <h2>② 브랜드 주소 정하기</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/start-slug.jpg" data-crop="300,60,1130,760">
+        <i data-box="337,142,1095,197" data-n="1"></i>
+        <i data-box="337,230,1095,301" data-n="2"></i>
+        <i data-box="337,691,1095,746" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>브랜드명을 <b>영문</b>으로 입력하세요. 이 이름이 주소가 됩니다.</span></li>
+        <li><span class="n">2</span><span><b>klow.kr/브랜드명</b> 주소를 바로 쓸 수 있어요.</span></li>
+        <li><span class="n">3</span><span><b>다음</b>을 누르세요.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h2>③ 업종 선택</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/start-category.jpg" data-crop="300,60,1130,760">
+        <i data-box="337,238,520,293" data-n="1"></i>
+        <i data-box="337,691,1095,746" data-n="2"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>판매할 업종을 고르세요. 현재 <b>화장품 · 치과 재료</b>를 지원합니다.</span></li>
+        <li><span class="n">2</span><span><b>브랜드 시작하기</b>를 누르면 스튜디오가 열립니다.</span></li>
+      </ol>
+      <div class="note">업종은 해외 통관 신고 분류에 쓰입니다. 나중에 홈 › 디자인 › 브랜드관에서 바꿀 수 있어요.</div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">02</span><h1>시작하기</h1><span class="crumb">브랜드 정보 · 계약서</span></div>
+  <h2>④ 송화인 · 정산 계좌 등록</h2>
+  <span class="where">처음 <b>홈 › 주문</b> 탭이나 <b>정산</b>을 누르면 나타나요</span>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:88%" data-src="images/onboarding-info.jpg" data-crop="600,88,1270,812">
+        <i data-box="941,94,1101,136" data-n="1"></i>
+        <i data-box="606,252,1262,548" data-n="2"></i>
+        <i data-box="606,578,1262,808" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>주문</b> 탭을 누르면 입력 화면이 열립니다.</span></li>
+        <li><span class="n">2</span><span>해외 송장에 찍힐 <b>보내는 사람 정보</b>예요. 브랜드명(영문)·주소·휴대폰.</span></li>
+        <li><span class="n">3</span><span>판매 대금을 받을 <b>은행·예금주·계좌번호</b>를 넣고 <b>저장</b>.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h2>⑤ 시딩 이용계약 동의</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:88%" data-src="images/contract.jpg" data-crop="340,94,1100,803">
+        <i data-box="362,700,760,730" data-n="1"></i>
+        <i data-box="365,738,1075,786" data-n="2"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>네 가지 안내를 읽고 <b>[필수] 동의</b>에 체크하세요.</span></li>
+        <li><span class="n">2</span><span><b>동의하고 서명하기</b>를 누르고 서명하면 끝.</span></li>
+      </ol>
+      <div class="note">시딩(국제배송) 물류비는 <b>매달 5일, 실측 무게 기준</b>으로 후청구됩니다. 서명한 계약서는 설정에서 언제든 PDF로 받을 수 있어요.</div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">02</span><h1>시작하기</h1><span class="crumb">KLOW PRO 멤버십</span></div>
+  <h2>⑥ KLOW PRO 멤버십 요금</h2>
+  <p class="lead">브랜드 링크 생성부터 해외 결제·배송·정산까지 KLOW가 대신 처리합니다. 금액 단위 원(KRW), 2026년 10월 기준.</p>
+  <div class="plans">
+    <div class="plan"><div class="nm">6개월 플랜</div><div class="pr">₩396,000<small>/ 6개월</small></div><div class="vat">VAT 포함 · 6개월마다 1회 결제</div><div class="mo">월 환산 <b>₩66,000</b> <span>(VAT 별도 ₩60,000)</span></div></div>
+    <div class="plan best"><span class="tag">약 17% 할인</span><div class="nm">연간 플랜</div><div class="pr">₩660,000<small>/ 12개월</small></div><div class="vat">VAT 포함 · 12개월마다 1회 결제</div><div class="mo">월 환산 <b>₩55,000</b> <span>(VAT 별도 ₩50,000)</span></div></div>
+  </div>
+  <table class="t">
+    <tr><th>구분</th><th class="r">공급가</th><th class="r">부가세(10%)</th><th class="r">결제 금액</th><th class="r">월 환산(VAT 포함)</th></tr>
+    <tr><td>6개월 플랜</td><td class="r">360,000</td><td class="r">36,000</td><td class="r"><b>396,000</b></td><td class="r">66,000</td></tr>
+    <tr><td>연간 플랜</td><td class="r">600,000</td><td class="r">60,000</td><td class="r"><b>660,000</b></td><td class="r">55,000</td></tr>
+    <tr><td><b>연간 선택 시 절감액</b></td><td></td><td></td><td class="r"><b>132,000</b></td><td class="r"><b>11,000</b></td></tr>
+  </table>
+  <h2 style="margin-top:2mm">포함 서비스</h2>
+  <table class="t">
+    <tr><td style="width:42mm"><b>글로벌 스토어 입점·노출</b></td><td>브랜드 전용 주소가 발급되고, 승인된 제품이 klow.kr 글로벌 스토어에 노출됩니다.</td></tr>
+    <tr><td><b>제품 등록·관리 스튜디오</b></td><td>brand.klow.kr 스튜디오에서 제품 정보(이미지·설명·가격·옵션)를 직접 등록·수정·관리합니다.</td></tr>
+    <tr><td><b>해외 판매 및 결제 대행</b></td><td>해외 소비자가 klow.kr에서 결제하면 KLOW가 자기 명의의 통신판매로 거래를 처리합니다.</td></tr>
+    <tr><td><b>해외 배송 대행</b></td><td>판매된 제품의 해외 배송을 KLOW가 대행합니다.</td></tr>
+    <tr><td><b>주문·배송·정산 관리</b></td><td>주문·배송 현황과 정산 금액을 스튜디오 주문·정산 탭에서 확인합니다.</td></tr>
+  </table>
+  <div class="note"><span class="t">결제 · 해지 · 환불 조건</span>
+    <ul>
+      <li>절감액은 6개월 플랜을 1년(2회) 이용한 금액 792,000원과 비교한 값입니다.</li>
+      <li>첫 결제 시 일시불 또는 3·6·12개월 할부를 선택할 수 있습니다(카드사 무이자 이벤트 적용 시 무이자).</li>
+      <li>무료 체험 기간은 없으며, 입점 정보 제출 후 바로 결제되고 판매가 시작됩니다.</li>
+      <li>선택한 주기마다 등록한 카드로 자동 결제됩니다. 카드 변경과 구독 해지는 스튜디오 › 설정 › 구독 관리에서 언제든 할 수 있습니다.</li>
+      <li>해지하면 이미 결제한 기간이 끝날 때까지 이용할 수 있고, 다음 결제부터 청구되지 않습니다.</li>
+      <li>첫 결제일로부터 7일 이내에 제품 노출이 한 건도 없었다면 전액 환불됩니다. 그 밖의 일할·부분 환불은 없습니다.</li>
+      <li>정책 위반으로 강제 해지된 경우 남은 기간의 이용료는 환불되지 않습니다.</li>
+    </ul>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">02</span><h1>시작하기</h1><span class="crumb">멤버십 결제</span></div>
+  <h2>⑦ 결제하고 판매 시작</h2>
+  <figure class="shot" style="width:72%" data-src="images/paywall.jpg" data-crop="140,94,1292,795">
+    <i data-box="1060,116,1271,149" data-n="1"></i>
+    <i data-box="158,698,660,722" data-n="2"></i>
+    <i data-box="161,732,1271,783" data-n="3"></i>
+  </figure>
+  <div class="row">
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>6-month / annually</b> 중 결제 주기를 고르세요.</span></li>
+        <li><span class="n">2</span><span>자동 결제(빌링키 보관) 동의에 체크.</span></li>
+        <li><span class="n">3</span><span><b>글로벌 판매 시작하기</b>를 누르세요.</span></li>
+        <li><span class="n">4</span><span>카드번호·유효기간·비밀번호 앞 2자리·생년월일(법인은 사업자번호)을 입력합니다.</span></li>
+        <li><span class="n">5</span><span>할부를 고르고 <b>글로벌 판매 시작하기</b>를 누르면 결제와 동시에 판매가 시작됩니다.</span></li>
+      </ol>
+      <div class="note">카드 정보는 나이스페이먼츠로 안전하게 전송돼 빌링키로 바뀌며, KLOW는 카드번호를 저장하지 않습니다.</div>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:82%" data-src="images/card-entry.jpg" data-crop="510,56,930,783">
+        <i data-box="537,278,903,494" data-n="4"></i>
+        <i data-box="537,524,903,706" data-n="5"></i>
+      </figure>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="page" data-chap="c3">
+  <div class="chap"><span class="no">03</span><h1>브랜드관 꾸미기</h1><span class="crumb">홈 › 디자인</span></div>
+  <p class="lead">왼쪽은 손님에게 보이는 <b>실시간 미리보기</b>, 오른쪽은 <b>편집 패널</b>입니다. 고치는 즉시 왼쪽에 반영되고 자동 저장돼요.</p>
+  <figure class="shot" style="width:100%" data-src="images/design-brand.jpg" data-crop="170,85,1275,823">
+    <i data-box="184,94,564,134" data-n="1"></i>
+    <i data-box="282,145,566,182" data-n="2"></i>
+    <i data-box="184,194,564,823" data-n="3"></i>
+    <i data-box="772,92,937,138" data-n="4"></i>
+    <i data-box="608,148,1268,194" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>내 브랜드관 주소</b>. 옆의 QR 버튼과 <b>글로벌 판매시작</b>으로 공유합니다.</span></li>
+    <li><span class="n">2</span><span><b>모바일 / PC</b> 화면과 <b>국가</b>를 바꿔가며 손님 화면을 확인하세요.</span></li>
+    <li><span class="n">3</span><span>미리보기 속 사진·제품을 누르면 해당 편집 화면으로 바로 이동합니다.</span></li>
+    <li><span class="n">4</span><span><b>디자인</b> 탭을 누르세요.</span></li>
+    <li><span class="n">5</span><span>브랜드관 · 메뉴 · 꾸미기 · 링크 · SNS 순서로 채워 나가면 됩니다.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">03</span><h1>브랜드관 꾸미기</h1><span class="crumb">브랜드관 · 메뉴</span></div>
+  <h2>브랜드관 <span class="sub">이름 · 한 줄 소개 · 태그 · 폰트</span></h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/design-brand.jpg" data-crop="600,145,1270,675">
+        <i data-box="610,150,742,192" data-n="1"></i>
+        <i data-box="608,206,1260,466" data-n="2"></i>
+        <i data-box="608,478,1260,668" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>브랜드관</b> 서브탭.</span></li>
+        <li><span class="n">2</span><span>브랜드명과 한 줄 소개. 한국어로 써도 손님 나라 말로 자동 번역됩니다.</span></li>
+        <li><span class="n">3</span><span>브랜드 태그는 최대 5개. 아래로 내리면 <b>폰트</b>와 <b>브랜드 카테고리</b>도 고를 수 있어요.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h2>메뉴 <span class="sub">손님 화면 왼쪽 위 ☰ 서랍</span></h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/design-menu.jpg" data-crop="180,145,1270,560">
+        <i data-box="196,206,482,560" data-n="1"></i>
+        <i data-box="625,260,1251,474" data-n="2"></i>
+        <i data-box="625,484,1251,527" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>손님이 ☰ 을 누르면 보이는 메뉴입니다.</span></li>
+        <li><span class="n">2</span><span>⠿ 를 끌어 순서를 바꾸고, 👁 로 숨기거나 보이게 합니다.</span></li>
+        <li><span class="n">3</span><span><b>+ 페이지</b>(브랜드 스토리 등)나 <b>+ 링크</b>(외부 사이트)를 추가하세요.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">03</span><h1>브랜드관 꾸미기</h1><span class="crumb">꾸미기 · 링크</span></div>
+  <h2>꾸미기 <span class="sub">레이아웃 · 대표 사진 · PC 진열</span></h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/design-deco.jpg" data-crop="600,145,1270,795">
+        <i data-box="625,258,1245,383" data-n="1"></i>
+        <i data-box="623,408,1245,587" data-n="2"></i>
+        <i data-box="623,628,1245,784" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>대표 사진 모양(원형·둥근 사각형·가로형·세로형)을 고르세요.</span></li>
+        <li><span class="n">2</span><span>대표 사진·동영상을 올립니다. <b>모바일 / PC</b>용을 따로 올릴 수 있어요.</span></li>
+        <li><span class="n">3</span><span>PC 화면에서 한 줄에 보일 제품 수(2·3·4개). 아래로 내리면 배경색·공유 이미지 설정이 있습니다.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h2>링크 <span class="sub">브랜드관 아래 버튼</span></h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/design-links.jpg" data-crop="600,145,1270,760">
+        <i data-box="608,208,1260,430" data-n="1"></i>
+        <i data-box="608,441,1260,488" data-n="2"></i>
+        <i data-box="608,500,1260,760" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>버튼 문구와 이동할 주소를 넣습니다(자사몰·카탈로그 등).</span></li>
+        <li><span class="n">2</span><span><b>+ 브랜드 링크 추가</b>로 버튼을 늘립니다.</span></li>
+        <li><span class="n">3</span><span>버튼 스타일·둥글기·그림자·색을 브랜드 톤에 맞추세요.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">03</span><h1>브랜드관 꾸미기</h1><span class="crumb">SNS · PC 화면</span></div>
+  <h2>SNS 아이콘</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/design-sns.jpg" data-crop="600,145,1270,640">
+        <i data-box="623,221,1245,371" data-n="1"></i>
+        <i data-box="623,380,1245,520" data-n="2"></i>
+        <i data-box="623,560,1245,636" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>쓰는 SNS를 누르세요(인스타그램·틱톡·유튜브 등).</span></li>
+        <li><span class="n">2</span><span>각 SNS 주소를 붙여 넣습니다.</span></li>
+        <li><span class="n">3</span><span>아이콘을 브랜드 원본 색으로 둘지, 한 가지 색으로 맞출지 고릅니다.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h2>PC 화면 미리보기</h2>
+  <figure class="shot" style="width:100%" data-src="images/design-pc.jpg" data-crop="20,88,980,700">
+    <i data-box="497,148,587,180" data-n="1"></i>
+    <i data-box="815,435,935,522" data-n="2"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>PC</b>를 누르면 컴퓨터로 접속한 손님의 화면이 보입니다.</span></li>
+    <li><span class="n">2</span><span>PC 상단 사진은 여기서 바로 바꿀 수 있어요.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">03</span><h1>브랜드관 꾸미기</h1><span class="crumb">공유하기</span></div>
+  <h2>브랜드관 링크 공유</h2>
+  <figure class="shot" style="width:100%" data-src="images/share-modal.jpg" data-crop="300,85,1100,590">
+    <i data-box="587,92,690,135" data-n="1"></i>
+    <i data-box="514,378,918,427" data-n="2"></i>
+    <i data-box="514,452,918,535" data-n="3"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>글로벌 판매시작</b>을 누르면 브랜드관 주소가 복사됩니다.</span></li>
+    <li><span class="n">2</span><span>복사된 주소를 인스타그램 프로필, 쇼핑몰 배너 등에 붙여 넣으세요.</span></li>
+    <li><span class="n">3</span><span>Instagram · Facebook · WhatsApp · 카카오톡 · TikTok 으로 바로 공유할 수도 있어요.</span></li>
+  </ol>
+  <div class="note"><span class="t">손님은 이렇게 봐요</span>
+    손님이 고른 나라에 맞춰 <b>언어 · 통화 · 배송비</b>가 자동으로 바뀝니다. 손님 나라 화면은 미리보기의 국가 칩에서 확인할 수 있어요(04장 ‘번역 직접 고치기’).</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="page" data-chap="c4">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">홈 › 미리보기 › 상품 추가</span></div>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/product-add.jpg" data-crop="184,195,564,823">
+        <i data-box="206,705,369,823" data-n="1"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/product-choose.jpg" data-crop="600,92,1272,823">
+        <i data-box="606,170,1270,495" data-n="2"></i>
+        <i data-box="606,505,1270,823" data-n="3"></i>
+      </figure>
+    </div>
+  </div>
+  <ol class="steps">
+    <li><span class="n">1</span><span>미리보기 제품 목록 맨 끝의 <b>+ 상품 추가</b>를 누르세요.</span></li>
+    <li><span class="n">2</span><span><b>상세페이지로 자동 등록</b> — 쇼핑몰 상세페이지(PDF·PNG·JPG)를 올리면 AI가 제품명·효능·성분까지 정리해 줍니다.</span></li>
+    <li><span class="n">3</span><span><b>사진 올리고 직접 입력</b> — 상세페이지가 없으면 사진을 올리고 직접 채우세요.</span></li>
+  </ol>
+  <div class="note"><span class="t">처음이라면</span>
+    브랜드 소개서(PDF·PPT)가 있다면 빈 브랜드관의 <b>‘브랜드 소개서로 일괄 등록하기’</b>로 여러 제품을 한 번에 등록할 수 있어요. AI가 채운 내용은 꼭 한 번 확인해 주세요.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">설정 탭</span></div>
+  <h2>제품 정보 입력</h2>
+  <figure class="shot" style="width:100%" data-src="images/product-settings.jpg" data-crop="180,88,1270,823">
+    <i data-box="606,92,854,135" data-n="1"></i>
+    <i data-box="606,144,718,255" data-n="2"></i>
+    <i data-box="606,294,930,366" data-n="3"></i>
+    <i data-box="938,294,1262,438" data-n="4"></i>
+    <i data-box="606,478,1262,606" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>제품 편집은 <b>설정 · 가격 · 리뷰</b> 세 탭입니다. 이미 등록한 제품은 미리보기에서 제품을 눌러 엽니다.</span></li>
+    <li><span class="n">2</span><span>대표 사진. 첫 사진이 <b>메인</b>이 됩니다.</span></li>
+    <li><span class="n">3</span><span>제품명은 <b>영문</b>으로. 통관 신고에 그대로 쓰여요.</span></li>
+    <li><span class="n">4</span><span>카테고리. 직접 입력도 되지만, 직접 입력한 카테고리는 쇼핑 카테고리 필터에는 나오지 않아요.</span></li>
+    <li><span class="n">5</span><span>상세 페이지 사진·제품 동영상(선택). 아래로 내려 용량·전성분·사용법 등을 채우세요.</span></li>
+  </ol>
+  <div class="note">한국어로 입력한 설명은 영어로 자동 번역되고, 손님에게는 나라별 언어로 보입니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">가격 탭</span></div>
+  <h2>가격 정하기</h2>
+  <figure class="shot" style="width:70%" data-src="images/product-price.jpg" data-crop="600,88,1270,823">
+    <i data-box="626,166,1242,246" data-n="1"></i>
+    <i data-box="626,268,1242,308" data-n="2"></i>
+    <i data-box="626,352,1242,432" data-n="3"></i>
+    <i data-box="606,500,1262,630" data-n="4"></i>
+    <i data-box="1117,97,1193,130" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>원가</b>와 1개 팔 때 남길 <b>마진</b>을 원화로 입력하세요.</span></li>
+    <li><span class="n">2</span><span>둘을 더한 금액이 <b>기준 정산가</b> — 1개 팔면 받는 금액입니다.</span></li>
+    <li><span class="n">3</span><span>모든 나라에 한 번에 적용할 할인율·배송비.</span></li>
+    <li><span class="n">4</span><span>나라별 판매가가 자동 계산됩니다. 카드를 누르면 나라별로 따로 조정할 수 있어요(다음 쪽).</span></li>
+    <li><span class="n">5</span><span><b>저장하기</b>.</span></li>
+  </ol>
+  <div class="note"><span class="t">판매가는 이렇게 계산돼요</span>
+    <div class="formula"><span>원가 + 마진</span><i>=</i><span>정산가(₩)</span><i>÷ 0.95</i><span>결제 수수료 5% 포함</span><i>÷ 환율</i><span>판매가($)</span></div>
+    판매가는 저장 시점에 고정됩니다. 이후 환율이 바뀌면 손님 가격은 그대로이고 정산액이 조금씩 달라집니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">가격 탭 › 나라별 카드</span></div>
+  <h2>나라별 판매가 · 할인 · 배송비</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/product-country.jpg" data-crop="446,140,986,700">
+        <i data-box="781,219,960,296" data-n="1"></i>
+        <i data-box="472,372,960,482" data-n="2"></i>
+        <i data-box="474,519,958,652" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>그 나라 통화로 판매가를 직접 정할 수 있어요(아래에 달러 결제 기준 표시).</span></li>
+        <li><span class="n">2</span><span>할인율 막대. 빨간 <b>‘원가 도달’</b> 선을 넘으면 손해입니다. 할인분은 브랜드가 부담해요.</span></li>
+        <li><span class="n">3</span><span><b>고객 부담 배송비</b>를 달러로 정합니다.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="note"><span class="t">고객 부담 배송비 규칙</span>
+    <ul>
+      <li><b>비워두면</b> 그 나라 기본 요율(500g 기준)로 손님이 냅니다.</li>
+      <li><b>$0</b> 이면 무료배송 — 배송비는 브랜드가 부담합니다.</li>
+      <li><b>금액을 넣으면</b> 그 금액을 받습니다. 한 주문에 내 제품이 여러 개면 가장 큰 배송비 <b>1번만</b> 받아요.</li>
+      <li>손님이 낸 배송비는 정산금에 포함되고, 실제 물류비는 매월 따로 청구됩니다(12장).</li>
+    </ul>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">리뷰 탭 · 제품 관리</span></div>
+  <h2>리뷰 등록</h2>
+  <figure class="shot" style="width:100%" data-src="images/product-reviews.jpg" data-crop="600,88,1270,580">
+    <i data-box="1052,147,1192,175" data-n="1"></i>
+    <i data-box="1206,147,1256,175" data-n="2"></i>
+    <i data-box="1180,206,1248,238" data-n="3"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>스크린샷에서 불러오기</b> — 국내 쇼핑몰 리뷰 화면을 캡처해 올리면 자동으로 읽어 등록합니다.</span></li>
+    <li><span class="n">2</span><span><b>+ 추가</b> — 리뷰를 하나씩 직접 입력합니다.</span></li>
+    <li><span class="n">3</span><span>등록한 리뷰는 연필·휴지통으로 고치거나 지웁니다. 등록 즉시 브랜드관에 보여요.</span></li>
+  </ol>
+  <h2>제품 가리기 · 삭제</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/product-manage.jpg" data-crop="510,313,930,510">
+        <i data-box="537,380,903,430" data-n="1"></i>
+        <i data-box="537,434,903,484" data-n="2"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>제품 편집 화면 오른쪽 위 <b>⋯</b> › <b>이 제품 가리기</b>: 잠시 판매를 멈출 때.</span></li>
+        <li><span class="n">2</span><span><b>이 제품 삭제하기</b>: 완전히 지울 때.</span></li>
+      </ol>
+      <div class="note warn"><span class="t">주의</span>가리기는 <b>온라인 브랜드관에서만</b> 숨겨집니다. 현장 QR 판매에서도 빼려면 현장 QR › 제품별 현장가에서 <b>현장 제외</b>를 켜세요.</div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">04</span><h1>제품 등록하기</h1><span class="crumb">번역 직접 고치기</span></div>
+  <p class="lead">제품명·설명은 손님 나라 말로 자동 번역됩니다. 어색한 번역은 미리보기에서 바로 고칠 수 있어요.</p>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/preview-country.jpg" data-crop="180,90,660,520">
+        <i data-box="472,148,566,180" data-n="1"></i>
+        <i data-box="474,184,640,424" data-n="2"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/translate-edit.jpg" data-crop="180,95,690,823">
+        <i data-box="204,456,424,494" data-n="3"></i>
+        <i data-box="373,686,675,812" data-n="4"></i>
+      </figure>
+    </div>
+  </div>
+  <ol class="steps">
+    <li><span class="n">1</span><span>미리보기 위의 <b>국가 칩</b>을 누르세요.</span></li>
+    <li><span class="n">2</span><span>확인할 나라를 고르면 그 나라 언어·통화로 바뀝니다.</span></li>
+    <li><span class="n">3</span><span>고칠 글자(예: 제품명)를 미리보기에서 바로 누르세요.</span></li>
+    <li><span class="n">4</span><span>번역을 고치고 <b>저장</b>. 원문을 나중에 바꾸면 자동 번역으로 돌아가니 다시 확인해 주세요.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="page" data-chap="c5">
+  <div class="chap"><span class="no">05</span><h1>주문 받고 발송하기</h1><span class="crumb">홈 › 주문</span></div>
+  <p class="lead">주문이 들어오면 알림톡이 옵니다. 국제 송장은 자동으로 만들어지니, 바코드 라벨을 인쇄해 박스에 붙이고 KLOW 물류센터로 보내면 됩니다.</p>
+  <div class="flow">
+    <div class="st"><span class="k">1</span><b>발송 대기</b>새 주문 확인</div><div class="ar">›</div>
+    <div class="st"><span class="k">2</span><b>바코드 인쇄</b>라벨을 박스에 부착</div><div class="ar">›</div>
+    <div class="st"><span class="k">3</span><b>국내 택배</b>인천 물류센터로 발송</div><div class="ar">›</div>
+    <div class="st"><span class="k">4</span><b>배송 중</b>해외 배송 추적</div>
+  </div>
+  <figure class="shot" style="width:100%" data-src="images/orders-shipping.jpg" data-crop="600,88,1270,660">
+    <i data-box="939,92,1103,138" data-n="1"></i>
+    <i data-box="610,155,938,195" data-n="2"></i>
+    <i data-box="934,155,1257,195" data-n="3"></i>
+    <i data-box="606,280,1262,400" data-n="4"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>주문</b> 탭을 누르세요.</span></li>
+    <li><span class="n">2</span><span><b>발송 대기</b>: 새 주문. 주문을 골라 <b>바코드 인쇄 → 발송 처리하기</b>를 누릅니다.</span></li>
+    <li><span class="n">3</span><span><b>배송 중</b>: KLOW 물류센터 입고 후 해외로 가는 중인 주문.</span></li>
+    <li><span class="n">4</span><span>주문을 누르면 받는 사람·상품·배송 단계가 보입니다(다음 쪽).</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">05</span><h1>주문 받고 발송하기</h1><span class="crumb">배송 상세</span></div>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/order-detail.jpg" data-crop="480,26,960,816">
+        <i data-box="507,244,925,300" data-n="1"></i>
+        <i data-box="507,344,925,502" data-n="2"></i>
+        <i data-box="507,513,925,640" data-n="3"></i>
+        <i data-box="524,723,908,767" data-n="4"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/order-detail-2.jpg" data-crop="480,400,960,800">
+        <i data-box="524,488,908,585" data-n="5"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">1</span><span>배송 단계: 송장 등록 → 국제 운송 → 현지 도착 → 배송 완료.</span></li>
+        <li><span class="n">2</span><span>추적 내역이 자동으로 쌓입니다.</span></li>
+        <li><span class="n">3</span><span>국제 송장 번호와 바코드.</span></li>
+        <li><span class="n">4</span><span><b>라벨 인쇄</b>로 바코드를 출력해 박스에 붙이세요.</span></li>
+        <li><span class="n">5</span><span>박스를 보낼 <b>KLOW 입고지 주소</b>. 복사 버튼으로 복사해 택배 접수하세요.</span></li>
+      </ol>
+      <div class="note"><span class="t">알아두세요</span>
+        <ul>
+          <li>한 주문에서 내 브랜드 제품은 송장 1장으로 나갑니다.</li>
+          <li>무게는 KLOW가 입고할 때 직접 잽니다.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="page" data-chap="c6">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">국제배송 &amp; 링크</span></div>
+  <p class="lead">인플루언서·바이어에게 제품을 해외로 보낼 때 씁니다. <b>배송 링크</b>를 만들어 보내면 받는 사람이 직접 주소를 입력하고, 송장은 자동으로 만들어집니다.</p>
+  <figure class="shot" style="width:100%" data-src="images/seeding-issue-2.jpg" data-crop="140,88,1302,790">
+    <i data-box="142,92,586,786" data-n="1"></i>
+    <i data-box="594,92,1300,138" data-n="2"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>왼쪽에서 <b>배송 링크를 발급</b>합니다(다음 쪽).</span></li>
+    <li><span class="n">2</span><span>오른쪽 탭은 진행 순서입니다.</span></li>
+  </ol>
+  <div class="flow" style="margin-top:0">
+    <div class="st"><b>링크 발급</b>아직 안 보낸 링크</div><div class="ar">›</div>
+    <div class="st"><b>입력 대기중</b>받는 사람이 주소 입력 전</div><div class="ar">›</div>
+    <div class="st"><b>발송 대기</b>주소 입력 완료, 인쇄할 차례</div><div class="ar">›</div>
+    <div class="st"><b>배송중</b>해외 배송 중</div><div class="ar">›</div>
+    <div class="st"><b>배송 기록</b>지난 발송 전체</div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">배송 링크 발급</span></div>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/seeding-issue-1.jpg" data-crop="146,96,584,460">
+        <i data-box="163,192,565,243" data-n="1"></i>
+        <i data-box="163,396,565,448" data-n="2"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>1명당 링크 1개</b> 또는 <b>링크 1개로 여러 명</b>(선착순 모집).</span></li>
+        <li><span class="n">2</span><span>배송비를 <b>브랜드가 결제</b>(무료 발송)할지, <b>고객이 결제</b>할지.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/seeding-issue-2.jpg" data-crop="146,200,584,780">
+        <i data-box="163,244,557,296" data-n="3"></i>
+        <i data-box="163,347,557,453" data-n="4"></i>
+        <i data-box="163,503,557,561" data-n="5"></i>
+        <i data-box="163,634,557,685" data-n="6"></i>
+        <i data-box="163,715,565,767" data-n="7"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">3</span><span>보낼 제품을 <b>브랜드가 지정</b> 또는 <b>고객이 선택</b>.</span></li>
+        <li><span class="n">4</span><span>박스에 담을 제품명과 수량.</span></li>
+        <li><span class="n">5</span><span>발급할 링크 개수.</span></li>
+        <li><span class="n">6</span><span>이벤트명(선택) — 링크를 묶어 보고 라벨에도 찍혀요.</span></li>
+        <li><span class="n">7</span><span><b>배송 링크 발급하기</b>.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="note">발급된 링크는 <b>링크 발급</b> 탭에서 <b>링크 복사</b>·<b>QR 보기</b>로 보내세요. 받는 사람이 주소를 입력하면 <b>발송 대기</b>로 넘어옵니다. 한국 안으로 보내는 링크는 브랜드가 직접 국내 택배로 보냅니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">배송비 계산</span></div>
+  <h2>보내기 전에 배송비 확인</h2>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/seeding-estimate.jpg" data-crop="400,66,1040,758">
+        <i data-box="427,133,1013,191" data-n="1"></i>
+        <i data-box="455,251,977,318" data-n="2"></i>
+        <i data-box="434,605,998,728" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <p class="lead">발급 패널 오른쪽 위 <b>배송비 계산</b> 버튼을 누르세요.</p>
+      <ol class="steps">
+        <li><span class="n">1</span><span>받는 나라를 고릅니다.</span></li>
+        <li><span class="n">2</span><span>1개 무게(g)를 넣습니다. 박스가 크면 부피도 넣으세요.</span></li>
+        <li><span class="n">3</span><span>예상 배송비와 EMS·DHL 직접 발송 대비 절감액이 나옵니다.</span></li>
+      </ol>
+      <div class="note">화면 금액은 예상치입니다. 실제 청구는 KLOW가 입고 때 잰 <b>실측 무게</b> 기준이며, 매달 후청구됩니다. 통관 신고가는 KLOW가 나라별로 정합니다.</div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">발송 대기 › 인쇄 및 발송</span></div>
+  <figure class="shot" style="width:76%" data-src="images/seeding-ready.jpg" data-crop="596,88,1302,610">
+    <i data-box="609,338,634,362" data-n="1"></i>
+    <i data-box="1186,192,1299,231" data-n="2"></i>
+    <i data-box="637,414,1273,453" data-n="3"></i>
+  </figure>
+  <div class="row">
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>보낼 사람을 체크하세요(전체 선택 가능).</span></li>
+        <li><span class="n">2</span><span><b>인쇄 및 발송</b>을 누르세요.</span></li>
+        <li><span class="n">3</span><span>한 명씩 처리할 땐 <b>발송처리하기</b>.</span></li>
+        <li><span class="n">4</span><span>라벨지에서 비어 있는 칸을 누르면 그 칸부터 인쇄돼요. 쓰던 라벨지도 재사용할 수 있어요.</span></li>
+        <li><span class="n">5</span><span><b>인쇄 &amp; 자동 발송처리</b>를 고르면 인쇄와 동시에 배송중으로 넘어갑니다.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:88%" data-src="images/seeding-print.jpg" data-crop="480,119,960,704">
+        <i data-box="598,203,842,544" data-n="4"></i>
+        <i data-box="507,623,933,677" data-n="5"></i>
+      </figure>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">배송중 · 배송 기록</span></div>
+  <h2>배송중</h2>
+  <figure class="shot" style="width:82%" data-src="images/seeding-transit.jpg" data-crop="596,88,1302,520">
+    <i data-box="594,144,1080,186" data-n="1"></i>
+    <i data-box="1188,146,1299,186" data-n="2"></i>
+    <i data-box="637,322,1273,362" data-n="3"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>이름·주소·인스타·번호로 검색하고, 국가·캠페인·기간으로 거릅니다.</span></li>
+    <li><span class="n">2</span><span>바코드를 다시 인쇄할 때.</span></li>
+    <li><span class="n">3</span><span><b>배송현황 보러가기</b> — 홈 › 주문에서 추적 내역을 봅니다.</span></li>
+  </ol>
+  <h2>배송 기록</h2>
+  <figure class="shot" style="width:82%" data-src="images/seeding-history.jpg" data-crop="596,88,1302,470">
+    <i data-box="1160,146,1299,186" data-n="4"></i>
+    <i data-box="1010,191,1118,230" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">4</span><span><b>엑셀로 기록 추가</b> — KLOW 이전에 보냈던 기록도 올려 두면 중복 발송을 막을 수 있어요.</span></li>
+    <li><span class="n">5</span><span><b>배송완료만</b> 보기. 같은 주소로 다시 보낼 땐 기록에서 <b>다시 보내기</b>.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">06</span><h1>국제배송 &amp; 링크 (시딩)</h1><span class="crumb">엑셀로 자동 국제 송장 발급</span></div>
+  <p class="lead">받는 사람 명단이 이미 있다면 링크 없이 <b>엑셀 한 번</b>으로 송장을 만듭니다.</p>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/seeding-issue-1.jpg" data-crop="146,240,584,330">
+        <i data-box="165,253,563,314" data-n="1"></i>
+      </figure>
+      <figure class="shot" style="width:100%" data-src="images/bulk-new.jpg" data-crop="510,250,930,573">
+        <i data-box="537,389,903,464" data-n="2"></i>
+        <i data-box="537,470,903,546" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>엑셀로 자동 국제 송장 발급</b>을 누르세요.</span></li>
+        <li><span class="n">2</span><span><b>양식 다운로드</b>로 KLOW 양식을 받아 채웁니다.</span></li>
+        <li><span class="n">3</span><span><b>엑셀 파일 업로드</b>. 회사에서 쓰던 양식을 그대로 올려도 AI가 열을 찾아 맞춰 줍니다.</span></li>
+        <li><span class="n">4</span><span>정보가 빠진 사람은 <b>수정 필요</b>로 분류돼요. 행을 눌러 고치세요.</span></li>
+        <li><span class="n">5</span><span><b>송장 N건 만들기</b>를 누르면 송장 가능한 사람만 바로 발급됩니다.</span></li>
+      </ol>
+    </div>
+  </div>
+  <figure class="shot" style="width:80%" data-src="images/bulk-fix.jpg" data-crop="270,116,1170,708">
+    <i data-box="296,390,1143,455" data-n="4"></i>
+    <i data-box="982,629,1143,681" data-n="5"></i>
+  </figure>
+  <div class="note">나라에 따라 추가 정보가 필요합니다 — 예: 중국 신분증 번호, 멕시코 RFC, 미국 주(State), 일본 영문 주소.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="page" data-chap="c7">
+  <div class="chap"><span class="no">07</span><h1>할인 링크</h1><span class="crumb">할인 링크</span></div>
+  <p class="lead">특정 인플루언서·VIP·제휴처에게만 <b>할인가로 보이는 브랜드관</b>을 만들어 줍니다. 링크마다 유입과 구매가 따로 집계돼요.</p>
+  <figure class="shot" style="width:100%" data-src="images/promo-list.jpg" data-crop="140,96,1300,430">
+    <i data-box="1134,106,1296,154" data-n="1"></i>
+    <i data-box="142,170,1298,271" data-n="2"></i>
+    <i data-box="196,356,248,390" data-n="3"></i>
+  </figure>
+  <div class="row">
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>브랜드관 생성하기</b>를 누르세요.</span></li>
+        <li><span class="n">2</span><span>전체 링크의 유입·구매·매출 합계.</span></li>
+        <li><span class="n">3</span><span>스위치로 링크를 멈추거나 다시 켭니다. 링크 이름을 누르면 상세로 이동해요.</span></li>
+        <li><span class="n">4</span><span>누구에게 줄 링크인지 <b>영문</b>으로 적으세요.</span></li>
+        <li><span class="n">5</span><span>이 이름이 링크 주소가 됩니다(klow.kr/브랜드/이름).</span></li>
+        <li><span class="n">6</span><span><b>발급하기</b>.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/promo-create.jpg" data-crop="480,280,960,543">
+        <i data-box="507,363,933,414" data-n="4"></i>
+        <i data-box="507,418,862,440" data-n="5"></i>
+        <i data-box="683,461,933,517" data-n="6"></i>
+      </figure>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">07</span><h1>할인 링크</h1><span class="crumb">가격 설정</span></div>
+  <figure class="shot" style="width:100%" data-src="images/promo-detail.jpg" data-crop="140,96,1300,700">
+    <i data-box="158,142,542,186" data-n="1"></i>
+    <i data-box="603,256,833,304" data-n="2"></i>
+    <i data-box="603,358,932,470" data-n="3"></i>
+    <i data-box="1178,142,1294,186" data-n="4"></i>
+  </figure>
+  <div class="row">
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span>이 링크를 <b>복사</b>해 전달하세요.</span></li>
+        <li><span class="n">2</span><span>할인할 제품을 고릅니다.</span></li>
+        <li><span class="n">3</span><span>나라 카드를 눌러 할인가를 정합니다. <b>마진이 빨간색</b>이면 원가보다 싸게 파는 중이에요.</span></li>
+        <li><span class="n">4</span><span><b>추이</b>: 기간별 유입 그래프.</span></li>
+        <li><span class="n">5</span><span>이 링크로 들어온 손님이 낼 금액. 비워두면 평소 가격.</span></li>
+        <li><span class="n">6</span><span>내가 받는 금액과 마진이 바로 계산됩니다.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/promo-country.jpg" data-crop="480,202,960,621">
+        <i data-box="507,291,933,432" data-n="5"></i>
+        <i data-box="507,443,933,524" data-n="6"></i>
+      </figure>
+    </div>
+  </div>
+  <div class="note">할인분은 브랜드가 부담합니다(정산액이 그만큼 줄어요). 정산 화면에서 이 링크로 들어온 주문에는 <b>‘링크 유입’</b> 배지가 붙습니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="page" data-chap="c8">
+  <div class="chap"><span class="no">08</span><h1>현장 QR</h1><span class="crumb">현장 QR</span></div>
+  <p class="lead">박람회·팝업 부스에서 손님이 QR을 찍어 <b>그 자리에서 해외 카드·간편결제</b>로 결제합니다. 배송 없이 현장에서 제품을 건네요.</p>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/onsite-qr.jpg" data-crop="432,92,1000,700">
+        <i data-box="438,153,716,197" data-n="1"></i>
+        <i data-box="562,374,870,682" data-n="2"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/onsite-qr-2.jpg" data-crop="432,380,1000,742">
+        <i data-box="503,418,929,578" data-n="3"></i>
+        <i data-box="451,624,981,671" data-n="4"></i>
+        <i data-box="451,676,981,723" data-n="5"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>QR 코드</b> 탭.</span></li>
+        <li><span class="n">2</span><span>내 브랜드 현장 결제용 QR입니다.</span></li>
+        <li><span class="n">3</span><span>쓸 수 있는 결제수단(VISA·PayPay·Alipay·WeChat Pay 등)이 함께 인쇄돼요.</span></li>
+        <li><span class="n">4</span><span><b>PDF로 저장 / 이미지 저장</b> 후 포스터로 출력하세요.</span></li>
+        <li><span class="n">5</span><span><b>전시 모드</b>: 태블릿에 QR을 전체화면으로 띄웁니다.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">08</span><h1>현장 QR</h1><span class="crumb">제품별 현장가</span></div>
+  <figure class="shot" style="width:82%" data-src="images/onsite-price.jpg" data-crop="432,92,1000,823">
+    <i data-box="716,153,994,197" data-n="1"></i>
+    <i data-box="847,364,981,406" data-n="2"></i>
+    <i data-box="901,412,981,453" data-n="3"></i>
+    <i data-box="451,485,981,545" data-n="4"></i>
+    <i data-box="913,288,981,318" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>제품별 현장가</b> 탭.</span></li>
+    <li><span class="n">2</span><span>현장에서 1개 팔 때 <b>받을 금액(원화)</b>. 나라별 가격은 그 나라 통화로 자동 계산돼요(배송비 없음).</span></li>
+    <li><span class="n">3</span><span><b>할인 표시</b>: 판매가는 그대로, 손님 화면에 취소선 가격만 보여요.</span></li>
+    <li><span class="n">4</span><span>나라별로 현장가를 따로 정할 수 있습니다.</span></li>
+    <li><span class="n">5</span><span><b>현장 제외</b>: 현장에서 팔지 않을 제품. 회색 ‘제외됨’으로 표시돼요.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="page" data-chap="c9">
+  <div class="chap"><span class="no">09</span><h1>B2B 도매</h1><span class="crumb">B2B</span></div>
+  <p class="lead">해외 바이어 전용 페이지(klow.kr/브랜드/b2b)입니다. 바이어가 도매가·최소 주문 수량(MOQ)을 보고 <b>주문서</b>를 보내면 메일로 알려 드려요.</p>
+  <figure class="shot" style="width:100%" data-src="images/b2b-price.jpg" data-crop="180,88,1272,823">
+    <i data-box="182,92,566,136" data-n="1"></i>
+    <i data-box="606,200,1262,268" data-n="2"></i>
+    <i data-box="623,411,1245,513" data-n="3"></i>
+    <i data-box="623,515,1245,645" data-n="4"></i>
+    <i data-box="1194,342,1246,375" data-n="5"></i>
+    <i data-box="1193,97,1270,132" data-n="6"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>바이어 전용 링크. <b>링크 복사</b>나 QR로 전달합니다.</span></li>
+    <li><span class="n">2</span><span><b>가격표로 한 번에 채우기</b> — 엑셀·PDF 가격표를 올리면 AI가 MOQ와 구간 가격을 채웁니다.</span></li>
+    <li><span class="n">3</span><span>제품별 <b>MOQ</b>와 1개당 도매가.</span></li>
+    <li><span class="n">4</span><span>수량이 많을수록 싸지는 <b>구간 가격</b>. 구간 편집으로 추가하세요.</span></li>
+    <li><span class="n">5</span><span>바이어 페이지에 이 제품을 보일지 켜고 끕니다.</span></li>
+    <li><span class="n">6</span><span>바이어가 보낸 <b>주문서</b> 확인.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">09</span><h1>B2B 도매</h1><span class="crumb">자료 · 설정</span></div>
+  <div class="row">
+    <div class="col">
+      <h2>자료</h2>
+      <figure class="shot" style="width:100%" data-src="images/b2b-docs.jpg" data-crop="604,140,1270,390">
+        <i data-box="829,146,1047,186" data-n="1"></i>
+        <i data-box="623,319,1253,367" data-n="2"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>자료</b> 탭.</span></li>
+        <li><span class="n">2</span><span>카탈로그·회사 소개서 같은 <b>PDF</b>를 올리면 바이어 메뉴에 추가됩니다.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <h2>설정</h2>
+      <figure class="shot" style="width:100%" data-src="images/b2b-settings.jpg" data-crop="604,140,1270,425">
+        <i data-box="1203,226,1253,257" data-n="3"></i>
+        <i data-box="623,353,1253,406" data-n="4"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">3</span><span><b>바이어 링크 공개</b>를 켜야 바이어가 볼 수 있어요.</span></li>
+        <li><span class="n">4</span><span>주문서가 오면 알림을 받을 이메일.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="note"><span class="t">결제는 어떻게 하나요?</span>
+    B2B 주문서는 접수·알림까지만 KLOW에서 처리합니다. 대금 결제와 선적은 바이어와 직접 진행해 주세요.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="page" data-chap="c10">
+  <div class="chap"><span class="no">10</span><h1>통계 보기</h1><span class="crumb">홈 › 통계</span></div>
+  <figure class="shot" style="width:86%" data-src="images/home-stats.jpg" data-crop="600,88,1270,823">
+    <i data-box="606,92,770,138" data-n="1"></i>
+    <i data-box="610,146,832,190" data-n="2"></i>
+    <i data-box="1050,146,1260,190" data-n="3"></i>
+    <i data-box="606,203,1262,302" data-n="4"></i>
+    <i data-box="606,311,1262,823" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>통계</b> 탭.</span></li>
+    <li><span class="n">2</span><span>채널: 전체 · 일반 · 할인링크 · 현장.</span></li>
+    <li><span class="n">3</span><span>기간: 7일 · 30일 · 90일 · 전체.</span></li>
+    <li><span class="n">4</span><span><b>방문자 → 장바구니 → 결제</b> 흐름.</span></li>
+    <li><span class="n">5</span><span>방문 국가 추이. 아래로 내리면 결제 국가·제품 TOP 5가 있어요.</span></li>
+  </ol>
+  <div class="note">방문·장바구니 숫자(사람 기준)와 결제·판매 수량은 세는 기준이 달라 서로 맞지 않는 게 정상입니다. 방문 국가는 손님이 고른 배송 국가 기준이에요.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="page" data-chap="c11">
+  <div class="chap"><span class="no">11</span><h1>재고 · 출고신청 (3PL) <span class="badge-soon">서비스 준비중</span></h1></div>
+  <p class="lead">KLOW 제휴 창고에 제품을 맡겨 두고, 주문이 생기면 <b>출고신청</b>만으로 창고에서 바로 보내는 서비스입니다. 정식 오픈 전이며, 오픈 시 따로 안내해 드립니다.</p>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/inventory.jpg" data-crop="600,88,1270,780">
+        <i data-box="1105,92,1270,138" data-n="1"></i>
+        <i data-box="606,212,800,300" data-n="2"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">1</span><span>홈 › <b>재고</b> 탭.</span></li>
+        <li><span class="n">2</span><span>창고에 보관 중인 수량을 제품별로 확인합니다.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/inventory-outbound.jpg" data-crop="600,140,1270,520">
+        <i data-box="606,364,1270,511" data-n="3"></i>
+      </figure>
+      <ol class="steps">
+        <li><span class="n">3</span><span><b>출고신청</b>: 단건 신청 · 엑셀 업로드 신청 · 카페24 자사몰 주문 불러오기.</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section class="page" data-chap="c12">
+  <div class="chap"><span class="no">12</span><h1>정산 · 물류비 청구</h1><span class="crumb">정산</span></div>
+  <figure class="shot" style="width:100%" data-src="images/settlement.jpg" data-crop="140,90,1300,692">
+    <i data-box="142,94,548,176" data-n="1"></i>
+    <i data-box="1122,141,1298,178" data-n="2"></i>
+    <i data-box="1176,243,1298,289" data-n="3"></i>
+    <i data-box="142,306,537,346" data-n="4"></i>
+    <i data-box="1176,408,1292,448" data-n="5"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>그 달 정산 금액. 결제사 정산서로 확정되면 원화 금액이 표시돼요.</span></li>
+    <li><span class="n">2</span><span>달을 넘겨 지난 정산을 봅니다.</span></li>
+    <li><span class="n">3</span><span><b>정산내역 엑셀</b> 다운로드. 왼쪽 검색창은 송장번호·수취인·제품으로 전 기간을 찾습니다.</span></li>
+    <li><span class="n">4</span><span>일반주문 · 현장결제 · 시딩 · 물류비 청구 탭.</span></li>
+    <li><span class="n">5</span><span>상태: 정산 예정 → 입금 완료(환불 시 환불 완료).</span></li>
+  </ol>
+  <div class="note"><span class="t">언제, 얼마 들어오나요?</span>
+    <ul>
+      <li><b>결제완료</b>된 주문 기준으로, 지난달 판매분을 <b>매월 15일 원화로</b> 등록한 계좌에 입금합니다.</li>
+      <li>손님이 낸 배송비도 정산금에 포함됩니다(결제 수수료 5% 차감).</li>
+      <li>손님 결제(USD)와 입금액(원)은 주문 시점 환율·결제 수수료만큼 차이가 있어요.</li>
+    </ul>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">12</span><h1>정산 · 물류비 청구</h1><span class="crumb">물류비 청구</span></div>
+  <figure class="shot" style="width:100%" data-src="images/settlement-logistics.jpg" data-crop="140,300,1300,618">
+    <i data-box="425,306,537,346" data-n="1"></i>
+    <i data-box="1200,378,1284,408" data-n="2"></i>
+    <i data-box="159,463,308,498" data-n="3"></i>
+    <i data-box="159,520,1281,598" data-n="4"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>물류비 청구</b> 탭.</span></li>
+    <li><span class="n">2</span><span>그 달 낼 물류비 합계.</span></li>
+    <li><span class="n">3</span><span><b>청구서 엑셀 다운로드</b> — EMS 정가 · KLOW 운송료 · 절감액, 수출신고비·관세가 정리돼 있어요.</span></li>
+    <li><span class="n">4</span><span>송장별 청구액(일반주문·시딩 구분).</span></li>
+  </ol>
+  <div class="note"><span class="t">물류비는 따로 청구돼요</span>
+    실제 해외 배송비(EFS 실비 + 수수료)는 <b>실측 무게</b> 기준으로 매월 청구됩니다. 일반 주문이든 시딩이든, 누가 배송비를 냈든 같은 방식이에요. 손님이 낸 배송비는 이미 정산금으로 지급되므로, 둘의 차이가 브랜드 손익이 됩니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section class="page" data-chap="c13">
+  <div class="chap"><span class="no">13</span><h1>설정</h1><span class="crumb">설정</span></div>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/settings-1.jpg" data-crop="288,96,1144,823">
+        <i data-box="290,318,1142,412" data-n="1"></i>
+        <i data-box="290,428,1142,522" data-n="2"></i>
+        <i data-box="290,649,1142,743" data-n="3"></i>
+      </figure>
+    </div>
+    <div class="col">
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>로그인 전화번호 관리</b> — 최대 5개. 담당자가 바뀌어도 같은 계정을 쓸 수 있어요.</span></li>
+        <li><span class="n">2</span><span><b>이메일 로그인</b> — 이메일·비밀번호 로그인을 추가합니다.</span></li>
+        <li><span class="n">3</span><span><b>브랜드 정보 · 계좌 정보</b> — 송장에 찍히는 송화인과 정산 계좌를 고칩니다.</span></li>
+      </ol>
+      <div class="note">카드를 열면(⌄) 내용이 펼쳐집니다. 맨 아래 <b>계정 작업</b>에서 로그아웃·탈퇴 신청을 할 수 있어요(탈퇴 시 판매 즉시 중단, 30일 후 완전 삭제).</div>
+    </div>
+  </div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">13</span><h1>설정</h1><span class="crumb">공지 팝업 · 알림톡</span></div>
+  <h2>공지 팝업 <span class="sub">연휴 배송 지연 등 손님 안내</span></h2>
+  <figure class="shot" style="width:100%" data-src="images/settings-notice.jpg" data-crop="288,260,1144,823">
+    <i data-box="315,349,1117,491" data-n="1"></i>
+    <i data-box="315,503,1117,823" data-n="2"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>등록한 공지와 상태(게시 중 · 예정 · 종료). 연필로 수정합니다.</span></li>
+    <li><span class="n">2</span><span><b>공지 추가</b>를 누르고 제목·내용·사진·기간을 넣으세요. 한국어로 써도 손님 나라 말로 번역돼요.</span></li>
+  </ol>
+  <h2>시딩 신청 알림톡</h2>
+  <figure class="shot" style="width:100%" data-src="images/settings-2.jpg" data-crop="288,512,1144,705">
+    <i data-box="1066,535,1118,566" data-n="3"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">3</span><span>무료 시딩 신청·재발송 때도 카카오톡으로 받으려면 켜세요. 주문 알림은 이 설정과 상관없이 항상 갑니다.</span></li>
+  </ol>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">13</span><h1>설정</h1><span class="crumb">설정 › 구독 관리</span></div>
+  <div class="row">
+    <div class="col">
+      <figure class="shot" style="width:100%" data-src="images/settings-2.jpg" data-crop="288,368,1144,496">
+        <i data-box="290,371,1142,493" data-n="1"></i>
+      </figure>
+    </div>
+  </div>
+  <figure class="shot" style="width:100%" data-src="images/subscription.jpg" data-crop="352,100,1080,560">
+    <i data-box="379,270,1053,417" data-n="2"></i>
+    <i data-box="966,483,1054,527" data-n="3"></i>
+  </figure>
+  <ol class="steps">
+    <li><span class="n">1</span><span>설정의 <b>구독 관리</b> 카드를 누르세요.</span></li>
+    <li><span class="n">2</span><span>플랜 · 결제액 · 현재 기간 · 다음 결제일.</span></li>
+    <li><span class="n">3</span><span><b>카드 변경</b>. 아래에서 청구서 내역 확인과 <b>해지 예약 / 해지 예약 취소</b>를 할 수 있어요.</span></li>
+  </ol>
+  <div class="note">해지해도 이미 결제한 기간이 끝날 때까지는 계속 판매할 수 있습니다. 결제가 실패하면 홈 화면에 <b>카드 변경</b> 안내가 뜹니다.</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section class="page" data-chap="c14">
+  <div class="chap"><span class="no">14</span><h1>자주 묻는 질문</h1></div>
+  <dl class="faq">
+    <dt>결제하기 전에 미리 써볼 수 있나요?</dt>
+    <dd>네. 가입하면 브랜드관 꾸미기와 제품 등록은 바로 됩니다. 주문·정산·국제배송 메뉴는 멤버십 결제 후 열려요. 무료 체험 기간은 없습니다.</dd>
+    <dt>해외 판매가는 어떻게 정해지나요?</dt>
+    <dd>원가 + 마진(정산가)에 결제 수수료 5%를 더하고 저장 시점 환율로 바꾼 금액입니다. 나라별로 직접 바꿀 수도 있어요(04장).</dd>
+    <dt>환율이 바뀌면 손님 가격도 바뀌나요?</dt>
+    <dd>아니요. 판매가는 고정이고, 정산 금액(원화)이 환율에 따라 조금씩 달라집니다.</dd>
+    <dt>해외 송장은 누가 만드나요?</dt>
+    <dd>KLOW가 자동으로 만듭니다. 브랜드는 바코드 라벨을 인쇄해 박스에 붙이고, 인천 KLOW 물류센터로 국내 택배를 보내면 됩니다.</dd>
+    <dt>배송비는 누가 내나요?</dt>
+    <dd>기본은 손님이 나라별 요율을 냅니다. 제품·나라별로 무료($0)나 원하는 금액으로 바꿀 수 있어요. 실제 물류비는 실측 무게 기준으로 매월 따로 청구됩니다.</dd>
+    <dt>판매 대금은 언제 들어오나요?</dt>
+    <dd>지난달 결제완료된 주문을 매월 15일 원화로 등록 계좌에 입금합니다.</dd>
+    <dt>인플루언서에게 무료로 보내면 비용은?</dt>
+    <dd>국제배송 &amp; 링크에서 ‘브랜드가 결제’로 발급하면 받는 사람은 무료이고, 물류비는 매달 5일 실측 무게 기준으로 후청구됩니다. 발송 전에는 무료로 취소할 수 있어요.</dd>
+    <dt>번역이 어색해요.</dt>
+    <dd>홈 미리보기에서 국가를 바꾼 뒤 해당 글자를 누르면 직접 고칠 수 있습니다(04장).</dd>
+    <dt>담당자가 바뀌면 계정은 어떻게 하나요?</dt>
+    <dd>설정 › 로그인 전화번호 관리에서 새 담당자 번호를 추가하세요(최대 5개).</dd>
+    <dt>구독을 해지하면 바로 판매가 멈추나요?</dt>
+    <dd>아니요. 이미 결제한 기간이 끝날 때까지 판매할 수 있습니다. 첫 결제 후 7일 이내 제품 노출이 한 건도 없었다면 전액 환불돼요.</dd>
+  </dl>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<section class="page">
+  <div class="chap"><span class="no">14</span><h1>용어집</h1></div>
+  <div class="gloss">
+    <b>브랜드관</b><span>klow.kr/브랜드주소 로 열리는 내 온라인 매장.</span>
+    <b>정산가</b><span>제품 1개가 팔리면 브랜드가 받는 원화 금액(원가 + 마진).</span>
+    <b>판매가</b><span>손님이 내는 금액. 정산가에 결제 수수료 5%를 더해 그 나라 통화로 표시.</span>
+    <b>송화인</b><span>해외 송장에 찍히는 ‘보내는 사람’ 정보(브랜드명·주소·연락처).</span>
+    <b>시딩</b><span>인플루언서·바이어에게 체험용 제품을 보내는 것. 국제배송 &amp; 링크 메뉴에서 처리.</span>
+    <b>배송 링크</b><span>받는 사람이 직접 주소를 입력하도록 보내는 링크. 입력하면 송장이 자동 발급.</span>
+    <b>할인 링크</b><span>특정 사람에게만 할인가로 보이는 브랜드관 주소.</span>
+    <b>현장가</b><span>현장 QR 판매에서 1개 팔 때 받을 금액(배송비 없음).</span>
+    <b>MOQ</b><span>최소 주문 수량. B2B 바이어가 주문해야 하는 최소 개수.</span>
+    <b>송장 · 바코드</b><span>KLOW가 발급하는 국제 송장. 바코드 라벨을 박스에 붙여 물류센터로 보냅니다.</span>
+    <b>실측 무게</b><span>물류센터 입고 때 KLOW가 잰 박스 무게. 물류비 청구 기준.</span>
+    <b>물류비 청구</b><span>실제 해외 배송비(EFS 실비 + 수수료)를 매월 브랜드에 청구하는 것.</span>
+    <b>퍼널</b><span>방문 → 장바구니 → 결제로 이어지는 손님 흐름.</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="note" style="text-align:center; padding:6mm"><span class="t" style="font-size:12pt">도움이 필요하면 언제든 연락 주세요</span>
+    KLOW 고객센터 <b>0507-1313-7026</b> · <b>team@klow.kr</b><br>평일 10:00–18:00 (점심 12:00–13:00 제외, 주말·공휴일 휴무)</div>
+  <div class="foot"><span>KLOW Brand 시작 가이드</span><span class="pn"></span></div>
+</section>
+
+<script>
+(function () {
+  const NS = 'http://www.w3.org/2000/svg';
+  document.querySelectorAll('figure.shot').forEach(fig => {
+    const [x1, y1, x2, y2] = fig.dataset.crop.split(',').map(Number);
+    const cw = x2 - x1, ch = y2 - y1;
+    fig.style.aspectRatio = cw + ' / ' + ch;
+    const img = document.createElement('img');
+    img.src = fig.dataset.src;
+    // 모든 캡처는 1440px 폭(뷰포트 1:1)이다.
+    img.style.width = (1440 / cw * 100) + '%';
+    img.style.left = (-x1 / cw * 100) + '%';
+    img.style.top = (-y1 / ch * 100) + '%';
+    fig.prepend(img);
+    fig.querySelectorAll('i[data-box]').forEach(m => {
+      const [a, b, c, d] = m.dataset.box.split(',').map(Number);
+      const L = Math.max(a, x1), T = Math.max(b, y1), R = Math.min(c, x2), B = Math.min(d, y2);
+      const bx = document.createElement('div');
+      bx.className = 'bx';
+      bx.style.left = ((L - x1) / cw * 100) + '%';
+      bx.style.top = ((T - y1) / ch * 100) + '%';
+      bx.style.width = ((R - L) / cw * 100) + '%';
+      bx.style.height = ((B - T) / ch * 100) + '%';
+      fig.appendChild(bx);
+      if (m.dataset.n) {
+        const n = document.createElement('div');
+        n.className = 'bn';
+        n.textContent = m.dataset.n;
+        n.dataset.x = (L - x1) / cw; n.dataset.y = (T - y1) / ch;
+        fig.appendChild(n);
+      }
+      m.remove();
+    });
+  });
+  // 번호 배지: 박스 왼쪽 위 모서리, 그림 밖으로 잘리지 않게 픽셀 단위로 안쪽에 고정
+  document.querySelectorAll('.shot .bn').forEach(n => {
+    const fig = n.parentElement, r = fig.getBoundingClientRect();
+    const m = 13;
+    const x = Math.min(Math.max(parseFloat(n.dataset.x) * r.width, m), r.width - m);
+    const y = Math.min(Math.max(parseFloat(n.dataset.y) * r.height, m), r.height - m);
+    n.style.left = x + 'px'; n.style.top = y + 'px';
+  });
+  // 넘침 검사 — 본문이 꼬리말을 침범하면 빨간 테두리
+  document.querySelectorAll('.page').forEach(p => {
+    const foot = p.querySelector('.foot'); if (!foot) return;
+    const ft = foot.getBoundingClientRect().top;
+    const kids = [...p.children].filter(c => c !== foot && !c.classList.contains('spacer'));
+    if (kids.some(c => c.getBoundingClientRect().bottom > ft + 1)) p.classList.add('overflow');
+  });
+  // page numbers + TOC
+  const pages = [...document.querySelectorAll('.page')];
+  pages.forEach((p, i) => { const pn = p.querySelector('.foot .pn'); if (pn) pn.textContent = i + 1; });
+  document.querySelectorAll('[data-toc]').forEach(el => {
+    const t = document.querySelector('[data-chap="' + el.dataset.toc + '"]');
+    if (t) el.textContent = pages.indexOf(t) + 1;
+  });
+})();
+</script>
+</body>
+</html>
