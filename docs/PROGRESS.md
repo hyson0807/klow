@@ -47,16 +47,20 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ⚠️ **staging DB 는 이미 마이그레이션이 적용돼 있다**(Neon `ep-icy-flower`) — push 로 새로 도는 건
 코드뿐이다.
 
-### 2026-10-01 계획 세션 — customer-reviews 트랙이 큐 **맨 뒤**에 붙었다
+### customer-reviews — 다음은 `§7` **15행**(B. 요청 큐·cron·8개국어 메일 + 어드민 배지)
 
-`§7` **14·15·16행**(배송완료 → 고객 리뷰 요청 메일 + 작성 페이지). 이 세션은 **문서만** 썼고
-코드는 0줄이다 — 스펙은 [`plan/customer-reviews/`](./plan/customer-reviews/README.md),
-다음 단계 명세는 `§6 customer-reviews` 의 14행이다.
+**14행(A)은 2026-10-01 에 끝났다**(klow_server `1f4cb6e`, push 안 함). 사용자 지시로 이 트랙은
+**git `staging` 브랜치 + staging DB(`ep-icy-flower`)에서 직접** 진행한다 — 트랙 문서의
+"`feat/customer-reviews` + Neon DB 브랜치" 지시를 이 트랙에 한해 대체한다. 마이그레이션
+`add_customer_reviews` 는 **staging DB 에 이미 적용**됐다. 15행 명세는 트랙 문서
+[B행](./plan/customer-reviews/implementation-plan.md) — 착수 전에 `§9` 의 14행 메모를 읽는다.
 
 ⚠️ **위 세 줄(7·8 → 12 → 9행)의 우선순위를 밀지 않는다** — 그건 전부 사용자 `git push` 와
-운영 확인이 필요한 일이고, 14행은 새 git·DB 브랜치에서 시작하므로 그것들과 충돌하지 않는다.
-⚠️ 14행은 **Prisma 마이그레이션을 동반**하므로 `§4 WIP 상한`(마이그레이션 동시 1개)에 걸린다 —
-착수 시점에 다른 마이그레이션 단계가 `진행 중` 이면 안 된다(지금은 없다).
+운영 확인이 필요한 일이다. ⚠️ 단 14행 커밋이 klow_server `staging` 에 쌓였으므로 7·8·12행의
+`git push` 에 **14행이 함께 실려 나간다** — 라우트 3개가 추가될 뿐 프론트가 없어 무해하고
+(staging DB 엔 마이그레이션이 이미 있다), cron 은 아직 없다. ⚠️ 운영 배포 때는
+`add_customer_reviews` 마이그레이션 + `REVIEW_LINK_SECRET` env 가 **먼저** 있어야 한다(없으면
+운영 부팅 거부 — fail-closed).
 
 ### ⚠️⚠️ 2026-09-30 후속 — 배송비 단위를 원 → USD 센트로 옮겼다 (사용자 요청)
 
@@ -822,6 +826,18 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
   3. `PATCH /v1/brand/reviews/:id` 가 `source='customer'` 리뷰에 **403**
 - **불변식**: 트랙 문서 G4(전용 시크릿) · G7(시딩 제품명 파생) · G8(집계 우회 금지)
 
+#### 15. B — klow_server 요청 큐·cron·8개국어 메일 → klow_admin 출처 배지
+
+본문은 트랙 문서 [B행](./plan/customer-reviews/implementation-plan.md). 14행이 끝나 전제가 확정됐다.
+
+- **읽을 것**: 트랙 문서 **G1·G2·G3·G6** + B행 · `server/modules/brand-crm.md`(큐 관용구) ·
+  [`decisions/settlement.md#2026-09-04`](./decisions/settlement.md#2026-09-04) · `§9` 의 14행 메모
+- **건드리는 레포 · 배포 순서**: klow_server → klow_admin (어드민이 먼저면 `source` 없는 응답에 전부 '대행')
+- **스키마·데이터 위험**: 없음 (14행에서 끝났다). ⚠️ **staging 브랜치·staging DB 에서 직접**(사용자 지시)
+- **완료 기준**: 트랙 문서 B행 그대로 — 특히 `npm run test:e2e` cron **13개** · 멀티 브랜드 주문에서
+  한쪽만 배송완료면 `ReviewRequest` **1행** · `[DEV email]` 링크가 `form` 200
+- ⚠️ staging DB 로 cron 을 돌릴 땐 `RESEND_API_KEY` 를 비워 **실메일이 나가지 않게** 한다
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -874,7 +890,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 10 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
 | 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
-| 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 | 대기 | ✗ | | |
+| 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 (**staging 브랜치·staging DB 에서 직접** — 사용자 지시) | 완료 | ✗ | 2026-10-01 | 1f4cb6e / - / - / - / (이 커밋) |
 | 15 | customer-reviews | B. klow_server 요청 큐·cron·8개국어 메일 + klow_admin 출처 배지 | 대기 | ✗ | | |
 | 16 | customer-reviews | C. klow_web 작성 페이지 + PDP `구매 확인` 배지 + klow_brand 읽기 전용 + 문서·결정 기록 | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
@@ -940,6 +956,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### customer-reviews — 14행 A (완료 · klow_server `1f4cb6e`, push 안 함)
+
+- **사용자 지시**: git `staging` + staging DB 에서 직접(feat 브랜치·DB 브랜치 없음). 15·16행도 같은 방식으로 본다. `migrate dev` 는 유니크 경고 프롬프트 때문에 Claude Code 안(`!` 포함)에선 안 돌아 **사용자가 별도 터미널에서** 실행했다.
+- **트랙 문서와 다르게 한 것**: ① 토큰 게이트·폼 조립은 새 `customer-review.service.ts`(`CustomerReviewService`), 쓰기만 `ReviewsService.createFromCustomer` ② 사진 URL 은 **이 주문 업로드 prefix 아래만** 허용(`R2Service.publicUrlPrefix` 신설, 키 `brands/reviews/<orderId>/images/`) ③ 공개 목록·상세에서 `orderId` 를 벗긴다 ④ `sourceLocale` 은 `normalizeReviewLocale` 통과값만 저장(그 외·`ko` → null) ⑤ `defaultUserName` = `fullName` 첫 단어(공개 노출이라).
+- **`locale` 은 지금 늘 null** — `ReviewRequest` 행에서 읽는데 행을 만드는 큐가 15행이다. `country-locale.ts` 도 15행 몫이라 손대지 않았다.
+- **폼 제품명은 한국어/원문 그대로**(번역 overlay 없음) — 16행(C) 화면을 만들 때 필요하면 `ProductTranslationService` 로 붙인다.
+- 검증: typecheck 2종 · jest 100 suites/1465(새 spec 16) · e2e · 부팅 라우트 **402**(새 3개 확인) · staging curl(form 200·submit 201·재제출 409·외부 이미지 400·변조 404·집계 4.6→4.667) · 브랜드 403 은 **세션 쿠키 대신 실DB 에 붙인 서비스 직접 호출**로 확인. 테스트 리뷰 2건은 삭제하고 집계 원복(4.6/5 · 0/0) 확인.
+- 15행이 알 것: `ReviewRequest` 는 `@@unique([orderId, brandId])` 라 `createMany({ skipDuplicates })` 로 멱등. 메일 링크 = `${WEB}/review/<orderId>?t=${signReviewLinkToken(orderId, brandId)}`.
 
 ### seeding-bulk-invoice — B행 후속 (완료 · push 대기, 사용자 요청)
 
