@@ -47,6 +47,17 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ⚠️ **staging DB 는 이미 마이그레이션이 적용돼 있다**(Neon `ep-icy-flower`) — push 로 새로 도는 건
 코드뿐이다.
 
+### 2026-10-01 계획 세션 — customer-reviews 트랙이 큐 **맨 뒤**에 붙었다
+
+`§7` **14·15·16행**(배송완료 → 고객 리뷰 요청 메일 + 작성 페이지). 이 세션은 **문서만** 썼고
+코드는 0줄이다 — 스펙은 [`plan/customer-reviews/`](./plan/customer-reviews/README.md),
+다음 단계 명세는 `§6 customer-reviews` 의 14행이다.
+
+⚠️ **위 세 줄(7·8 → 12 → 9행)의 우선순위를 밀지 않는다** — 그건 전부 사용자 `git push` 와
+운영 확인이 필요한 일이고, 14행은 새 git·DB 브랜치에서 시작하므로 그것들과 충돌하지 않는다.
+⚠️ 14행은 **Prisma 마이그레이션을 동반**하므로 `§4 WIP 상한`(마이그레이션 동시 1개)에 걸린다 —
+착수 시점에 다른 마이그레이션 단계가 `진행 중` 이면 안 된다(지금은 없다).
+
 ### ⚠️⚠️ 2026-09-30 후속 — 배송비 단위를 원 → USD 센트로 옮겼다 (사용자 요청)
 
 위 배포 **직후** 사용자가 *"배송비를 달러로 입력하자 — PG 결제가 달러라 환율 때문에 달라 보일
@@ -763,6 +774,54 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | **7** | A. 캐리어 고정화 + `POST /v1/brand/seeding/bulk-issue` | klow_server |
 | **8** | B. 분기 문구 + 엑셀 모달 실연결 + staging push | klow_admin → klow_brand (서버 뒤) |
 
+### customer-reviews — 배송완료 → 고객 리뷰 요청 메일 + 작성 페이지
+
+스펙: [`plan/customer-reviews/`](./plan/customer-reviews/README.md) — 결정 요약은 `README.md`,
+설계 논거는 `flow.md`, **빌드 스펙 정본은 `implementation-plan.md`**.
+
+손님(구매자)이 리뷰를 **직접** 쓸 경로를 만든다. 지금 PDP 의 리뷰는 전부 어드민·브랜드의 **대행
+수기 입력**이고(`decisions/products.md#2026-08-18`) 고객 작성 경로는 0개다. 배송이 끝나면
+**(주문 × 브랜드) 단위로 1통** 리뷰 요청 메일을 보내고, 토큰 링크로 로그인 없이 들어와 그
+브랜드 제품 중 **원하는 만큼 자유 선택**해 평점·글·사진을 남긴다. 일반·시딩·현장 주문 전부 대상.
+
+⚠️ 착수 전에 트랙 문서의 **착수 게이트 G1~G8** 을 읽는다. 특히 둘은 코드를 쓰기 전에 알아야 한다.
+
+- **G1 — 트리거는 cron 의 DB 스캔이고 `shipments.service.ts` 는 한 줄도 안 건드린다.**
+  그 파일이 *"배송완료 분기를 호출부마다 두지 말 것 — 국내용 완료 훅을 따로 만들었더니 국내·EFS
+  가 섞인 주문이 양쪽 어디에도 안 걸렸다"* 를 이미 주석으로 남겨 뒀다. 배송완료 코드는
+  `EFS_DELIVERED_CODES`(33·47·74) 단일 출처 — ⚠️ `'33'` 만 쓰면 settlement 과 같은 사고가 난다.
+- **G6 — 발송 cron 은 기본 off(`REVIEW_REQUEST_CRON_ENABLED === 'true'` 일 때만).**
+  다른 cron 의 `!== 'false'` 관례와 **의도적으로 반대**다. 메일이 가리키는 klow_web 페이지가
+  뜨기 전에 켜면 손님에게 404 로 가는 링크가 발송되고 **되돌릴 수 없다.**
+
+⚠️ **`SeedingClaim.reviewCompleted` 와 아무 관계가 없다** — 그건 브랜드가 켜는 "인플루언서가 SNS
+후기를 만들었다" 플래그다. 이름만 비슷한 **다른 축**이고 이 트랙은 그 컬럼을 읽지도 쓰지도 않는다.
+
+| `§7` | 단계 | 레포 · 배포 순서 |
+|---|---|---|
+| **14** | A. 스키마·마이그레이션 + 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 | klow_server |
+| **15** | B. 요청 큐·cron·8개국어 메일 + 어드민 출처 배지 | klow_server → klow_admin |
+| **16** | C. 손님 작성 페이지 + PDP 배지 + 브랜드 읽기 전용 + 문서·결정 기록 | klow_brand → klow_web, 그 **뒤에** cron on |
+
+#### 14. A — klow_server: 스키마 + 토큰 + 제출/조회/업로드 API + 권한
+
+본문은 트랙 문서 [A행](./plan/customer-reviews/implementation-plan.md). 여기엔 읽을 것과 완료 기준만.
+
+- **읽을 것**: `server/modules/reviews.md` 전체 · 트랙 문서 **G4·G5·G7·G8** ·
+  [`decisions/products.md#2026-08-18`](./decisions/products.md#2026-08-18) ·
+  [`decisions/shipping-seeding.md#2026-09-14`](./decisions/shipping-seeding.md#2026-09-14)
+- **건드리는 레포 · 배포 순서**: klow_server 단독 — 프론트가 없어 라우트만 떠 있으면 무해하다
+- **스키마·데이터 위험**: 마이그레이션 `add_customer_reviews` — `Review` 에 nullable ADD COLUMN
+  3개(`source`·`orderId`·`sourceLocale`) + `CREATE TABLE ReviewRequest` + `CREATE TYPE
+  ReviewSource` + unique 2개. **백필 0건**(`source @default(proxy)`) · **롤링 안전**.
+  ⚠️ **git `feat/customer-reviews` + Neon DB 브랜치를 함께 판다**(`CLAUDE.md` 규칙).
+- **완료 기준**
+  1. 검증 3층 + `npm run start` 라우트 수 **+3**
+  2. 로컬 `curl`: 유효 토큰 `form` 200 → `submit` 2건 → `GET /v1/reviews?productId=` 에 등장 ·
+     `Product.rating` 재계산 확인 · 같은 제품 재제출 **409** · 토큰 1글자 변조 **404**
+  3. `PATCH /v1/brand/reviews/:id` 가 `source='customer'` 리뷰에 **403**
+- **불변식**: 트랙 문서 G4(전용 시크릿) · G7(시딩 제품명 파생) · G8(집계 우회 금지)
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -815,11 +874,21 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 10 | cafe24-fulfillment | 7. 실브랜드 1~2곳 시범 | 대기 | ✗ | | |
 | 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
 | 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
+| 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 | 대기 | ✗ | | |
+| 15 | customer-reviews | B. klow_server 요청 큐·cron·8개국어 메일 + klow_admin 출처 배지 | 대기 | ✗ | | |
+| 16 | customer-reviews | C. klow_web 작성 페이지 + PDP `구매 확인` 배지 + klow_brand 읽기 전용 + 문서·결정 기록 | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
 > (9·10·11행)보다 **앞**이다. 큐가 뒤집혀도 안전한 이유는 `§0` 이 갖는다(운영 마이그레이션 5개가
 > 이미 소진됐다).
+>
+> ⚠️ **13행(aws-fargate)이 14~16행보다 아래에 있는 것은 의도된 것이다** — 그 트랙은 우선순위
+> 최하위라 `§6` 이 "표에서도 맨 아래 행"으로 못박았다. 번호는 추가 순서이고 **순서는 위치가**
+> **말한다.** 번호를 다시 매기지 않는다 — 다른 문서와 `§0`·`§6` 이 행 번호로 서로를 가리킨다.
+>
+> **14·15·16행(customer-reviews)은 2026-10-01 계획 세션이 더했다** — 기존 큐(7·8 → 12 → 9·10·11)
+> **뒤**다. 착수 전에 `§6 customer-reviews` 의 G1·G6 경고를 읽는다.
 >
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 >

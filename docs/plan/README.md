@@ -16,6 +16,7 @@
 | [b2b-wholesale/](./b2b-wholesale/README.md) | 해외 바이어가 링크 하나로 **도매가·MOQ·수량구간**을 보고 주문서를 넣는다. 브랜드관 위에 한 겹을 얹는 구조 — 테이블 6벌 + 전용 모듈이 전부 신규다. **브랜드 원본 가격표 엑셀에서 AI 로 MOQ·도매가 추출**(`rate-sheet-ai` 2단계 규칙 재사용). 결제(PG)는 스코프 밖 |
 | [brand-shipping-fee/](./brand-shipping-fee/README.md) | 브랜드가 **국가별 고객 부담 배송비**를 직접 정한다. 지금은 무료배송 `ON/OFF` 두 칸뿐이라 전액 부담 아니면 전액 전가뿐 — `ProductCountryPrice` 컬럼 하나로 0원~임의 금액을 고르게 한다. `NULL` = 지금과 같은 500g 요율이라 미설정 브랜드는 동작 불변 |
 | [seeding-bulk-invoice/](./seeding-bulk-invoice/README.md) | 브랜드가 **수령인 명단 엑셀**로 링크 없이 EFS 송장을 일괄 발급한다(taeyoung30 목업 실연결). 같은 트랙에서 **송장 캐리어 = 국가 고정 캐리어**로 고정 — 무게 분기는 예상 배송비 전용 |
+| [customer-reviews/](./customer-reviews/README.md) | 손님(구매자)이 제품 리뷰를 직접 쓴다. 배송완료(EFS 33·47·74 / 국내 발송처리 / 현장 결제+N일)를 cron 이 스캔해 **(주문 × 브랜드) 1통**씩 리뷰 요청 메일을 보내고, 전용 HMAC 토큰 링크로 비로그인 진입해 **그 브랜드 판매중 전 제품 중 자유 선택**해 평점·글·사진을 남긴다. `ReviewRequest` 행의 `@@unique([orderId, brandId])` 가 중복 발송 금지의 정본이고, `Review.source=customer` 는 브랜드가 수정·삭제할 수 없다 |
 
 ## 새 트랙을 만들 때
 
