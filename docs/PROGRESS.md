@@ -47,20 +47,21 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ⚠️ **staging DB 는 이미 마이그레이션이 적용돼 있다**(Neon `ep-icy-flower`) — push 로 새로 도는 건
 코드뿐이다.
 
-### customer-reviews — 다음은 `§7` **15행**(B. 요청 큐·cron·8개국어 메일 + 어드민 배지)
+### customer-reviews — 다음은 `§7` **16행**(C. 손님 작성 페이지 + PDP 배지 + 브랜드 읽기 전용)
 
-**14행(A)은 2026-10-01 에 끝났다**(klow_server `1f4cb6e`, push 안 함). 사용자 지시로 이 트랙은
-**git `staging` 브랜치 + staging DB(`ep-icy-flower`)에서 직접** 진행한다 — 트랙 문서의
-"`feat/customer-reviews` + Neon DB 브랜치" 지시를 이 트랙에 한해 대체한다. 마이그레이션
-`add_customer_reviews` 는 **staging DB 에 이미 적용**됐다. 15행 명세는 트랙 문서
-[B행](./plan/customer-reviews/implementation-plan.md) — 착수 전에 `§9` 의 14행 메모를 읽는다.
+**14행(A)·15행(B)은 2026-10-01 에 끝났다**(klow_server `1f4cb6e`·`b282b9d`, klow_admin `b5cbe59`,
+push 안 함). 사용자 지시로 이 트랙은 **git `staging` 브랜치 + staging DB(`ep-icy-flower`)에서 직접**
+진행한다 — 트랙 문서의 "`feat/customer-reviews` + Neon DB 브랜치" 지시를 이 트랙에 한해 대체한다.
+마이그레이션 `add_customer_reviews` 는 **staging DB 에 이미 적용**됐다. 16행 명세는 `§6` + 트랙 문서
+[C행](./plan/customer-reviews/implementation-plan.md) — 착수 전에 `§9` 의 15행 메모를 읽는다.
 
 ⚠️ **위 세 줄(7·8 → 12 → 9행)의 우선순위를 밀지 않는다** — 그건 전부 사용자 `git push` 와
-운영 확인이 필요한 일이다. ⚠️ 단 14행 커밋이 klow_server `staging` 에 쌓였으므로 7·8·12행의
-`git push` 에 **14행이 함께 실려 나간다** — 라우트 3개가 추가될 뿐 프론트가 없어 무해하고
-(staging DB 엔 마이그레이션이 이미 있다), cron 은 아직 없다. ⚠️ 운영 배포 때는
-`add_customer_reviews` 마이그레이션 + `REVIEW_LINK_SECRET` env 가 **먼저** 있어야 한다(없으면
-운영 부팅 거부 — fail-closed).
+운영 확인이 필요한 일이다. ⚠️ 단 14·15행 커밋이 klow_server·klow_admin `staging` 에 쌓였으므로
+7·8·12행의 `git push` 에 **함께 실려 나간다** — 라우트 3개 + `/admin/reviews?source=` 필터 +
+cron 1개가 추가되지만 **cron 은 기본 off**(`REVIEW_REQUEST_CRON_ENABLED === 'true'` 일 때만)라
+메일은 나가지 않는다. ⚠️⚠️ **staging·운영 어디서든 16행 klow_web 배포 전에 그 env 를 켜지 말 것**
+— 손님에게 404 링크가 나가고 되돌릴 수 없다. ⚠️ 운영 배포 때는 `add_customer_reviews`
+마이그레이션 + `REVIEW_LINK_SECRET` env 가 **먼저** 있어야 한다(없으면 운영 부팅 거부 — fail-closed).
 
 ### ⚠️⚠️ 2026-09-30 후속 — 배송비 단위를 원 → USD 센트로 옮겼다 (사용자 요청)
 
@@ -826,17 +827,20 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
   3. `PATCH /v1/brand/reviews/:id` 가 `source='customer'` 리뷰에 **403**
 - **불변식**: 트랙 문서 G4(전용 시크릿) · G7(시딩 제품명 파생) · G8(집계 우회 금지)
 
-#### 15. B — klow_server 요청 큐·cron·8개국어 메일 → klow_admin 출처 배지
+#### 16. C — klow_web 작성 페이지 + PDP 배지 → klow_brand 읽기 전용 + 문서·결정 기록
 
-본문은 트랙 문서 [B행](./plan/customer-reviews/implementation-plan.md). 14행이 끝나 전제가 확정됐다.
+본문은 트랙 문서 [C행](./plan/customer-reviews/implementation-plan.md). 14·15행이 끝나 전제가 확정됐다.
 
-- **읽을 것**: 트랙 문서 **G1·G2·G3·G6** + B행 · `server/modules/brand-crm.md`(큐 관용구) ·
-  [`decisions/settlement.md#2026-09-04`](./decisions/settlement.md#2026-09-04) · `§9` 의 14행 메모
-- **건드리는 레포 · 배포 순서**: klow_server → klow_admin (어드민이 먼저면 `source` 없는 응답에 전부 '대행')
-- **스키마·데이터 위험**: 없음 (14행에서 끝났다). ⚠️ **staging 브랜치·staging DB 에서 직접**(사용자 지시)
-- **완료 기준**: 트랙 문서 B행 그대로 — 특히 `npm run test:e2e` cron **13개** · 멀티 브랜드 주문에서
-  한쪽만 배송완료면 `ReviewRequest` **1행** · `[DEV email]` 링크가 `form` 200
-- ⚠️ staging DB 로 cron 을 돌릴 땐 `RESEND_API_KEY` 를 비워 **실메일이 나가지 않게** 한다
+- **읽을 것**: 트랙 문서 C행 · `klow_web/docs/i18n.md` · klow_web `app/seed/[token]/page.tsx` ·
+  `app/track/[id]/page.tsx` · `server/modules/reviews.md`(form/submit/upload 응답 모양) · `§9` 의 15행 메모
+- **건드리는 레포 · 배포 순서**: klow_brand → klow_web, 그 **뒤에** `REVIEW_REQUEST_CRON_ENABLED=true`
+  (G6 — 거꾸로면 손님이 404 를 본다)
+- **스키마·데이터 위험**: 없음. ⚠️ **staging 브랜치·staging DB 에서 직접**(사용자 지시)
+- **완료 기준**: 트랙 문서 C행 그대로 — 특히 실제 메일 링크로 진입 → 제출 → PDP `구매 확인` 배지 ·
+  재방문 시 `작성 완료` · klow_brand 에서 수정·삭제 버튼 없음 · `/review/preview` 가 백엔드 없이 뜬다
+- ⚠️ "B행이 찍은 실제 메일 링크"는 **staging 에 남아 있지 않다**(15행이 테스트 후 지웠다) — 다시 찍는 법은 `§9` 15행 메모
+- ⚠️ 이 행이 트랙의 마지막이다 — **결정 기록 1건**(`decisions/products.md`) + `decisions/README.md` 표 +
+  `CLAUDE.md` `## 결정 기록` 색인 + Where Things Live 한 줄을 빠뜨리지 말 것
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -891,7 +895,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 11 | cafe24-fulfillment | 8. 퍼블릭앱 심사 제출 (외부 대기) | 대기 | — | | |
 | 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
 | 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 (**staging 브랜치·staging DB 에서 직접** — 사용자 지시) | 완료 | ✗ | 2026-10-01 | 1f4cb6e / - / - / - / (이 커밋) |
-| 15 | customer-reviews | B. klow_server 요청 큐·cron·8개국어 메일 + klow_admin 출처 배지 | 대기 | ✗ | | |
+| 15 | customer-reviews | B. klow_server 요청 큐·cron(**기본 off**)·8개국어 메일 + klow_admin 출처 배지·필터 | 완료 | ✗ | 2026-10-01 | b282b9d / b5cbe59 / - / - / (이 커밋) |
 | 16 | customer-reviews | C. klow_web 작성 페이지 + PDP `구매 확인` 배지 + klow_brand 읽기 전용 + 문서·결정 기록 | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
@@ -956,6 +960,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### customer-reviews — 15행 B (완료 · klow_server `b282b9d` · klow_admin `b5cbe59`, push 안 함)
+
+- **트랙 문서와 다르게 한 것**: ① 어드민 출처 필터는 **서버 쿼리**(`GET /admin/reviews?source=`) — 목록이 200건 상한이라 클라 필터면 고객 리뷰가 묻힌다 ② 필터·배지는 `/reviews` 페이지가 아니라 그 안의 제품 패널 `ReviewManager`·`ReviewItem` 에 있다(페이지가 제품 선택형이라) ③ 메일 HTML 은 `reviews/review-request-email.ts` 가 만들고 `EmailService.sendReviewRequest` 는 `{to, subject, html, reviewUrl}` 만 받는다(web-auth → reviews 역의존 방지) ④ `BrandCrmOptOut` 히트는 카운터를 안 올리고 `skipped`.
+- **실측(staging DB + 로컬, `RESEND_API_KEY` 비움)**: 시딩 주문 `cmunvlthu…` 송장을 `'33'` 으로 + 같은 주문에 다른 브랜드 임시 송장(`'05'`) 복제 → `DELAY_DAYS=0` 으로 `ReviewRequestCron.run()` → 그 주문은 **배송완료 브랜드 1행만** `sent` · `[DEV email]` 링크로 `GET /v1/reviews/form` **200**(`locale:"en"` 이 이제 채워진다) · 부팅 라우트 **402**(이번 행 라우트 추가 0). ⚠️ staging 의 **현장 주문 119건**(전부 `@example.com` 시드)도 같이 `sent` 로 적재됐다 — 테스트 후 `ReviewRequest` **전부 삭제(0행 원복)**·임시 송장 삭제·송장 `'11'` 원복 확인.
+- **16행이 링크를 다시 찍으려면**: 위와 같이 송장 하나를 `'33'`(+`latestStatusAt=now()`)로 바꾸고 AppModule 컨텍스트에서 `REVIEW_REQUEST_CRON_ENABLED=true REVIEW_REQUEST_DELAY_DAYS=0 RESEND_API_KEY= CRON_ENABLED=false` 로 `ReviewRequestCron.run()` 을 부른다. 끝나면 같은 원복을 할 것. 또는 `reviewLinkUrl(orderId, brandId)`(export 됨)로 링크만 만들어도 form 은 뜬다(그땐 `locale` null).
+- **확인 못 한 것**: 어드민 화면(로그인 필요) — `npm run build` 만 통과. 실제 Resend 발송(8개국어 렌더) — 단위 스펙만.
+- 검증: typecheck 2종 · jest 102 suites/1487 · e2e(cron **13**) · `npx eslint` 바꾼 파일 · klow_admin `tsc`·`build`.
 
 ### customer-reviews — 14행 A (완료 · klow_server `1f4cb6e`, push 안 함)
 
