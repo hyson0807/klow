@@ -896,7 +896,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 12 | brand-shipping-fee | **4. 배송비 단위 전환(원 → USD 센트)** — 코드·마이그레이션·문서 완료, **staging push 대기** | 완료 | ✗ | 2026-09-30 | 162fff8 / 7bc9988 / 1f794a0 / - / (이 커밋) |
 | 14 | customer-reviews | A. klow_server — 스키마·마이그레이션 + 리뷰 링크 토큰 + 조회/제출/업로드 API + 브랜드 403 가드 (**staging 브랜치·staging DB 에서 직접** — 사용자 지시) | 완료 | ✗ | 2026-10-01 | 1f4cb6e / - / - / - / (이 커밋) |
 | 15 | customer-reviews | B. klow_server 요청 큐·cron(**기본 off**)·8개국어 메일 + klow_admin 출처 배지·필터 | 완료 | ✗ | 2026-10-01 | b282b9d / b5cbe59 / - / - / (이 커밋) |
-| 16 | customer-reviews | C. klow_web 작성 페이지 + klow_brand 읽기 전용 + 문서·결정 기록(PDP 배지는 사용자 결정으로 뺐다) — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 / 13d44a4 / 9adbd0d · 6cad729 / ae56ffc · 78506df / 867aa3d · 7a9cb36 · (이 커밋) |
+| 16 | customer-reviews | C. klow_web 작성 페이지 + klow_brand 읽기 전용 + 문서·결정 기록(PDP 배지는 사용자 결정으로 뺐다) — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 · 5b17611 / 13d44a4 / 9adbd0d · 6cad729 / ae56ffc · 78506df · 63dcdc2 / 867aa3d · 7a9cb36 · b092720 · (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -965,6 +965,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 - **트랙 문서와 다르게 한 것**: ① **`npm run i18n:fill` 을 못 돌렸다** — 로컬 어디에도 `GOOGLE_TRANSLATE_API_KEY` 가 없다. 7개 언어를 **수동 번역**해 `review` 네임스페이스·`pdp.verifiedPurchase` 만 **추가**했다(기존 값 0건 변경 — fill 의 큐레이션 되돌림 문제도 없음) ② `review`·`reviews` 를 **브랜드 slug 예약어**에 넣었다(klow_server 1커밋 — `/review` 가 `[brandSlug]` 를 가린다. staging DB·운영 API 에 그 slug 없음 확인) ③ 출처 배지(PDP `Verified purchase` · 브랜드 `고객 작성` · 어드민 `고객`/`대행`)는 만들었다가 **사용자 요청으로 전부 뺐다**(같은 날) — `source` 는 권한 분기·어드민 필터에만 쓴다.
 - **실측(로컬 :4010/:3001 · staging DB · Chrome)**: JP 일반 주문 `cdemoblnk…3760` 에 `reviewLinkUrl()`(메일과 같은 함수) + `ReviewRequest` 1행(locale=`countryToLocale('JP')`)을 만들어 진입 → 일본어 화면 · 받은 제품 2 + 다른 제품 1 선택 · 사진 1장 R2 업로드 · 제출 → DB `source=customer`·`sourceLocale=ja`·집계 5/4/3·`submittedAt` → 재방문 `レビュー済み` 3개 비활성 → PDP `Verified purchase` 배지 + 사진 렌더 → `/review/preview?lang=th` API 호출 0 · 위조 토큰은 invalid 화면. **전부 원복**(리뷰 3·요청 1·집계 0/0·R2 객체 2 삭제).
+- **후속(사용자 요청, 같은 날)**: 메일 별점 원클릭 — 메일 별 5개(`&r=N`) → 받은 제품이 그 별점으로 선택된 채 열려 **제출 한 번**, 받은 제품 미상이면 제품만 고르기, 본문·사진·이름은 접힌 선택 옵션(서버 zod 도 선택으로). 실측: `r=4` 진입 → 클릭 1번에 등록(별 4 · 본문 '') · `r` 없으면 제출 비활성 + 안내 · 프리뷰 시딩 `r=5` 에서 제품 1개 고르면 활성. 실측 리뷰는 지웠고 **사용자가 메일 링크로 직접 남긴 리뷰 1건(Cica, 본문 `12312312`+사진)은 staging 에 남아 있다**.
 - ⚠️ cron 경유 실제 메일 링크는 다시 찍지 않았다(15행에서 확인됨) — 링크 생성 함수는 같다.
 - **확인 못 한 것**: klow_brand 리뷰 탭의 `고객 작성` 배지(로그인 필요 — `build` 만) · 실제 klow_web 배포 오리진에서의 사진 업로드(**R2 CORS 가 막는다** — `§0` 2번).
 - ⚠️ 로컬 dev 에서 사진을 시험하려면 klow_web 을 **포트 3001** 로 띄울 것(3011 은 R2 CORS 403). 화면 우하단 둥근 버튼은 TanStack Query devtools(dev 전용)다.

@@ -64,6 +64,7 @@
 - ⚠️ **고객 작성 리뷰(`source='customer'`)는 브랜드가 수정·삭제할 수 없다**(서버 403 — 브랜드 표면 404 관례의 의도된 예외). klow_brand 는 그 리뷰의 수정·삭제 버튼을 그리지 않는다. 어드민만 삭제(스팸·욕설 대응).
 - ⚠️ **화면 언어는 앱 locale 이 아니라 메일을 보낸 언어**(`GET /v1/reviews/form` 의 `locale` = `ReviewRequest.locale`, 없으면 앱 locale) — `/seed/[token]` 과 같은 이유(수신자는 온보딩을 안 거쳤다). 제출 시 그 locale 을 `sourceLocale` 로 보내 번역 소스가 된다(원문 = 요청 locale 이면 번역도 캐시도 안 만든다).
 - ⚠️ **`/review` 가 최상위 정적 경로가 되어 `review`·`reviews` 를 브랜드 slug 예약어에 넣었다**(klow_server `common/reserved-slugs.ts` ↔ klow_web `lib/reserved-slugs.ts` 미러). 넣기 전 staging DB·운영 공개 API 에서 그 slug 를 가진 브랜드가 없음을 확인했다. 앞으로 klow_web 에 최상위 라우트를 만들면 같은 두 파일에 함께 넣을 것.
+- ⚠️⚠️ **기본 경로는 "메일에서 별 누름 → 제출 버튼 한 번"이다**(2026-10-01 사용자 결정 — 이탈 최소화). 메일의 별 5개가 각각 작성 페이지 링크 + `r=1..5` 이고, 페이지는 받은 제품을 **그 별점으로 전부 선택한 채** 연다. 받은 제품을 특정할 수 없으면(시딩 자유 품명) 제품 고르기 목록만 보여 주고 고르면 메일 별점이 붙는다. **본문·사진·표시 이름은 전부 선택**(zod `content`·`userName` 기본 `''`, 이름을 비우면 `fallbackUserName` = `fullName` 첫 단어 → 이메일 앞 2글자`***`)이고 화면에서 접힌 옵션이다. 별점만 있는 리뷰는 PDP 에 **별만 있는 카드로 그대로** 나간다(A안). ⚠️⚠️ **별 링크(GET)로 리뷰를 등록하지 말 것** — 네이버·Gmail·Outlook 보안 검사기가 메일 링크를 미리 열어 보므로 도착하자마자 가짜 별점이 쌓인다. 등록은 페이지의 POST 한 번이다. 필수 항목을 다시 늘리면 그 칸에서 이탈한다.
 - **출처 배지는 어디에도 없다**(2026-10-01 사용자 결정 — PDP `Verified purchase` · klow_brand `고객 작성` · klow_admin `고객`/`대행` 을 만들었다가 전부 뺐다). `source` 는 응답에 그대로 실리고 **권한 분기(브랜드 수정·삭제 버튼 숨김, 어드민 수정 버튼 숨김)와 어드민 출처 필터에만** 쓰인다. 다시 넣을 곳은 klow_web `ReviewCard` · klow_brand `ReviewListItem` · klow_admin `ReviewItem`.
 - `SeedingClaim.reviewCompleted` 등 "인플루언서 SNS 후기" 플래그와는 **이름만 비슷한 다른 축**이다 — 서로 읽지 않는다.
 
