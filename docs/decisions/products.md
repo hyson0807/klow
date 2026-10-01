@@ -61,10 +61,10 @@
 
 - ⚠️⚠️ **발송 cron(`review-request-dispatch`)은 기본 off — `REVIEW_REQUEST_CRON_ENABLED === 'true'` 일 때만** 돈다(다른 cron 의 `!== 'false'` 와 의도적으로 반대). 켜는 순서는 **klow_server → klow_web 배포 확인 → env on** 이다. 거꾸로면 손님 수신함에 404 링크가 영구히 남는다.
 - ⚠️⚠️ **리뷰 사진은 브라우저가 R2 에 직접 PUT 한다(presign) — 버킷 CORS 가 klow_web 오리진을 허용해야 한다.** 2026-10-01 실측: staging 버킷 `klow-staging` 은 `localhost:3001`·`brand-staging.klow.kr` 만 허용하고 `klow.kr`·`www.klow.kr` 은 **403** 이다. 그대로면 사진 업로드만 실패한다(리뷰 글은 사진 없이 제출된다 — 화면이 `errors.upload` 를 띄운다). cron 을 켜기 전에 운영 버킷 CORS 에 klow_web 오리진(PUT · `content-type`)을 넣을 것. 로컬 dev 도 **포트 3001 이 아니면 막힌다**(3011 실측 403).
-- ⚠️ **고객 작성 리뷰(`source='customer'`)는 브랜드가 수정·삭제할 수 없다**(서버 403 — 브랜드 표면 404 관례의 의도된 예외). klow_brand 는 `고객 작성` 배지만 달고 버튼을 그리지 않는다. 어드민만 삭제(스팸·욕설 대응).
+- ⚠️ **고객 작성 리뷰(`source='customer'`)는 브랜드가 수정·삭제할 수 없다**(서버 403 — 브랜드 표면 404 관례의 의도된 예외). klow_brand 는 그 리뷰의 수정·삭제 버튼을 그리지 않는다. 어드민만 삭제(스팸·욕설 대응).
 - ⚠️ **화면 언어는 앱 locale 이 아니라 메일을 보낸 언어**(`GET /v1/reviews/form` 의 `locale` = `ReviewRequest.locale`, 없으면 앱 locale) — `/seed/[token]` 과 같은 이유(수신자는 온보딩을 안 거쳤다). 제출 시 그 locale 을 `sourceLocale` 로 보내 번역 소스가 된다(원문 = 요청 locale 이면 번역도 캐시도 안 만든다).
 - ⚠️ **`/review` 가 최상위 정적 경로가 되어 `review`·`reviews` 를 브랜드 slug 예약어에 넣었다**(klow_server `common/reserved-slugs.ts` ↔ klow_web `lib/reserved-slugs.ts` 미러). 넣기 전 staging DB·운영 공개 API 에서 그 slug 를 가진 브랜드가 없음을 확인했다. 앞으로 klow_web 에 최상위 라우트를 만들면 같은 두 파일에 함께 넣을 것.
-- **손님 화면(PDP)은 고객 작성 리뷰와 대행 리뷰를 구분해 보여주지 않는다**(2026-10-01 사용자 결정 — `Verified purchase` 배지를 만들었다가 뺐다). `source` 는 응답에 그대로 실리고 klow_brand(`고객 작성`)·klow_admin(`고객`/`대행`)만 구분한다. 다시 넣을 때는 `ReviewCard` 한 곳이다.
+- **출처 배지는 어디에도 없다**(2026-10-01 사용자 결정 — PDP `Verified purchase` · klow_brand `고객 작성` · klow_admin `고객`/`대행` 을 만들었다가 전부 뺐다). `source` 는 응답에 그대로 실리고 **권한 분기(브랜드 수정·삭제 버튼 숨김, 어드민 수정 버튼 숨김)와 어드민 출처 필터에만** 쓰인다. 다시 넣을 곳은 klow_web `ReviewCard` · klow_brand `ReviewListItem` · klow_admin `ReviewItem`.
 - `SeedingClaim.reviewCompleted` 등 "인플루언서 SNS 후기" 플래그와는 **이름만 비슷한 다른 축**이다 — 서로 읽지 않는다.
 
 **마이그레이션** `add_customer_reviews`(14행) — nullable ADD COLUMN 3 + `CREATE TABLE ReviewRequest` + enum, 백필 0 · 롤링 안전. **env** `REVIEW_LINK_SECRET`(운영 미설정이면 부팅 거부) · `REVIEW_REQUEST_CRON_ENABLED`(기본 off) · `REVIEW_REQUEST_DELAY_DAYS`(3) · `REVIEW_REQUEST_LOOKBACK_DAYS`(14). **라우트 +3 · cron +1(13개).** 배포 순서 **klow_server → klow_admin → klow_brand → klow_web → (사진 CORS) → cron on**. 프리뷰 `/review/preview`·`preview-seeding`·`preview-done`(+`?state=success`·`?lang=`)은 백엔드 없이 뜬다.
