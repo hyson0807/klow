@@ -68,6 +68,7 @@
 | POST   | `/v1/brand/seeding/reissue`                 | **같은 주소로 다시 보내기** — 소스 주문 배송지 복사 + 링크·확정 claim·주문·EFS 송장 생성, `SeedingLinkDTO` 1개 반환 (`THROTTLE_REISSUE` 10회/분) |
 | POST   | `/v1/brand/seeding/bulk-issue`              | **엑셀 일괄 송장** — `{campaignName?, rows[1..20]}`, 행마다 링크·확정 claim·주문·EFS 송장 생성. **행 단위 격리**라 늘 200 + `results[]`(`clientRowId`, `ok`, 실패면 `error` / 성공이면 `linkId`·`orderId`·`shipmentStatus`) (`THROTTLE_BULK_ISSUE` 30회/분) |
 | POST   | `/v1/brand/seeding/bulk-columns`            | **브랜드 자기 양식 명단의 AI 열 매핑** — `{grid(≤12행×25열, 셀 60자), countryValues(≤50)}` → `{headerRowIndex, columns{필드→열인덱스, -1=없음}, countryMap{원본표기→ISO2}, notes, warnings[]}`. **파일을 받지 않는다**(값 추출은 브라우저) (`THROTTLE_TIGHT` 5회/분) |
+| POST   | `/v1/brand/seeding/bulk-normalize`          | **일괄 송장 명단의 한 칸에 몰린 주소 나누기**(+ 못 읽은 국가 → ISO2) — `{rows(≤25): [{id, country(ISO2 또는 원본), countryText(원본 표기), address1, address2, city, state, postalCode}]}` → `{rows: [{id, countryCode, address1, address2, city, state, postalCode, postalSource(original·inferred·no_postal·none), split, warnings[]}]}`. **이름·전화·이메일은 받지 않는다** · `split=false` 면 주소는 원본 그대로 (`THROTTLE_BULK_NORMALIZE` 20회/분) |
 | PATCH  | `/v1/brand/seeding/campaigns/rename`        | **캠페인 이름 변경** — `{from, to}`(1~40자). 캠페인은 링크마다 적힌 `campaignName` 문자열이라 이 브랜드에서 `from` 이름을 가진 링크 **전부**를 바꾼다. 이미 있는 이름이면 **합쳐진다**(확인은 klow_brand). 바꿀 링크가 없으면 404. '미분류'(null)는 대상 아님 |
 | DELETE | `/v1/brand/seeding/links/:id`               | 신청자 없는 링크 취소(soft, `cancelled`)                        |
 | PATCH  | `/v1/brand/seeding/links/:id/close`         | 다인원 링크 수동 마감/재개방(`closed`) — 정원이 남아도 신청을 닫는다 |
@@ -134,6 +135,29 @@ countryMap: {원본표기 → ISO2}, notes, warnings[] }`.
 스펙: `src/modules/seeding/__tests__/bulk-sheet-ai.spec.ts`(서버 · OpenAI 모킹) ·
 `klow_brand npm run check:bulk-invoice`(클라 · 추출과 재추출).
 
+
+## 명단 주소 나누기 (`bulk-address-ai.service.ts`)
+
+브랜드가 주소·도시·우편번호·국가를 **주소 1 한 칸**에 몰아 적은 행을 나눈다. 엔드포인트는
+`POST /v1/brand/seeding/bulk-normalize`(BrandGuard · `THROTTLE_BULK_NORMALIZE` 20회/분 — 25행씩이라
+명단 100명이면 4회. `THROTTLE_TIGHT` 5회/분으로는 모자라 별도 몫). 클라(`bulk-invoice.ts`
+`addressFixRequest`)가 **도시·우편번호가 비었거나 주소에 국가명이 붙었거나 국가를 못 읽은 행만** 보낸다.
+
+⚠️⚠️ **위 열 매핑과 달리 AI 가 값을 옮겨 적는다** — "AI 는 위치만" 규칙의 유일한 예외라, 서버 `harden()` 이
+환각을 막는다: ① 나눈 조각마다 **원문의 부분문자열**(번역·음역·재배열 거절) ② 원문 낱말이 **하나도
+사라지면 안 된다**(국가명만 예외 — 그래서 `countryText` 로 원래 표기 `UAE` 를 따로 받는다) ③ 우편번호는
+원문에 있으면 `original`, 없으면 `inferred`(브랜드 확인 경고). 하나라도 걸리면 **그 행은 원본 그대로 +
+`warnings`**(`split=false`).
+
+- **우편번호 제도가 없는 나라**(`NO_POSTAL_FILLER`: AE·QA·DJ·FJ `00000`, HK·MO `000000`)는 AI 를 믿지 않고
+  서버가 채운다. 그 나라에서 AI 가 뽑은 숫자(대개 사서함 `(63999)`)는 **주소로 되돌린다**.
+- **2차 호출** — 나눈 뒤에도 우편번호가 빈 행은 **국가 코드·도시만** 보내 대표 우편번호를 받는다(1차가 같은
+  지시를 받고도 들쭉날쭉 빠뜨린다 — 실측). 실패해도 1차 결과는 돌려준다.
+- 우편번호로 옮긴 `(10000)` 은 주소에서 코드로 뗀다(괄호가 원문에 있을 때만). 주소 1 이 70자를 넘으면
+  주소 2(50자)까지 들어가는 쉼표·낱말 경계에서 넘긴다.
+- ⚠️ AI 응답의 우편번호·id 를 `z.coerce.string()` 으로 받지 말 것 — 칸이 없으면 `"undefined"` 가 되고 그게
+  우편번호 모양 검사를 통과한다.
+- OpenAI 실패는 502 — 클라는 그 청크만 원본으로 두고 토스트(브랜드를 막지 않는다).
 ## public-seeding.controller.ts (`@Controller('v1/seeding')`)
 
 > public. claim/checkout 은 `@Throttle`(IP당 **20회/분** — 다인원 링크는 같은 NAT 뒤 여러 사람이 신청한다). checkout 만 `OptionalUserGuard`(로그인 시 주문 귀속, 게스트면 결제 쿠키 발급).

@@ -33,6 +33,13 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 떨어진다 — 깨지진 않는다). ⚠️ **staging 서버에 `OPENAI_API_KEY` 가 있어야** AI 경로가 돈다(없으면 503 →
 현행 머리칸 매칭으로 폴백). 실파일 1건으로 매핑 화면까지 확인할 것.
 
+**`§7` 18행 — seeding-bulk-invoice D 는 2026-10-02 에 끝났다(`staging` 병합까지. push 는 사용자 작업).**
+브랜드(밀드플레르)의 한셀 명단이 빈 시트로 읽힌 사고 대응 + 업로드 직후 자동 정리. 결정은
+[`decisions/shipping-seeding.md` 2026-10-02](./decisions/shipping-seeding.md#2026-10-02).
+⚠️ push 순서 **klow_server → klow_brand**(반대면 주소 정리 호출이 404 → 토스트 후 원본 그대로 — 깨지진 않는다).
+⚠️ staging 서버에 `OPENAI_API_KEY` 필요(없으면 주소 정리만 503). push 뒤 같은 실파일 1건으로 **검수 화면까지만**
+확인할 것(발급은 실 EFS 송장이다). klow_brand 는 의존성이 하나 늘었다(`libphonenumber-js`) — 배포 빌드가 `npm ci` 를 돈다.
+
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
 그다음이 **`§7` 9행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
@@ -904,6 +911,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 15 | customer-reviews | B. klow_server 요청 큐·cron(**기본 off**)·8개국어 메일 + klow_admin 출처 배지·필터 | 완료 | ✗ | 2026-10-01 | b282b9d / b5cbe59 / - / - / (이 커밋) |
 | 16 | customer-reviews | C. klow_web 작성 페이지 + klow_brand 읽기 전용 + 문서·결정 기록(PDP 배지는 사용자 결정으로 뺐다) — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 · 5b17611 / 13d44a4 / 9adbd0d · 6cad729 / ae56ffc · 78506df · 63dcdc2 / 867aa3d · 7a9cb36 · b092720 · (이 커밋) |
 | 17 | seeding-bulk-invoice | C. 엑셀 전화번호 숫자화 수정(양식 칸 텍스트 서식 + 파서 과학표기 복구) + **브랜드 자기 양식 AI 열 매핑**(`POST /v1/brand/seeding/bulk-columns` + 매핑 확인 화면 + 전체 국가 일괄 지정) — 코드 완료, **staging push 대기**(= 사용자 `git push`) | 완료 | ✗ | 2026-10-01 | (이 커밋) / - / b3c23b8 · e6472f4 · (이 커밋) / - / (이 커밋) |
+| 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 / - / 4910b6d · ac89878 / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
