@@ -68,7 +68,7 @@
 | POST   | `/v1/brand/seeding/reissue`                 | **같은 주소로 다시 보내기** — 소스 주문 배송지 복사 + 링크·확정 claim·주문·EFS 송장 생성, `SeedingLinkDTO` 1개 반환 (`THROTTLE_REISSUE` 10회/분) |
 | POST   | `/v1/brand/seeding/bulk-issue`              | **엑셀 일괄 송장** — `{campaignName?, rows[1..20]}`, 행마다 링크·확정 claim·주문·EFS 송장 생성. **행 단위 격리**라 늘 200 + `results[]`(`clientRowId`, `ok`, 실패면 `error` / 성공이면 `linkId`·`orderId`·`shipmentStatus`) (`THROTTLE_BULK_ISSUE` 30회/분) |
 | POST   | `/v1/brand/seeding/bulk-columns`            | **브랜드 자기 양식 명단의 AI 열 매핑** — `{grid(≤12행×25열, 셀 60자), countryValues(≤50)}` → `{headerRowIndex, columns{필드→열인덱스, -1=없음}, countryMap{원본표기→ISO2}, notes, warnings[]}`. **파일을 받지 않는다**(값 추출은 브라우저) (`THROTTLE_TIGHT` 5회/분) |
-| POST   | `/v1/brand/seeding/bulk-normalize`          | **일괄 송장 명단의 한 칸에 몰린 주소 나누기**(+ 못 읽은 국가 → ISO2) — `{rows(≤25): [{id, country(ISO2 또는 원본), countryText(원본 표기), address1, address2, city, state, postalCode}]}` → `{rows: [{id, countryCode, address1, address2, city, state, postalCode, postalSource(original·inferred·no_postal·none), split, warnings[]}]}`. **이름·전화·이메일은 받지 않는다** · `split=false` 면 주소는 원본 그대로 (`THROTTLE_BULK_NORMALIZE` 20회/분) |
+| POST   | `/v1/brand/seeding/bulk-normalize`          | **일괄 송장 명단의 한 칸에 몰린 주소 나누기**(+ 못 읽은 국가 → ISO2) — `{rows(≤25): [{id, country(ISO2 또는 원본), countryText(원본 표기), address1, address2, city, state, postalCode, postalSuspect}]}` → `{rows: [{id, countryCode, address1, address2, city, state, postalCode, postalSource(original·inferred·no_postal·none), split, warnings[]}]}`. **이름·전화·이메일은 받지 않는다** · `split=false` 면 주소는 원본 그대로 (`THROTTLE_BULK_NORMALIZE` 20회/분) |
 | PATCH  | `/v1/brand/seeding/campaigns/rename`        | **캠페인 이름 변경** — `{from, to}`(1~40자). 캠페인은 링크마다 적힌 `campaignName` 문자열이라 이 브랜드에서 `from` 이름을 가진 링크 **전부**를 바꾼다. 이미 있는 이름이면 **합쳐진다**(확인은 klow_brand). 바꿀 링크가 없으면 404. '미분류'(null)는 대상 아님 |
 | DELETE | `/v1/brand/seeding/links/:id`               | 신청자 없는 링크 취소(soft, `cancelled`)                        |
 | PATCH  | `/v1/brand/seeding/links/:id/close`         | 다인원 링크 수동 마감/재개방(`closed`) — 정원이 남아도 신청을 닫는다 |
@@ -151,6 +151,10 @@ countryMap: {원본표기 → ISO2}, notes, warnings[] }`.
 
 - **우편번호 제도가 없는 나라**(`NO_POSTAL_FILLER`: AE·QA·DJ·FJ `00000`, HK·MO `000000`)는 AI 를 믿지 않고
   서버가 채운다. 그 나라에서 AI 가 뽑은 숫자(대개 사서함 `(63999)`)는 **주소로 되돌린다**.
+- **보내는 행**(클라 `addressFixRequest`): 도시·우편번호가 빈 행에 더해, 칸이 다 찼어도 ① 우편번호가 그 나라 형식과
+  안 맞거나 ② 도시 칸에 숫자·쉼표가 있거나 ③ 도시+우편번호가 주소 1 에 한 번 더 적힌 행. 멀쩡한 행은 AI 를 타지 않는다.
+- **`postalSuspect`**(①의 행)만 브랜드가 적은 우편번호를 고칠 수 있다. ⚠️ 1차 답은 버리고 2차로 채운다 — 1차가 원문
+  숫자에 끌려 다른 도시 번호대를 낸다(실측). 2차 요청엔 틀린 번호를 싣지 않는다.
 - **2차 호출** — 나눈 뒤에도 우편번호가 빈 행은 **국가 코드·도시만** 보내 대표 우편번호를 받는다(1차가 같은
   지시를 받고도 들쭉날쭉 빠뜨린다 — 실측). 실패해도 1차 결과는 돌려준다.
 - 우편번호로 옮긴 `(10000)` 은 주소에서 코드로 뗀다(괄호가 원문에 있을 때만). 주소 1 이 70자를 넘으면

@@ -911,7 +911,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 15 | customer-reviews | B. klow_server 요청 큐·cron(**기본 off**)·8개국어 메일 + klow_admin 출처 배지·필터 | 완료 | ✗ | 2026-10-01 | b282b9d / b5cbe59 / - / - / (이 커밋) |
 | 16 | customer-reviews | C. klow_web 작성 페이지 + klow_brand 읽기 전용 + 문서·결정 기록(PDP 배지는 사용자 결정으로 뺐다) — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 · 5b17611 / 13d44a4 / 9adbd0d · 6cad729 / ae56ffc · 78506df · 63dcdc2 / 867aa3d · 7a9cb36 · b092720 · (이 커밋) |
 | 17 | seeding-bulk-invoice | C. 엑셀 전화번호 숫자화 수정(양식 칸 텍스트 서식 + 파서 과학표기 복구) + **브랜드 자기 양식 AI 열 매핑**(`POST /v1/brand/seeding/bulk-columns` + 매핑 확인 화면 + 전체 국가 일괄 지정) — 코드 완료, **staging push 대기**(= 사용자 `git push`) | 완료 | ✗ | 2026-10-01 | (이 커밋) / - / b3c23b8 · e6472f4 · (이 커밋) / - / (이 커밋) |
-| 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 / - / 4910b6d · ac89878 / - / (이 커밋) |
+| 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) + **후속: 칸이 다 찬 행도 배치 흔적이 있으면 AI · 전화 형식 경고** — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 · 2ecfe03 · 4d9e737 / - / 4910b6d · ac89878 · dd27cde · 31d70e0 / - / b4967ec · (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
