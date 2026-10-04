@@ -40,6 +40,13 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 ⚠️ staging 서버에 `OPENAI_API_KEY` 필요(없으면 주소 정리만 503). push 뒤 같은 실파일 1건으로 **검수 화면까지만**
 확인할 것(발급은 실 EFS 송장이다). klow_brand 는 의존성이 하나 늘었다(`libphonenumber-js`) — 배포 빌드가 `npm ci` 를 돈다.
 
+**`§7` 19행 — site-traffic 은 2026-10-04 에 끝났다(klow_server `226dd81` · klow_admin `336ec79` 로 staging 병합 + push 완료).** 남은 건 운영 배포다. 어드민 대시보드에
+klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.md` 2026-10-04](./decisions/platform.md#2026-10-04).
+⚠️ 운영 배포 순서도 **klow_server → klow_admin**(반대여도 대시보드는 안 깨진다 — 섹션만 "불러오지 못함"). staging 서버의 첫 03:00 cron 은 이미 채운 90일을 건너뛰고 최근 3일만 받는다.
+⚠️ **staging DB 에는 마이그레이션이 이미 적용**돼 있다. 운영은 `migrate deploy` 후 서버 배포 → **첫 03:00 cron 이
+90일 백필**(수십 분 — `pages` 쿼리가 하루 1회 5~31초) 또는 어드민에서 `POST /admin/stats/site-traffic/collect`.
+⚠️ 운영 Railway 의 `VERCEL_PROJECT_ID` 가 **klow-web**(운영)인지 확인할 것 — 이 값이 곧 "어느 사이트를 세나"다.
+
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
 그다음이 **`§7` 9행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
@@ -912,6 +919,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 16 | customer-reviews | C. klow_web 작성 페이지 + klow_brand 읽기 전용 + 문서·결정 기록(PDP 배지는 사용자 결정으로 뺐다) — 코드 완료, **push·R2 CORS·cron on 대기** | 완료 | ✗ | 2026-10-01 | d6e3344 · 5b17611 / 13d44a4 / 9adbd0d · 6cad729 / ae56ffc · 78506df · 63dcdc2 / 867aa3d · 7a9cb36 · b092720 · (이 커밋) |
 | 17 | seeding-bulk-invoice | C. 엑셀 전화번호 숫자화 수정(양식 칸 텍스트 서식 + 파서 과학표기 복구) + **브랜드 자기 양식 AI 열 매핑**(`POST /v1/brand/seeding/bulk-columns` + 매핑 확인 화면 + 전체 국가 일괄 지정) — 코드 완료, **staging push 대기**(= 사용자 `git push`) | 완료 | ✗ | 2026-10-01 | (이 커밋) / - / b3c23b8 · e6472f4 · (이 커밋) / - / (이 커밋) |
 | 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) + **후속: 칸이 다 찬 행도 배치 흔적이 있으면 AI · 전화 형식 경고** + **e2e 8종 수정(AI 국가 짐작 게이트 · 주소 한 열 명단 · 미국 주 · CSV 경고)** — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 · 2ecfe03 · 4d9e737 · c4deaca · 9ec2964 / - / 4910b6d · ac89878 · dd27cde · 31d70e0 · 8bebc85 · f620497 / - / b4967ec · 612e04b · (이 커밋) |
+| 19 | site-traffic | **어드민 대시보드 "사이트 트래픽 · 국가별 요청"**(Vercel Observability → `SiteTrafficDay` 일일 복사 + 지도) — 코드·마이그레이션(**staging DB 직접** — 사용자 지시)·문서 완료, **staging push 완료** | 완료 | ✗ | 2026-10-04 | fe5c982 / 9f2e333 / - / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -975,6 +983,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### site-traffic — 19행 (완료 · klow_server `fe5c982` · klow_admin `9f2e333`, staging push 완료)
+
+- **계획과 다르게 한 것**: ① Vercel 보존은 30일이 아니라 **92일**(실측) → 백필 90일 ② `pages` 범위를 기본값으로(사람이 연 HTML, `botCategory:""`) ③ 수동 수집 `POST …/collect` 는 from/to 없이 "빈 날 + 최근 3일"만 ④ 지도 색은 로그가 아니라 **5분위 순위**(로그면 상위국이 한 색) ⑤ Neon DB 브랜치 대신 **staging DB 직접**(사용자 지시 — 이 MCP 계정엔 KLOW 프로젝트가 안 보인다).
+- **실측**: Vercel 3일 합계 35,319 = 대시보드 32K 와 일치 · 국가 합계 == 무그룹 합계 · TS 클라이언트 == Python 실측(10/02 KST all 23,617 / pages 668) · **staging DB 백필 완료**(스테이징 프로젝트 트래픽 90일 · 1,756행 · 30일 커버리지 30/30 · 직전 대비 −5.8%) · DB 10/02 합계 631 == Vercel 무그룹 합계 · 재실행은 최근 3일만 받고 행 수 불변 · 중복 0. ⚠️ 첫 백필은 실측 **약 1분/일**(타임아웃을 30→120초로 올린 이유).
+- **확인 못 한 것**: 어드민 화면을 브라우저로 보지 못했다(TOTP 로그인) — `build` + 지도 SSR 렌더(176 경로·SG/HK 마커·5단계 색)까지만.
+- ⚠️ 로컬 `.env` 의 `VERCEL_PROJECT_ID` 는 **klow-web-staging** 이다. 운영 숫자를 로컬에서 보려면 env 로 운영 id 를 덮어 띄울 것.
 
 ### customer-reviews — 16행 C (완료 · klow_server `d6e3344` · klow_brand `9adbd0d` · klow_web `ae56ffc`, push 안 함)
 

@@ -57,7 +57,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
 | API 엔드포인트 문서           | `docs/server/README.md` (모듈 색인) + `docs/server/modules/<module>.md` — 컨트롤러 변경 시 함께 갱신     |
-| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, stats, subscription, translation, upload) |
+| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, site-traffic, stats, subscription, translation, upload) |
 | Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | 가격 커널 (공유)              | `klow_server/src/pricing/` (배럴 — formulas/fx/country-price/promotion/price-line/chargeable-brands). **`modules/` 의 형제**이고 6개 모듈이 의존한다 |
 | 카페24 자사몰 연동            | `klow_server/src/modules/cafe24/` (OAuth 왕복 · 상품 매핑 · 주문 미러 → 3PL 출고신청 전환). ⚠️ **`mallId` 가 그대로 API 호스트가 되는 SSRF 축**이라 zod + `cafe24ApiOrigin()` 두 겹으로 막는다. 엔드포인트: `docs/server/modules/cafe24.md` |
@@ -114,7 +114,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 35개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 13개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 36개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 14개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
 3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 375개 — 2026-09-23 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
@@ -262,6 +262,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-11` [현지 통화 표시 — `enabled` 게이트 제거 + 사우디 새 기호](docs/decisions/platform.md#2026-09-11-3)
 - `2026-09-11` [바텀시트가 소프트 키보드에 가리던 버그](docs/decisions/platform.md#2026-09-11-4)
 - `2026-09-15` [자사몰 URL 분석(`analyze-homepage`) + Playwright 제거](docs/decisions/platform.md#2026-09-15)
+- `2026-10-04` [어드민 "사이트 트래픽 · 국가별 요청" — Vercel Observability 를 매일 DB 로 복사 (요청 수 ≠ 방문자 · 국가는 접속 IP · 92일 한도)](docs/decisions/platform.md#2026-10-04)
 
 ## Admin UI Convention — Toast Feedback (required)
 

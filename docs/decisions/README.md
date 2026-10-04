@@ -102,3 +102,4 @@
 | `2026-09-30` | [송장 캐리어 = 국가 고정 캐리어 — 무게 분기는 예상 배송비 전용](./shipping-seeding.md#2026-09-30-4) | shipping-seeding |
 | `2026-09-30` | [엑셀로 자동 국제 송장 발급 — 링크 없이 명단으로](./shipping-seeding.md#2026-09-30-5) | shipping-seeding |
 | `2026-10-01` | [고객 직접 리뷰 — 배송완료 메일 링크 + 작성 페이지 (손님 화면 배지 없음)](./products.md#2026-10-01) | products |
+| `2026-10-04` | [어드민 "사이트 트래픽 · 국가별 요청" — Vercel Observability 를 매일 DB 로 복사](./platform.md#2026-10-04) | platform |
