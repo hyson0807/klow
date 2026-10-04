@@ -3,7 +3,7 @@
 - **모듈 경로**: `src/modules/buyer/`
 - **목적**: 해외 바이어가 `klow.kr/` 에서 둘러보는 **KLOW 가 골라 올린 브랜드·제품**의 데이터. 관리자가 klow_admin "바이어 공간"에서 채우고(`/admin/buyer/*`), klow_web 이 공개 API(`/v1/buyer/*`)로 그린다. 브랜드(klow_brand)는 무관하다.
 - **설계 정본**: [`docs/plan/buyer-platform/`](../../plan/buyer-platform/README.md) — 불변식 G1~G12 는 `implementation-plan.md §1`.
-- **관련 파일**: `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendBuyerInquiry`
+- **관련 파일**: `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
 - **마이그레이션**: `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
 
 ## 데이터 모델
@@ -50,7 +50,7 @@
 | GET | `/admin/buyer/brands/:brandId/products` | 그 브랜드 **승인 제품** + 이미 올린 행(승인이 풀린 것 포함). `buyer: null` = 안 올림, 있으면 `missing`·`reasons`·`visible`·썸네일 |
 | POST | `/admin/buyer/products` `{productId}` | 제품 올리기(승인만 · 브랜드를 먼저 올려야 함 400 `brand_not_added`). 프리필: name→`nameEn` · volume→`size` · ingredients · countryOfOrigin→`madeIn` · expiryInfo→`shelfLifeMonths`(개월 파싱) · keyIngredients[].name→`keyActives` · basePriceUsd→`msrpUsdCents` |
 | PATCH | `/admin/buyer/products/bulk` `{productIds, categoryId?, published?}` | 일괄 카테고리/공개 |
-| GET | `/admin/buyer/products/:productId` | 편집기 — 전 필드 + `tiers` + `originalImages`(대표+상세컷, 동영상 제외) + `preview`(공개 PDP 모양, 토글 무시) + `nextIncompleteProductId`(같은 브랜드 다음 미완비, 돌아서 처음부터) |
+| GET | `/admin/buyer/products/:productId` | 편집기 — 전 필드 + `tiers` + `originalImages`(대표+상세컷, 동영상 제외) + `brand.marketingSupport`(미리보기 카드 줄) + `nextIncompleteProductId`(같은 브랜드 다음 미완비, 돌아서 처음부터) |
 | PATCH | `/admin/buyer/products/:productId` | 필드 + **`tiers` 를 같은 트랜잭션에서 통째 교체**(빈 배열 허용 = 미완비 저장, 행이 있으면 G10 위반 400). `images: []` = 원본으로 되돌리기 |
 | DELETE | `/admin/buyer/products/:productId` | 바이어 행 삭제(입력값 소멸) |
 | GET/POST | `/admin/buyer/categories` | 목록(소속 제품 수) / 추가 `{name, slug}` |
@@ -69,7 +69,7 @@
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
 - ⚠️ 감사 로그(`AdminAuditInterceptor`)는 본문 10KB 초과분을 자른다 — 성분 8000자 PATCH 는 잘릴 수 있다(R8, 수용).
 - 이미지 재크롭용 프록시(`image-source`)는 **만들지 않는다**(2026-10-04 판정) — R2 가 어드민 오리진 GET 을 CORS 로 허용해서 klow_admin 이 브라우저에서 직접 받아 크롭한다(운영 `cdn.klow.kr` → `admin.klow.kr` · dev 버킷 → `localhost:3000`·`admin-staging.klow.kr` 실측). ⚠️ dev 버킷은 **`localhost:3000` 만** 허용이라 어드민을 다른 포트로 띄우면 재크롭·업로드가 CORS 로 실패한다(화면은 토스트로 "파일로 다시 올려 달라"). 외부 호스트 원본 이미지도 같은 이유로 재크롭이 안 되고 파일 업로드로 대신한다.
-- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 서버 `preview` 대신 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영), 필수 7칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
+- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영 — 그래서 서버는 `preview` 를 싣지 않는다), 필수 7칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
 
 ## public-buyer.controller.ts (`@Controller('v1/buyer')`, 인증 없음)
 
