@@ -52,7 +52,9 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 카테고리·홈 구성을 세팅**한다. 스펙은 [`plan/buyer-platform/`](./plan/buyer-platform/README.md).
 **20행(A — klow_server)은 2026-10-04 에 끝났다** — git `feat/buyer-platform`(klow_server `47cc63d` · `5b6e2c3`) +
 Neon DB 브랜치 `ep-sparkling-sun`(사용자가 만듦 — 로컬 `klow_server/.env` 가 지금 그쪽을 본다). **staging 미병합·push 안 함.**
-다음은 **21행(B — klow_admin)** 이고, 로컬 서버를 이 브랜치로 띄워 진행하면 된다(staging 병합은 사용자 결정).
+**21행(B — klow_admin)도 2026-10-04 에 끝났다** — klow_admin git `feat/buyer-platform`(`d8b11dc`), staging 미병합·push 안 함.
+다음은 **22행(C — klow_web)** 이다(착수 세션이 `implementation-plan.md §3 3단계` 를 §5 템플릿으로 먼저 명세). staging 병합은 사용자 결정 —
+⚠️ 병합 순서 **klow_server → klow_admin**(반대면 바이어 공간 화면이 전부 404 토스트).
 ⚠️ staging 에 병합할 때는 staging DB 에 `20261004140057_add_buyer_platform` 을 **먼저** 적용한다(신규 테이블뿐이라 롤링 안전).
 위 push·운영 작업(7·8·17·18 → 12 → 9행)과 **파일이 겹치지 않아** 병행 가능하다 — 우선순위는 사용자가 정한다.
 
@@ -891,7 +893,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 어드민 점검(운영 DB 실측 포함) 결과는 `implementation-plan.md §4` R1~R13 — 원본은 영어지만 **대부분 빈칸**이라 연속 편집이 본체다
 - 서버 점검은 `implementation-plan.md §5` S1~S13 — ⚠️ **MOQ 는 구간가 표가 정본**(1행=샘플 1개, 2행 시작=MOQ)이고 MOQ·소매배수 컬럼을 만들지 않는다(G10·G11)
 - 웹 점검은 `implementation-plan.md §6` W1~W11 — `/` 는 **검색 노출**, 운영 배포 후 **점진 등록**이라 빈 상태에서도 깨지지 않게. ⚠️ 디자인 정적 이미지는 출처 불명(제품 사진 `p01~p24` 반입 금지)
-- 다음: **21행 B** — `implementation-plan.md §3 2단계` + `server/modules/buyer.md` + `§9` 20행 메모
+- 다음: **22행 C** — `implementation-plan.md §3 3단계`(착수 세션이 명세) + `§6 W1~W11` + `server/modules/buyer.md` 공개 API + `§9` 20·21행 메모
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -952,7 +954,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) + **후속: 칸이 다 찬 행도 배치 흔적이 있으면 AI · 전화 형식 경고** + **e2e 8종 수정(AI 국가 짐작 게이트 · 주소 한 열 명단 · 미국 주 · CSV 경고)** — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 · 2ecfe03 · 4d9e737 · c4deaca · 9ec2964 / - / 4910b6d · ac89878 · dd27cde · 31d70e0 · 8bebc85 · f620497 / - / b4967ec · 612e04b · (이 커밋) |
 | 19 | site-traffic | **어드민 대시보드 "사이트 트래픽 · 국가별 요청"**(Vercel Observability → `SiteTrafficDay` 일일 복사 + 지도) — 코드·마이그레이션(**staging DB 직접** — 사용자 지시)·문서 완료, **staging push 완료** | 완료 | ✗ | 2026-10-04 | fe5c982 / 9f2e333 / - / - / (이 커밋) |
 | 20 | buyer-platform | **A. klow_server** — 스키마·마이그레이션 `add_buyer_platform`(신규 테이블 8 · 카테고리 7종 SQL 시드 · **DB 브랜치 필수**) → `modules/buyer/`(완비 판정 함수) → `/admin/buyer/*` → 공개 `/v1/buyer/*` → 문의 저장+메일 → `server/modules/buyer.md`. 정지점: 스키마 끝 / 어드민 API 끝 — **git `feat/buyer-platform` + Neon DB 브랜치 `ep-sparkling-sun` 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | 47cc63d · 5b6e2c3 / - / - / - / (이 커밋) |
-| 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록. 정지점: 제품 편집기 끝 | 대기 | ✗ | | |
+| 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록 — **git `feat/buyer-platform`(klow_admin) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | - / d8b11dc / - / - / (이 커밋) |
 | 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(뒤로가기·빈 카트·빈 주문·탭바·로그아웃이 `/shop` 으로 새는 11곳 → 손님의 브랜드관, 없으면 숨김 · **별도 커밋, 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS 이식 → `/` 홈 → `/shop/brands/[slug]`·`/shop/products/[id]` → 문의 드로어 → **구 소비자 `/shop` 제거** → 결정 기록·문서 → staging push 안내(**server → admin → web**) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
@@ -1017,6 +1019,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-platform — 21행 B (완료 · klow_admin `d8b11dc`, 브랜치 `feat/buyer-platform` · staging 미병합)
+
+- **계획과 다르게 한 것**: ① 재크롭 프록시 없이 **R2 CORS 직접**(어드민 오리진 GET 허용 실측 — `server/modules/buyer.md`) ② 문의 상세는 드로어가 아니라 `<Modal>`(어드민 eslint 가 손으로 만든 백드롭을 막는다) ③ `ProductPickerModal`·`BuyerImageList` 는 라우트 전용이라 각 `_components/` 에 뒀다(`components/buyer/` 는 2곳 이상이 쓰는 `SortableList`·`PublishSwitch`·`BrandLogo` 만).
+- **미저장 경고 = 어드민 첫 사례** `hooks/useUnsavedGuard.ts` — iframe 탭이 `TAB_DIRTY_MESSAGE` 를 부모로 보내 `TabsContext` 가 탭 닫기·사이드바 재클릭(remount) 전에 confirm. 새 편집 화면은 이 훅을 쓰면 된다.
+- **실측(로컬 :4020 서버 + :3020 어드민 · DB 브랜치 `ep-sparkling-sun` · operator 계정 임시 세션, Playwright)**: BLINK 추가 → 제품 3개 올림 → 저장하고 다음으로 연달아 채움(7/7) → 미저장 상태 '← 브랜드로'·탭 닫기·사이드바 재클릭 모두 confirm → 원본 이미지 4:5 재크롭 업로드 → 원본 상세컷 추가 → 키보드 드래그로 순서 바꿈 → 새로고침 후 유지 → 원본으로(`images: []`, `imagesSource: original`) → 일괄 공개 → `GET /v1/buyer/home` 에 브랜드(Opening order 24 · 2.7×)·선반 제품 노출 → 비공개로 바꾼 제품은 선반 "비노출" 배지 + 공개 API 에서 빠짐 → 히어로 업로드·연결·삭제 → 카테고리 삭제 비활성 → 문의 처리 완료·메모. 테스트 데이터·세션은 지웠다(R2 `klow-staging` 에 테스트 이미지 2장 남음).
+- ⚠️ 재크롭·업로드 검증은 dev 버킷 CORS 가 `localhost:3000` 만 허용이라 **Playwright 가 R2 응답에 CORS 헤더를 붙여** 했다(포트 3000 은 사용자 dev 서버가 점유). staging(`admin-staging.klow.kr`)에서 실 CORS 로 1회 확인할 것.
+- **다음 단계가 알 것**: 카드·PDP 규칙(MOQ 구간가·인증 문구 CPNP=EU notified / FDA OTC=US sunscreen listing / SPF=입력값 / GMP=ISO 22716)은 `components/preview/BuyerPreview.tsx` 에 디자인 미러로 있다 — klow_web 이식 때 같은 문구를 쓸 것.
 
 ### buyer-platform — 20행 A (완료 · klow_server `47cc63d` · `5b6e2c3`, 브랜치 `feat/buyer-platform` · staging 미병합)
 

@@ -68,7 +68,8 @@
 
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
 - ⚠️ 감사 로그(`AdminAuditInterceptor`)는 본문 10KB 초과분을 자른다 — 성분 8000자 PATCH 는 잘릴 수 있다(R8, 수용).
-- 이미지 재크롭용 프록시(`image-source`)는 **만들지 않았다** — R2 CORS 가 어드민 오리진 GET 을 허용하는지 21행(klow_admin) 착수 시 판정한다(SSRF 축이라 필요할 때만).
+- 이미지 재크롭용 프록시(`image-source`)는 **만들지 않는다**(2026-10-04 판정) — R2 가 어드민 오리진 GET 을 CORS 로 허용해서 klow_admin 이 브라우저에서 직접 받아 크롭한다(운영 `cdn.klow.kr` → `admin.klow.kr` · dev 버킷 → `localhost:3000`·`admin-staging.klow.kr` 실측). ⚠️ dev 버킷은 **`localhost:3000` 만** 허용이라 어드민을 다른 포트로 띄우면 재크롭·업로드가 CORS 로 실패한다(화면은 토스트로 "파일로 다시 올려 달라"). 외부 호스트 원본 이미지도 같은 이유로 재크롭이 안 되고 파일 업로드로 대신한다.
+- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 서버 `preview` 대신 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영), 필수 7칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
 
 ## public-buyer.controller.ts (`@Controller('v1/buyer')`, 인증 없음)
 
