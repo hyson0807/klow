@@ -14,7 +14,7 @@
 | G5 | **이미지 추종 규칙**: `BuyerProduct.images = []` 이면 응답 시점에 원본 **대표사진 1장**(`image`, 비었으면 `detailImages` 의 첫 비동영상)만 싣는다. `detailImages` 전체를 싣지 않는다(README 결정 6). 응답에 `imagesSource: 'original' \| 'custom'` 를 함께 실어 어드민이 구분한다. 로고도 동일(`logoUrl` null → 원본) |
 | G6 | 가격은 **USD 센트 정수**(`unitUsdCents Int`). Decimal·환율을 쓰지 않는다 |
 | G7 | 문의 POST 는 완전 공개 쓰기라 `@Throttle(THROTTLE_TIGHT)` 필수 + 메일 HTML 의 모든 입력 `escapeHtml`(선례 `b2b-order-email.ts`) |
-| G8 | klow_web 바이어 CSS 는 **`.kb` 루트 아래로 전부 스코프**한다. 전역 셀렉터(`body`·`a`·`button`·`:root` 변수) 0건 |
+| G8 | klow_web 바이어 CSS 는 **`.kb` 루트 아래로 전부 스코프**한다. 전역 셀렉터(`body`·`a`·`button`·`:root` 변수) 0건 — **유일한 예외는 `body:has(.kb)` 배경색 한 줄**(소비자 `globals.css` 의 `body{background:#f1f2f4}` 가 오버스크롤에 비치는 것을 막는다. 같은 파일에 `body:has(main[data-shell=desktop])` 선례) |
 | G10 | **MOQ 정본 = 구간가 표**: `tiers[0].minQty = 1`(샘플) · `tiers.length >= 2` · MOQ = `tiers[1].minQty` · minQty 엄격 오름차순. 제품·브랜드 MOQ 컬럼은 **만들지 않는다**. 브랜드 `Opening order` = 노출 제품 MOQ 최솟값, `Avg. retail multiple` = 노출 제품 `msrp / MOQ가` 평균 — 둘 다 응답 시 계산(README 결정 9) |
 | G11 | 카드·패널·선반의 대표 도매가 = **MOQ 구간 단가**(`tiers[1]`). 공개 매퍼 한 곳(`cardPrice()`)만 이 규칙을 안다 |
 | G12 | 공개 단건 조회(`brands/:slug`·`products/:id`)는 **노출 불가면 존재 여부와 무관하게 동일한 404** — 비공개 행의 존재를 새지 않는다. `BuyerProduct` 의 브랜드와 `Product.brandId` 가 다르면(제품의 브랜드가 바뀐 경우) 노출 불가 + 어드민 사유 `브랜드 불일치` |
@@ -219,13 +219,38 @@ model BuyerInquiry   { id · kind · subject(VarChar 200 — 디자인 "Brand or
 
 #### ② 이후 — 바이어 공간
 
-세션 안 순서: ② `KLOWBUYER/app/globals.css` 를 `.kb` 스코프로 이식 + Geist 폰트 + 바이어 전용 Header/Footer
-(BottomTabBar·소비자 Footer·Onboarding 은 `/` 와 `/shop/*` 에서 숨김) → ③ `/` 홈(HeroSlides · Collection:
+세션 안 순서: ② **라우트 그룹 `app/(buyer)/`** 신설 — `(buyer)/layout.tsx`(중첩 레이아웃: Geist `next/font` · `.kb`
+래퍼 · 바이어 Header/Footer · 메타데이터) + `(buyer)/page.tsx` · `(buyer)/shop/brands/[slug]` · `(buyer)/shop/products/[id]`.
+⚠️ **`app/page.tsx`(redirect)를 같은 커밋에서 지운다** — `/` 가 두 곳에서 정의되면 빌드가 깨진다. `KLOWBUYER/app/globals.css`
+를 `.kb` 스코프로 이식(G8). 소비자 크롬 정리: `Footer.tsx` 의 숨김 판정에 바이어 경로 추가(선례 `isB2bBuyerPath`) ·
+BottomTabBar·Onboarding 은 `/` 가 원래 대상 밖이라 무변경 → ③ `/` 홈(HeroSlides · Collection:
 Curated 선반 / All / 카테고리 탭 + 검색 · 브랜드 로고월 + 패널) → ④ `/shop/brands/[slug]` · `/shop/products/[id]`
 (갤러리 · 인증 배지 · 구간가 표 + 수량 계산기 · 상세 스펙 · More from brand) → ⑤ Request 드로어 →
 `POST /v1/buyer/inquiries` → ⑥ 구 `/shop`·`/shop/search`·`/shop/recommendations` 삭제(①로 참조가 이미 0건),
 onboarding 자동 노출 경로·`sitemap.ts` 정리 → ⑦ 결정 기록(`decisions/storefront.md` +
 `decisions/README.md` + CLAUDE.md 색인) · CLAUDE.md `klow_web pages` 갱신 · staging push 안내
+
+⚠️ 웹 점검에서 정한 것 (2026-10-04, `§6` 표가 근거)
+- **렌더링**: 페이지는 **서버 컴포넌트**가 `API_BASE` 로 `/v1/buyer/*` 를 받아 그리고(`sitemap.ts`·`lib/brand-server.ts` 선례),
+  `generateMetadata` 로 브랜드·제품별 메타. 탭·검색·계산기·드로어·히어로 슬라이드만 클라이언트 컴포넌트.
+  fetch 는 **`revalidate: 60`** — 어드민 수정이 최대 1분 뒤 보인다(어드민 화면에 한 줄 안내).
+  ⚠️ Vercel 서버의 SSR fetch 는 **같은 egress IP 묶음**이라 서버 전역 throttle(60회/분/IP)에 걸릴 수 있다 — ISR 캐시가
+  그걸 막는 장치이므로 `cache: 'no-store'` 로 바꾸지 말 것
+- **카테고리 탭·검색**은 클라이언트에서 `GET /v1/buyer/products?category=&q=` (TanStack Query). 홈 SSR 은 선반·브랜드·카테고리만
+- **Next 15 → 14 변환**: 디자인은 `params: Promise<…>` + `await params` · `generateStaticParams`(mock) 를 쓴다 →
+  Next 14 동기 `params`, `generateStaticParams` 삭제(데이터가 동적). `?ask=`·`?lang=` 쿼리 처리도 뺀다
+- **이름 충돌**: klow_web 에 이미 `components/b2b/Buyer{Storefront,ProductCard,ProductDetail,Cart}` 가 있다(브랜드 B2B 링크).
+  새 코드는 **`components/buyer-space/`** + `Kb*` 접두, API 네임스페이스 `api.buyerSpace` — 같은 "Buyer" 이름 둘이면 다음 세션이 헷갈린다
+- **이미지**는 디자인처럼 `<img loading="lazy">`(어드민이 이미 WebP 1600w 로 올린다 — Vercel 이미지 변환 비용을 늘리지 않는다)
+- **검색 노출**(2026-10-04 사용자 결정): `/`·브랜드·제품 **index**. `sitemap.ts` 에서 `/shop*` 3줄을 빼고 바이어 브랜드·제품을
+  **노출 중인 것만** 추가. 루트 `app/opengraph-image.tsx`(소비자 KLOW)를 `/` 가 물려받으므로 `(buyer)/opengraph-image.tsx` 를 따로 둔다
+- ⚠️⚠️ **배포 후 점진 등록**(사용자): 운영에 나가는 순간 `/` 는 브랜드 0~몇 개 상태다. **비어도 깨져 보이지 않아야 한다** —
+  노출 제품 0 인 선반·카테고리 탭·로고월은 섹션째 숨기고, 히어로가 0장이면 디자인 기본 히어로(정적 이미지)로,
+  Collection 이 비면 "New brands are being added" + Request a brand CTA. 완료 기준에 **빈 DB 로 `/` 렌더**를 넣는다
+- ⚠️ **정적 이미지 저작권**: 디자인 `public/img/` 의 연출컷(`hero.jpg`·`dark.jpg`·`facial.jpg` 등)은 출처가 확인되지 않았다.
+  `p01~p24.jpg` 는 **가짜 브랜드 제품 사진**이라 절대 가져오지 않는다. 연출컷은 착수 시 출처·라이선스를 사용자에게 확인하고,
+  불명이면 히어로 기본값을 어드민 업로드로 대신한다
+- 사이트 트래픽 대시보드(19행)는 klow_web 전체 요청을 센다 — 배포 후엔 바이어 트래픽이 섞인다(결정 기록에 한 줄)
 
 ⚠️ 착수 시 확인할 것
 - **커스텀 도메인**: `/` 는 커스텀 도메인에서 브랜드관으로 rewrite 되므로 영향 없음. `shop` 은 이미
@@ -278,3 +303,21 @@ onboarding 자동 노출 경로·`sitemap.ts` 정리 → ⑦ 결정 기록(`deci
 | S11 | 문의의 브랜드·제품 FK 가 Cascade 면 브랜드를 빼는 순간 영업 기록이 사라진다 | SetNull |
 | S12 | dev Resend 키가 실발송 | 테스트 시 `RESEND_API_KEY=` |
 | S13 | 이미지 재크롭 프록시는 SSRF 축 | 호스트 화이트리스트 + R2 CORS 로 대체 가능하면 만들지 않음(1단계 명세) |
+
+## §6 웹 점검 기록 (2026-10-04)
+
+3단계 명세를 klow_web 코드와 대조해 찾은 것. 위 3단계에 이미 반영했다.
+
+| # | 찾은 것 | 근거 | 반영 |
+|---|---|---|---|
+| W1 | `/` 를 바이어 홈으로 만들면서 기존 `app/page.tsx`(redirect)를 두면 같은 경로 이중 정의로 빌드 실패 | `app/page.tsx` | 라우트 그룹 `(buyer)` + 같은 커밋에서 삭제 |
+| W2 | 루트 레이아웃이 소비자 크롬(Footer·탭바·온보딩·Toaster·환율/세션 마운트)과 `body` 배경·폰트를 모든 경로에 깐다 | `app/layout.tsx` · `globals.css:37` | 중첩 레이아웃 `(buyer)/layout.tsx` + Footer 숨김(선례 `isB2bBuyerPath`) + `body:has(.kb)` 예외 1줄(G8) |
+| W3 | 디자인은 Next 15(`await params`·`generateStaticParams` mock), klow_web 은 Next 14.2 · React 18 | `KLOWBUYER/app/*/[id]/page.tsx` | 동기 params, static params 삭제 |
+| W4 | 디자인은 전부 클라이언트 + mock — 검색 노출에 SSR·메타가 필요 | 사용자 결정(index) | 서버 컴포넌트 + `generateMetadata` + `revalidate: 60` |
+| W5 | Vercel SSR fetch 는 egress IP 를 공유해 서버 전역 throttle 에 걸릴 수 있다 | `main.ts` throttle 주석 | ISR 캐시 유지(no-store 금지) |
+| W6 | `components/b2b/Buyer*` 와 이름 충돌 | `components/b2b/` | `components/buyer-space/` + `Kb*` |
+| W7 | 루트 `opengraph-image.tsx`(소비자)를 `/` 가 물려받는다 · sitemap 이 `/shop*` 3줄을 싣는다 | `app/opengraph-image.tsx` · `app/sitemap.ts:18-20` | `(buyer)/opengraph-image.tsx` · sitemap 교체 |
+| W8 | 배포 후 점진 등록이라 운영 `/` 가 거의 빈 상태로 index 된다 | 사용자 답변 | 빈 섹션 숨김 + 기본 히어로 + 빈 Collection 안내, 빈 DB 렌더를 완료 기준에 |
+| W9 | 디자인 정적 이미지의 출처 불명 · `p01~p24` 는 가짜 브랜드 제품 사진 | `KLOWBUYER/public/img/` | 제품 사진 반입 금지, 연출컷은 착수 시 라이선스 확인 |
+| W10 | 구 `/shop` 의 `shop`·`discover` i18n 네임스페이스·`components/shop`·`discover` 가 `/shop` 전용 | grep | ⑥ 에서 함께 삭제(en 원본 + 8개 로케일). `lib/shopCategories` 는 남은 소비자가 없는지 grep 후 |
+| W11 | 사이트 트래픽 대시보드에 바이어 트래픽이 섞인다 | 19행 | 결정 기록에 명시 |
