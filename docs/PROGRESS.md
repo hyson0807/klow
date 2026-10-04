@@ -50,7 +50,7 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 **`§7` 20·21·22행 — buyer-platform(바이어 공간) 은 코드가 전부 끝났다(2026-10-05).** `klow.kr/` 를 해외 바이어 공간
 (디자인 `KLOWBUYER/`)으로 바꾸고 어드민이 브랜드·제품·홈 구성을 세팅한다. 스펙 [`plan/buyer-platform/`](./plan/buyer-platform/README.md),
 결정 [`decisions/storefront.md` 2026-10-05](./decisions/storefront.md#2026-10-05).
-세 레포 모두 git **`feat/buyer-platform`** 에만 있고(klow_server `47cc63d`·`5b6e2c3` · klow_admin `d8b11dc`·`4061858` · klow_web `8048663`·`9eaa271`)
+세 레포 모두 git **`feat/buyer-platform`** 에만 있고(klow_server `47cc63d`·`5b6e2c3`·`f2254b9` · klow_admin `d8b11dc`·`4061858`·`b317515` · klow_web `8048663`·`9eaa271`·`d26a343` — 셋째 해시는 2026-10-05 simplify 정리)
 **staging 미병합·push 안 함** — 병합·push 는 사용자 결정이다. 단 22행 ① **브랜드관 이탈 수정(klow_web `cdd83e6`)은 `staging` 에 직접 커밋**했다
 (`feat/buyer-platform` 의 부모이기도 하다) — 서버와 무관하게 먼저 push 해도 된다.
 ⚠️ 병합·배포 순서 **klow_server → klow_admin → klow_web**(web 이 먼저면 `/` 가 빈 상태 — 구 `/shop` 은 이미 지워졌다).
@@ -1027,6 +1027,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - **확인하지 못한 것**: 로그아웃 후 이동·빈 주문 CTA(로그인 필요 — 코드만) · 커스텀 도메인 `/` 에서 소비자 Footer 가 그대로 보이는지(훅이라 한 프레임 뒤 판정) · 실 R2 이미지의 4:5 크롭 비율은 어드민이 올린 이미지 기준.
 - ⚠️ 빌드는 `NEXT_PUBLIC_API_URL` 을 **인라인**한다 — 로컬에서 env 없이 빌드하면 :4000(다른 브랜치 서버)을 봐서 바이어 페이지가 전부 404 로 보인다(실제로 한 번 오진했다).
 - ⚠️ 결정 색인 건수가 이미 어긋나 있다(실제 앵커 89 · `decisions/README.md` 표 85행 · CLAUDE.md "77건") — 이 세션은 +1 만 했다. 정리는 별도 작업.
+- **simplify 정리(2026-10-05 · klow_server `f2254b9` · klow_admin `b317515` · klow_web `d26a343`, 동작 무변경)**: 공개 단건 조회(브랜드·PDP·문의 연결)가 전 카탈로그 대신 **그 브랜드 행만** 읽는다(판정은 그대로 `evaluate()`, 브랜드는 메모리 필터도 남김) · 어드민 `getProduct` 의 안 쓰이던 `preview` 삭제 → `brand.marketingSupport` 추가(편집기 왕복 1회 제거) · `EmailService.sendPrepared` 하나로(B2B 주문 알림 공용) · `common/public-urls#adminBase()` · klow_web 소비자 Footer 숨김을 **`body:has(.kb)` CSS** 로(경로 목록 삭제) · `useConsumerBack()` · `/shop` 삭제로 고아가 된 파일 3개 + 쿼리키·API 함수 삭제. **e2e**: 서버 jest 1571 · e2e 3/3 · 라우트 444 · API 시나리오 56항목(DB 브랜치 `ep-sparkling-sun`) · Playwright(홈·검색 요청 1회·푸터·`/shop` 308·브랜드·PDP 문의 제출·400px 넘침 0·404·소비자 뒤로가기 4경우·어드민 편집기 7/7·미저장 확인). 테스트 데이터는 지웠다(카테고리 7종만).
+- ⚠️ 계획 점검에서 남은 것(코드 무변경, 기록만): ① 카트 폴백은 "카트 아이템의 브랜드" 가 아니라 breadcrumb 만 쓴다(라인에 slug 가 없다 — PDP 와 같은 원인) ② 바이어 `KbFooter` 의 About 이 소비자 `/legal/business` 로 간다 ③ 루트 `layout.tsx` 의 `canonical: '/'` 를 canonical 없는 소비자 페이지(`/product/[id]` 등)가 물려받아 **바이어 홈을 정본으로 선언**한다(기존 문제지만 `/` 가 바이어 홈이 되며 의미가 생겼다 — 운영 배포 전 별도 수정 권장)
 - **staging 병합 뒤 확인**: `staging` 에서 `/`(빈 상태여도 깨지지 않음) → 어드민에서 브랜드 1곳 공개 → 1분 뒤 `/` 에 노출 · `/shop` → `/` · 문의 1건(운영팀 메일 수신) · 브랜드관 손님 흐름 ①.
 
 ### buyer-platform — 21행 B (완료 · klow_admin `d8b11dc`, 브랜치 `feat/buyer-platform` · staging 미병합)
