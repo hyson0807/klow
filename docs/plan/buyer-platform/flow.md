@@ -8,7 +8,7 @@
 [어드민 /buyer]  "브랜드 추가" → 전 브랜드 검색 모달 → 선택
       │            (BuyerBrand 생성 · published=false · 원본 로고 추종)
       ▼
-[/buyer/brands/:brandId]  브랜드 프로필(tier·tagline·city·MOQ·리드타임…)
+[/buyer/brands/:brandId]  브랜드 프로필(tier·tagline·city·리드타임…  MOQ 는 제품 구간가에서 계산)
       │                    + 그 브랜드 제품 표 → 제품마다 "추가" 토글
       │                      (BuyerProduct 생성 · 원본 값 프리필 · 이미지 원본 추종)
       │                    + 카테고리 인라인 지정 / 여러 개 골라 일괄 지정
@@ -30,7 +30,7 @@
 | 원본 값 프리필 (보조 — 운영 원본은 대부분 빈칸, `implementation-plan.md §4` R2) | 제품 추가 시 `volume`→Size, `ingredients`→Ingredients, `countryOfOrigin`→Made in, `expiryInfo` 에서 개월수 추출 시도→Shelf life, `keyIngredients`→Key actives. 빈칸에서 시작하지 않는다 |
 | 완비 배지 `필수 n/7` · 칸별 누락 점 | 브랜드 카드·제품 표 양쪽. 노출 불가 사유(필수 누락·slug 없음·미승인)도 함께 |
 | **저장하고 다음 미완비 제품 →** | 대량 입력의 본체(사용자 결정 — 엑셀·AI 초안 대신). 같은 브랜드 안에서 다음 미완비 제품으로 바로 넘어간다 |
-| 구간가 "자동 채우기" | MOQ·기준 도매가를 넣으면 디자인 비율(1~MOQ-1 샘플=기준가, MOQ=기준가, 3×MOQ ×0.94, 8×MOQ ×0.88, 20×MOQ ×0.82)로 5행 생성 → 수기 수정 |
+| 구간가 "자동 채우기" | MOQ·기준 도매가를 넣으면(저장 안 됨 — 표만 저장) 디자인 비율(1~MOQ-1 샘플=기준가, MOQ=기준가, 3×MOQ ×0.94, 8×MOQ ×0.88, 20×MOQ ×0.82)로 5행 생성 → 수기 수정 |
 | 카테고리 일괄 지정 | 브랜드 제품 표에서 체크 → 드롭다운 한 번 |
 | 실시간 미리보기 | 바이어 공간의 카드(4:5)와 PDP 상단을 같은 CSS 로 렌더 — "예쁘게 다시 세팅" 하는 작업의 피드백 루프 |
 | 이미지 드래그 정렬 · 4:5 크롭 · 원본 상세컷에서 골라 넣기 · 원본으로 되돌리기 | 이미지 재세팅이 이 트랙의 핵심 작업이다(사용자 강조) |
@@ -46,7 +46,7 @@
 | FDA OTC 배지 | `FDA OTC` | `BuyerProduct.fdaOtc` Boolean | |
 | SPF 배지 | `SPF in-vivo` + claims 의 "SPF 50+ PA++++" | `BuyerProduct.spf` String (빈값 = 배지 없음) | 값 자체를 배지 노트로 |
 | GMP 배지 | `ISO 22716` → GMP | `BuyerProduct.gmp` Boolean | |
-| Wholesale price by quantity | `tiersFor()` (brand.moq 파생 5행) | `BuyerPriceTier(minQty, unitUsdCents)` | 첫 행 minQty=1 = sample. MOQ 표시는 `BuyerProduct.moq ?? BuyerBrand.moq` |
+| Wholesale price by quantity | `tiersFor()` (brand.moq 파생 5행) | `BuyerPriceTier(minQty, unitUsdCents)` | 첫 행 minQty=1 = sample, **둘째 행 시작 = MOQ**(정본, G10). 카드 대표가 = MOQ 구간 단가(G11) |
 | About the product | `copy.about` | `BuyerProduct.about` | |
 | Key actives | `copy.actives[]` | `BuyerProduct.keyActives String[]` | |
 | For | `copy.use` | `BuyerProduct.forText` | |
@@ -66,9 +66,9 @@
 | tier (K-Beauty icon / Hidden gem) | `BuyerBrand.tier` enum |
 | tagline | `BuyerBrand.tagline` (원본 `Brand.tagline` 프리필) |
 | From city · est. year | `city` · `founded Int?` |
-| Opening order MOQ | `moq Int?` |
+| Opening order MOQ | **계산값** — 노출 제품 MOQ 최솟값 (입력 칸 없음) |
 | Dispatch lead days | `leadDays Int?` |
-| Avg. retail multiple | `retailMultiple Decimal?` |
+| Avg. retail multiple | **계산값** — 노출 제품 `MSRP ÷ MOQ 구간가` 평균 (MSRP 있는 제품만) |
 | Export documents (지역) | `exportRegions String[]` (us·ca·uk·eu·gcc·sea·au·latam) |
 | Exclusivity open | `exclusiveRegions String[]` |
 | Marketing support | `marketingSupport String[]` |

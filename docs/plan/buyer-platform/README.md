@@ -54,7 +54,7 @@
 ### 5. 노출 게이트 = 어드민 공개 토글 + 필수 완비 (서버가 판정)
 
 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 완비` 인 것만 낸다.
-필수 7: **카테고리 · 구간가 ≥1행 · About · Size · Made in · Ingredients · 이미지 ≥1장(원본 포함)**.
+필수 7: **카테고리 · 구간가 ≥2행(1개 샘플가 + MOQ 구간) · About · Size · Made in · Ingredients · 이미지 ≥1장(원본 포함)**.
 소비자 쪽 구독 게이트(`PUBLIC_PRODUCT_WHERE`)와 **무관**하다 — 이 공간의 게이트는 어드민 큐레이션이다.
 **승인 브랜드(`Brand.status = approved`)의 승인 제품(`Product.status = approved`)만** 올릴 수 있고 노출된다
 (2026-10-04 사용자 결정) — 어드민 후보 목록도 그것만 보여주고, 올린 뒤 브랜드가 탈퇴·반려 등으로 승인 상태를
@@ -89,6 +89,14 @@
 히어로("Samples at wholesale price. Even just one unit.")·기둥(1 unit / 5 SKUs)·Sample program 섹션·구간가 첫 행
 `sample` 은 **디자인 문구 그대로** 둔다. 샘플 요청은 그동안 문의 폼으로 받는다(샘플 버튼 자체는 결정 4대로 숨김).
 문의는 **KLOW 운영팀만** 받는다 — 브랜드에 사본을 보내지 않고 klow_brand 도 무변경이다.
+
+### 9. MOQ 는 구간가 표가 정본, 카드 가격은 MOQ 구간가 (2026-10-04 사용자 결정)
+
+구간가 표의 **첫 행은 항상 `1개 → 샘플가`**, **둘째 행의 시작 수량이 그 제품의 MOQ** 다. 제품·브랜드에 MOQ 칸을
+따로 두지 않는다 — 세 군데 두면 "MOQ 48 인데 구간은 1/100/300" 같은 모순이 저장된다. 브랜드 페이지의
+`Opening order` 는 그 브랜드 노출 제품 MOQ 의 **최솟값**, `Avg. retail multiple` 은 노출 제품 `MSRP ÷ MOQ 구간가`
+평균으로 **서버가 계산**한다(입력 칸 없음). 카드·브랜드 패널·선반에 보이는 도매가 한 개 = **MOQ 구간 가격**이고
+High margin 선반 태그의 공급률도 이 값 ÷ MSRP 다.
 
 ## 스코프 밖
 

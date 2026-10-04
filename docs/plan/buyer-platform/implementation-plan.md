@@ -15,6 +15,9 @@
 | G6 | 가격은 **USD 센트 정수**(`unitUsdCents Int`). Decimal·환율을 쓰지 않는다 |
 | G7 | 문의 POST 는 완전 공개 쓰기라 `@Throttle(THROTTLE_TIGHT)` 필수 + 메일 HTML 의 모든 입력 `escapeHtml`(선례 `b2b-order-email.ts`) |
 | G8 | klow_web 바이어 CSS 는 **`.kb` 루트 아래로 전부 스코프**한다. 전역 셀렉터(`body`·`a`·`button`·`:root` 변수) 0건 |
+| G10 | **MOQ 정본 = 구간가 표**: `tiers[0].minQty = 1`(샘플) · `tiers.length >= 2` · MOQ = `tiers[1].minQty` · minQty 엄격 오름차순. 제품·브랜드 MOQ 컬럼은 **만들지 않는다**. 브랜드 `Opening order` = 노출 제품 MOQ 최솟값, `Avg. retail multiple` = 노출 제품 `msrp / MOQ가` 평균 — 둘 다 응답 시 계산(README 결정 9) |
+| G11 | 카드·패널·선반의 대표 도매가 = **MOQ 구간 단가**(`tiers[1]`). 공개 매퍼 한 곳(`cardPrice()`)만 이 규칙을 안다 |
+| G12 | 공개 단건 조회(`brands/:slug`·`products/:id`)는 **노출 불가면 존재 여부와 무관하게 동일한 404** — 비공개 행의 존재를 새지 않는다. `BuyerProduct` 의 브랜드와 `Product.brandId` 가 다르면(제품의 브랜드가 바뀐 경우) 노출 불가 + 어드민 사유 `브랜드 불일치` |
 | G9 | **소비자 화면은 `/shop`·`/` 로 보내지 않는다** — 폴백·CTA·탭의 목적지는 `consumerReturnHref()`(브랜드관) 하나로만 정하고, 없으면 숨긴다(README 결정 7). 바이어 화면(`/`·`/shop/*`)과 소비자 화면 사이에 링크가 0건이어야 한다 |
 
 ## §2 스키마 초안 (1단계에서 확정)
@@ -33,9 +36,7 @@ model BuyerBrand {
   tagline          String   @default("") @db.VarChar(200)
   city             String   @default("") @db.VarChar(60)
   founded          Int?
-  moq              Int?
   leadDays         Int?
-  retailMultiple   Decimal? @db.Decimal(4, 2)
   exportRegions    String[] @default([])
   exclusiveRegions String[] @default([])
   marketingSupport String[] @default([])
@@ -66,7 +67,6 @@ model BuyerProduct {
   fdaOtc          Boolean  @default(false)
   spf             String   @default("") @db.VarChar(40)
   gmp             Boolean  @default(false)
-  moq             Int?
   msrpUsdCents    Int?
   badge           String?  @db.VarChar(30)
   images          String[] @default([])
@@ -81,10 +81,14 @@ model BuyerCategory  { id · slug @unique · name · sort · products BuyerProdu
 model BuyerHeroSlide { id · imageUrl · buyerProductId? (SetNull) · caption · sort }
 model BuyerShelf     { id · title · lede · preview Int @default(4) · sort · published · items BuyerShelfItem[] }
 model BuyerShelfItem { id · shelfId(Cascade) · buyerProductId(Cascade) · sort · tag · @@unique([shelfId, buyerProductId]) }
-model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company · email · market · message · status @default(new) · adminNote · createdAt · updatedAt · @@index([status, createdAt]) }
+model BuyerInquiry   { id · kind · subject(VarChar 200 — 디자인 "Brand or product", 필수) · needs(VarChar 2000) · market(VarChar 200 — "Business & market") · email(VarChar 254, 필수) · brandId?(SetNull) · productId?(SetNull) · qty? · ip(VarChar 64) · status @default(new) · adminNote · createdAt · updatedAt · @@index([status, createdAt]) }
+// ⚠️ 필드는 디자인 `RequestBrand.tsx` 드로어 4칸(brand/product* · detail · market · email*)에 맞춘다 — 회사명 칸은 디자인에 없다
+// 브랜드·제품 FK 는 SetNull: 문의는 영업 기록이라 브랜드가 바이어 공간에서 빠져도 남아야 한다
 ```
 
-전부 `CREATE TABLE` + `Brand`·`Product` 의 역관계 필드(스키마 전용, DB 컬럼 없음)라 **롤링 안전**.
+전부 `CREATE TABLE` + `Brand`·`Product` 의 역관계 필드(`buyerBrand BuyerBrand?` · `buyerProduct BuyerProduct?` — 스키마
+전용, DB 컬럼 없음)라 **롤링 안전**. **Decimal 컬럼 0개**(돈은 센트 Int, 배수는 계산값) — b2b 매퍼가 Decimal→number 변환
+주석을 길게 단 이유를 반복하지 않는다.
 
 ## §3 단계
 
@@ -99,15 +103,17 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
   스크립트 없이 staging·운영 동일하게 — `20260930042335` 의 같은 SQL 백필 선례)
 - **할 일** (세션 안 순서 = 정지점)
   1. 스키마 + 마이그레이션 + 카테고리 시드 ← **정지점 ①**
+     - 시드 SQL 은 `prisma migrate dev --create-only --name add_buyer_platform` 로 만든 파일 끝에 붙이고 `migrate dev` 로 적용.
+       ⚠️ `@default(cuid())` 는 **Prisma 클라이언트 쪽 기본값**이라 SQL INSERT 에는 안 걸린다 — id 를 명시(`'bcat_skincare'` 등)
   2. `src/modules/buyer/` 신설(평면 파일 규칙): `buyer.module.ts` · `buyer-admin.service.ts` ·
      `buyer-public.service.ts` · `buyer.mapper.ts` · `buyer-completeness.ts`(G3 순수 함수 + 프리필 함수
-     `prefillFromProduct()`) · `buyer-inquiry-email.ts` · 검증 `common/validation/buyer.ts`(배럴 등록)
+     `prefillFromProduct()` + 원본 대표사진 선택 — 서버엔 동영상 판별 헬퍼가 없어 **확장자 판별(mp4·mov·webm)을 여기 둔다**, klow_web `isVideoUrl` 과 같은 규칙) · `buyer-inquiry-email.ts` · 검증 `common/validation/buyer.ts`(배럴 등록)
   3. `admin-buyer.controller.ts` (`admin/buyer`, AdminGuard) ← **정지점 ②**
      - 브랜드: `GET brands`(완비 집계 + 필수 칸별 누락 수 + 노출 제품 수) · `GET brand-candidates?q=`(**승인 브랜드만**, 이미 올린 것은 `added:true` — 기존 `GET /admin/brands` 는 승인 필터·추가 여부가 없어 재사용하지 않는다) ·
        `POST brands {brandId}` · `GET/PATCH/DELETE brands/:brandId`(⚠️ DELETE 는 입력한 제품 정보까지 cascade 로 지운다 — 어드민은 확인 모달 필수, 평소엔 공개 토글 OFF 를 권한다) · `PUT brands/order {ids[]}`
      - 제품: `GET brands/:brandId/products`(그 브랜드 **승인** 제품 + 바이어 행 유무·필수 칸별 누락·노출 불가 사유) ·
        `POST products {productId}`(**승인 제품만** · 프리필 — 원본은 영어로 저장돼 있어 그대로 옮긴다: `name`→nameEn · `volume`→Size · `ingredients` · `countryOfOrigin`→Made in · `expiryInfo` 개월수 · `keyIngredients`→Key actives · `basePriceUsd`→msrp. ⚠️ 운영 실측상 대부분 **빈칸**이라 프리필이 해결책이 아니다 — 아래 §4) · `GET/PATCH/DELETE products/:productId`(GET 은 이미지 편집기용 원본 상세컷 목록 `originalImages` 포함) ·
-       구간가는 **`PATCH products/:productId` 의 `tiers` 필드로 같은 트랜잭션에서 전체 교체**(최대 6, 첫 행 minQty=1, minQty 오름차순·단가 >0) — 별도 PUT 로 떼면 편집기 저장 한 번이 요청 둘이 되어 반쪽 저장이 생긴다. GET 응답에 `preview`(공개 매퍼로 만든 PDP 모양, published 무시)와 `nextIncompleteProductId`(같은 브랜드의 다음 미완비 제품)를 싣는다 ·
+       구간가는 **`PATCH products/:productId` 의 `tiers` 필드로 같은 트랜잭션에서 전체 교체**(2~6행, G10 규칙, 단가 >0 — 위반은 400 으로 막는다. 완비 판정이 아니라 **입력 검증**이다) — 별도 PUT 로 떼면 편집기 저장 한 번이 요청 둘이 되어 반쪽 저장이 생긴다. GET 응답에 `preview`(공개 매퍼로 만든 PDP 모양, published 무시)와 `nextIncompleteProductId`(같은 브랜드의 다음 미완비 제품)를 싣는다 ·
        `PATCH products/bulk {productIds[], categoryId?, published?}`
      - 홈: 카테고리 CRUD + `PUT categories/order`(⚠️ **소속 제품이 있으면 DELETE 409** — `SetNull` 로 두면 그 제품들이 필수 미달이 되어 바이어 화면에서 **조용히 사라진다**) · 히어로 CRUD + order · 선반 CRUD + order + `PUT shelves/:id/items`
      - 문의: `GET inquiries?status=` · `PATCH inquiries/:id {status, adminNote}`
@@ -116,21 +122,27 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
        R2 CORS 가 어드민 오리진 GET 을 이미 허용하면 이 라우트는 만들지 않는다(그 판정을 인계 메모에 남길 것)
      - 모든 PATCH 스키마는 **`patchOf()`**(`common/validation/shared.ts`) — `.partial()` 은 zod v4 에서 default 를 주입해
        보내지 않은 칸을 덮는다(2026-07 사고)
-  4. `public-buyer.controller.ts` (`v1/buyer`, public)
-     - `GET home` → `{ heroSlides, categories, shelves(+items 카드), brands(로고월+패널 요약) }`
+  4. `public-buyer.controller.ts` (`v1/buyer`, public) — ⚠️ 완비·노출 판정은 **읽을 때 계산**한다(원본 `image`·`status`
+     가 다른 화면에서 바뀌므로 저장된 `complete` 컬럼은 낡는다). 규모가 수백 행이라 `include` 한 번 + 메모리 판정으로
+     충분하고 N+1 을 만들지 않는다. 서버 캐시 없음
+     - `GET home` → `{ heroSlides, categories, shelves(+items 카드), brands(로고월+패널 요약) }` — 노출 제품이 0개인 카테고리·선반·브랜드는 빼고, 연결 제품이 비노출인 히어로는 **이미지만 남기고 링크를 뗀다**
      - `GET products?category=&q=&take=&cursor=` → 카드 목록
      - `GET brands/:slug` → 브랜드 + 노출 제품 카드
      - `GET products/:id` → PDP 전체(구간가·인증·스펙·이미지·같은 브랜드 다른 제품)
-     - `POST inquiries` (`THROTTLE_TIGHT`) → 저장 + 메일(`BUYER_INQUIRY_EMAIL`, 없으면 `CONTACT_INBOX_EMAIL`).
+     - `POST inquiries` (`THROTTLE_TIGHT` — 공용 상수가 아니라 **컨트롤러 로컬 상수**다, contact·admin-auth 선례) → `brandId`·`productId` 가 오면 **노출 중인 것만** 연결(아니면 null) · 숨은 필드 honeypot(채워지면 200 을 주고 저장 안 함) · `req.ip` 저장 → 저장 + 메일(`BUYER_INQUIRY_EMAIL`, 없으면 `CONTACT_INBOX_EMAIL`).
        메일 실패는 저장이 됐으므로 **삼키고 로그**(contact 와 반대 — 정본이 테이블이라서)
-  5. `app.module.ts` 등록 · `.env.example` 에 `BUYER_INQUIRY_EMAIL=` 한 줄
+  5. `app.module.ts` 등록(`BuyerModule` imports `WebAuthModule` — `EmailService`. b2b 선례대로 순환 없음) · `.env.example`
+     에 `BUYER_INQUIRY_EMAIL=` 한 줄 · cron 없음(e2e 의 cron 기대 목록 무변경). 순서 변경 `PUT …/order` 는 **현재 id 집합과
+     정확히 같은 목록**만 받는다(일부만 오면 400) — 동시 편집에서 순서가 반쯤 섞이지 않게
+     - 이미지 URL 검증: `https://` 문자열 · 500자 · 배열 최대 12. 호스트 제한은 두지 않는다(환경마다 R2 공개 주소가 달라서 — 기존 제품 `image` 와 같은 수준)
   6. 문서: `docs/server/modules/buyer.md` 신규 + `docs/server/README.md` 색인 + CLAUDE.md `Server modules` 목록에 `buyer`
 - **완료 기준**
   - 검증 3층(typecheck 2개 · `test:e2e` 모듈 수 +1 · `npm run start` 라우트 수 증가 기록)
   - jest: `buyer-completeness` 스펙(필수 7 각각 누락 → 미완비 · 이미지 원본 추종 시 완비 · 구간가 검증 규칙)
   - curl: 어드민 세션으로 브랜드 추가 → 제품 추가(프리필 값 확인) → 구간가·카테고리·필수 채움 →
     published → `GET /v1/buyer/home` 에 그 브랜드·제품이 나온다 / 한 칸 비우면 사라진다
-  - `POST /v1/buyer/inquiries` 6회째 429
+  - `POST /v1/buyer/inquiries` 6회째 429 · ⚠️ dev 의 `RESEND_API_KEY` 가 **실발송**이다 — 테스트는 `RESEND_API_KEY= npm run start`
+  - jest: G10(구간 1행·첫 행≠1·비오름차순 → 400) · G11 `cardPrice()` · 브랜드 Opening order·retail multiple 계산 · G12 404 동일성
 - **선행 조건**: 없음. ⚠️ `§4` WIP — 다른 마이그레이션 단계가 `진행 중` 이면 착수하지 않는다
 
 ### 2. B — klow_admin: "바이어 공간" (`§7` 21행)
@@ -159,7 +171,7 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
      우: sticky **미리보기**(바이어 카드 4:5 + PDP 상단 배지·구간가 표). 선례 `components/preview/ProductPreviewPanel.tsx`
      (klow_web PDP 의 **로컬 미러 컴포넌트**, iframe 아님)를 따라 `components/preview/BuyerPreview*.tsx` 로 만들고 파일
      머리에 "`KLOWBUYER/` · klow_web 바이어 화면과 동기화" 주석을 단다. CSS 는 `.kb-preview` 스코프, 폰트는 어드민에
-     `next/font` 가 없으니 시스템 폰트 폴백을 허용한다(레이아웃 확인용). 가격 입력은 **달러로 받고 센트로 변환**. 구간가 "자동 채우기" · 이미지 업로드(`lib/upload.ts`)·
+     `next/font` 가 없으니 시스템 폰트 폴백을 허용한다(레이아웃 확인용). 가격 입력은 **달러로 받고 센트로 변환**. 구간가 "자동 채우기"(MOQ·기준가는 **생성용 입력일 뿐 저장되지 않는다** — 저장되는 건 표, G10) · 이미지 업로드(`lib/upload.ts`)·
      4:5 크롭(`ImageCropModal` 은 `aspect={4/5}` 그대로 됨. `MultiImageUpload` 는 크롭이 없어 **새 `BuyerImageList`** 를
      만든다 — 업로드 시 크롭 + 기존 이미지 재크롭(1단계 `image-source` 또는 R2 CORS) · preset `product-main`)·
      **`@dnd-kit` 추가로 드래그 정렬**(어드민에 DnD 라이브러리 0개 — klow_brand 버전에 맞춘다)·**원본 상세컷에서 골라 넣기**(`originalImages` 피커)·원본으로 되돌리기 ← **정지점**
@@ -246,3 +258,23 @@ onboarding 자동 노출 경로·`sitemap.ts` 정리 → ⑦ 결정 기록(`deci
 | R11 | 브랜드 표의 "빼기"가 행 삭제면 입력한 12칸이 cascade 로 소멸 | 설계 검토 | 빼기 = 공개 OFF, 삭제는 별도 메뉴 + 확인 |
 | R12 | 편집기 저장이 필드 PATCH + 구간가 PUT 둘이면 반쪽 저장 가능 | 설계 검토 | `tiers` 를 PATCH 에 넣어 한 트랜잭션 |
 | R13 | 원본 로고 없음: 승인 브랜드 28 중 3 | 운영 SELECT | `logoUrl` 업로드 or 텍스트 워드마크 폴백(디자인과 동일) — 필수 아님 |
+
+## §5 서버 점검 기록 (2026-10-04)
+
+1단계 명세를 코드와 대조해 찾은 것. 위 §1·§2·1단계에 이미 반영했다.
+
+| # | 찾은 것 | 반영 |
+|---|---|---|
+| S1 | MOQ 가 브랜드·제품·구간표 세 곳에 따로 있어 모순 저장 가능 | 구간표가 정본(G10), MOQ 컬럼 삭제 — **사용자 결정** |
+| S2 | 카드 대표가가 어느 구간인지 미정(디자인은 샘플가=MOQ가라 드러나지 않음) | MOQ 구간가(G11) — **사용자 결정** |
+| S3 | `retailMultiple` 이 `Decimal` — 입력값이 실제 가격과 따로 놀고, Decimal 직렬화 부담 | 컬럼 삭제, 노출 제품에서 계산 |
+| S4 | 문의 스키마가 디자인 드로어와 달랐다(`company` 필수인데 디자인엔 칸이 없고 `Brand or product` 칸이 스키마에 없음) | `subject`·`needs`·`market`·`email` 로 정정 · honeypot · ip |
+| S5 | SQL 시드에 `cuid()` 기본값이 안 걸린다 | id 명시 + `--create-only` 로 SQL 편집 |
+| S6 | 서버에 동영상 URL 판별 헬퍼가 없다(원본 대표사진 폴백에 필요) | `buyer-completeness.ts` 에 확장자 판별 |
+| S7 | `THROTTLE_TIGHT` 는 공용 export 가 아니라 컨트롤러 로컬 상수 | 로컬 선언 |
+| S8 | 완비를 컬럼으로 저장하면 원본 `image`·`status` 변경에 낡는다 | 읽을 때 계산(규모 수백 행) |
+| S9 | 비공개 제품을 id 로 찌르면 존재가 샐 수 있다 · 제품의 브랜드가 바뀌면 오버레이가 엉뚱한 브랜드 밑에 남는다 | G12 |
+| S10 | 순서 변경 API 가 일부 id 만 받으면 동시 편집 때 순서가 섞인다 | 정확한 id 집합만 허용 |
+| S11 | 문의의 브랜드·제품 FK 가 Cascade 면 브랜드를 빼는 순간 영업 기록이 사라진다 | SetNull |
+| S12 | dev Resend 키가 실발송 | 테스트 시 `RESEND_API_KEY=` |
+| S13 | 이미지 재크롭 프록시는 SSRF 축 | 호스트 화이트리스트 + R2 CORS 로 대체 가능하면 만들지 않음(1단계 명세) |
