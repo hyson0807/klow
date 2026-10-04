@@ -47,6 +47,12 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 90일 백필**(수십 분 — `pages` 쿼리가 하루 1회 5~31초) 또는 어드민에서 `POST /admin/stats/site-traffic/collect`.
 ⚠️ 운영 Railway 의 `VERCEL_PROJECT_ID` 가 **klow-web**(운영)인지 확인할 것 — 이 값이 곧 "어느 사이트를 세나"다.
 
+**`§7` 20·21·22행 — buyer-platform(바이어 공간) 은 2026-10-04 계획 세션이 더했다(사용자 지시로 18·19행 뒤).**
+`klow.kr/` 를 해외 바이어 공간(디자인 `KLOWBUYER/`)으로 바꾸고, **어드민이 브랜드를 골라 올리고 제품 정보·이미지·
+카테고리·홈 구성을 세팅**한다. 스펙은 [`plan/buyer-platform/`](./plan/buyer-platform/README.md).
+착수는 20행(A — klow_server 스키마·API)부터. ⚠️ 마이그레이션 단계라 **git 브랜치 + Neon DB 브랜치를 먼저** 판다.
+위 push·운영 작업(7·8·17·18 → 12 → 9행)과 **파일이 겹치지 않아** 병행 가능하다 — 우선순위는 사용자가 정한다.
+
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
 그다음이 **`§7` 9행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
@@ -862,6 +868,22 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - ⚠️ 이 행이 트랙의 마지막이다 — **결정 기록 1건**(`decisions/products.md`) + `decisions/README.md` 표 +
   `CLAUDE.md` `## 결정 기록` 색인 + Where Things Live 한 줄을 빠뜨리지 말 것
 
+### buyer-platform — 바이어 공간 (klow.kr/ · 어드민 큐레이션)
+
+스펙: [`plan/buyer-platform/`](./plan/buyer-platform/README.md) — 결정 요약은 `README.md`, 운영 흐름·
+**디자인 필드 ↔ 스키마 매핑표**는 `flow.md`, **빌드 스펙 정본은 `implementation-plan.md`** 의 `§1 착수 게이트` + 1~3단계.
+
+디자인 목업 `KLOWBUYER/`(Next 15 · 순수 CSS · 전부 mock)를 klow_web `/` + `/shop/brands/[slug]` +
+`/shop/products/[id]` 로 이식하고, 그 내용을 **KLOW 관리자가 klow_admin "바이어 공간" 그룹에서** 채운다.
+브랜드(klow_brand)는 무변경. 로그인·채팅·샘플박스·결제·리뷰·Concierge 는 **스코프 밖**(2026-10-04 사용자 결정).
+
+- ⚠️⚠️ **원본 `Product`·`Brand` 와 기존 `B2b*` 테이블에 쓰지 않는다** — 1:1 오버레이 테이블(`BuyerBrand`·
+  `BuyerProduct`)만 쓴다(G1·G2). 도매 구간가도 바이어 전용 `BuyerPriceTier`(USD 센트)다
+- ⚠️ **노출 판정 함수는 서버에 하나**(G3) — 어드민 "필수 n/7" 배지와 공개 API 가 같은 함수를 쓴다
+- ⚠️ 이미지는 **빈 배열 = 브랜드 원본 추종**, 세팅하면 덮는다(G5)
+- ⚠️ 22행(C)은 구 소비자 `/shop` 을 **삭제**한다 — **서버 배포 후에만** klow_web 을 내보낸다(먼저면 `/` 가 빈 화면)
+- 다음: **20행 A** — `implementation-plan.md §3 1단계`
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -920,6 +942,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 17 | seeding-bulk-invoice | C. 엑셀 전화번호 숫자화 수정(양식 칸 텍스트 서식 + 파서 과학표기 복구) + **브랜드 자기 양식 AI 열 매핑**(`POST /v1/brand/seeding/bulk-columns` + 매핑 확인 화면 + 전체 국가 일괄 지정) — 코드 완료, **staging push 대기**(= 사용자 `git push`) | 완료 | ✗ | 2026-10-01 | (이 커밋) / - / b3c23b8 · e6472f4 · (이 커밋) / - / (이 커밋) |
 | 18 | seeding-bulk-invoice | D. **한셀 명단 읽기**(`hs:` 서식 태그 → 빈 시트) + **업로드 직후 자동 정리**(예시값 비우기 · 수식이 된 전화 복구 · 전화 국제번호 · 국가 · 주소 나누기 `POST /v1/brand/seeding/bulk-normalize`) + **후속: 칸이 다 찬 행도 배치 흔적이 있으면 AI · 전화 형식 경고** + **e2e 8종 수정(AI 국가 짐작 게이트 · 주소 한 열 명단 · 미국 주 · CSV 경고)** — 코드 완료·로컬 실파일 확인·**`staging` 병합 완료**, **push 대기**(= 사용자 `git push`, **klow_server → klow_brand**) | 완료 | ✗ | 2026-10-02 | 8fa6134 · 7dfe224 · 2ecfe03 · 4d9e737 · c4deaca · 9ec2964 / - / 4910b6d · ac89878 · dd27cde · 31d70e0 · 8bebc85 · f620497 / - / b4967ec · 612e04b · (이 커밋) |
 | 19 | site-traffic | **어드민 대시보드 "사이트 트래픽 · 국가별 요청"**(Vercel Observability → `SiteTrafficDay` 일일 복사 + 지도) — 코드·마이그레이션(**staging DB 직접** — 사용자 지시)·문서 완료, **staging push 완료** | 완료 | ✗ | 2026-10-04 | fe5c982 / 9f2e333 / - / - / (이 커밋) |
+| 20 | buyer-platform | **A. klow_server** — 스키마·마이그레이션 `add_buyer_platform`(신규 테이블 8 · 카테고리 7종 SQL 시드 · **DB 브랜치 필수**) → `modules/buyer/`(완비 판정 함수) → `/admin/buyer/*` → 공개 `/v1/buyer/*` → 문의 저장+메일 → `server/modules/buyer.md`. 정지점: 스키마 끝 / 어드민 API 끝 | 대기 | ✗ | | |
+| 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록. 정지점: 제품 편집기 끝 | 대기 | ✗ | | |
+| 22 | buyer-platform | **C. klow_web 바이어 공간** — `.kb` 스코프 CSS 이식 → `/` 홈 → `/shop/brands/[slug]`·`/shop/products/[id]` → 문의 드로어 → **구 소비자 `/shop` 제거** → 결정 기록·문서 → staging push 안내(**server → admin → web**) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
