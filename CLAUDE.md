@@ -72,7 +72,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Admin 인증 모듈               | `klow_server/src/modules/admin-auth/` (service, controller, admins controller, totp, invitation, audit interceptor) |
 | AdminGuard + CurrentAdmin     | `klow_server/src/modules/admin-auth/admin.guard.ts`, `klow_server/src/modules/admin-auth/super-admin.guard.ts`, `klow_server/src/modules/admin-auth/current-admin.decorator.ts` |
 | Admin 시드 스크립트           | `klow_server/prisma/seed/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
-| klow_web pages                | `klow_web/src/app/` (product, `[brandSlug]`, brand, shop, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) |
+| klow_web pages                | `klow_web/src/app/` (product, `[brandSlug]`, brand, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) · **바이어 공간** `(buyer)/`(`/` · `shop/brands/[slug]` · `shop/products/[id]` — `components/buyer-space/` · `lib/buyer-space*.ts` · CSS 는 `.kb` 스코프) |
 | klow_web UI i18n (앱 전역)    | `klow_web/src/i18n/` (en 단일 원본 → `npm run i18n:fill` 로 ja/zh/vi/th/id/ru/ar 생성) + `useT`/`useLabels` 훅. 가이드: [`klow_web/docs/i18n.md`](./klow_web/docs/i18n.md) |
 | klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, legal, `(authed)/`{studio(제품 관리), promotions, creators, seeding, instagram, crm, settings}) |
 | Instagram 연동 모듈           | `klow_server/src/modules/instagram/` (client, service, connect/resource 컨트롤러, refresh cron, token crypto) + `klow_brand/src/app/(authed)/instagram/`. 가이드: `docs/instagram-integration.md`, 엔드포인트: `docs/server/modules/instagram.md` |
@@ -180,6 +180,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-28` [손님 화면 메뉴 서랍 + PC 브랜드관·제품 상세](docs/decisions/storefront.md#2026-09-28-2)
 - `2026-09-28` [B2B 도매 — 바이어 페이지 + 주문서 + AI 원본 가격표 추출 (MOQ 열 없으면 U/B = MOQ · STOREFRONT_SEGMENTS 에 b2b 넣지 않음)](docs/decisions/storefront.md#2026-09-28-3)
 - `2026-09-29` [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](docs/decisions/storefront.md#2026-09-29)
+- `2026-10-05` [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · 폴백은 `consumerReturnHref` 하나 · `.kb` 스코프 · 키프레임 `kb-` 접두)](docs/decisions/storefront.md#2026-10-05)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

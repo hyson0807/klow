@@ -47,16 +47,16 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 90일 백필**(수십 분 — `pages` 쿼리가 하루 1회 5~31초) 또는 어드민에서 `POST /admin/stats/site-traffic/collect`.
 ⚠️ 운영 Railway 의 `VERCEL_PROJECT_ID` 가 **klow-web**(운영)인지 확인할 것 — 이 값이 곧 "어느 사이트를 세나"다.
 
-**`§7` 20·21·22행 — buyer-platform(바이어 공간) 은 2026-10-04 계획 세션이 더했다(사용자 지시로 18·19행 뒤).**
-`klow.kr/` 를 해외 바이어 공간(디자인 `KLOWBUYER/`)으로 바꾸고, **어드민이 브랜드를 골라 올리고 제품 정보·이미지·
-카테고리·홈 구성을 세팅**한다. 스펙은 [`plan/buyer-platform/`](./plan/buyer-platform/README.md).
-**20행(A — klow_server)은 2026-10-04 에 끝났다** — git `feat/buyer-platform`(klow_server `47cc63d` · `5b6e2c3`) +
-Neon DB 브랜치 `ep-sparkling-sun`(사용자가 만듦 — 로컬 `klow_server/.env` 가 지금 그쪽을 본다). **staging 미병합·push 안 함.**
-**21행(B — klow_admin)도 2026-10-04 에 끝났다** — klow_admin git `feat/buyer-platform`(`d8b11dc`), staging 미병합·push 안 함.
-다음은 **22행(C — klow_web)** 이다(착수 세션이 `implementation-plan.md §3 3단계` 를 §5 템플릿으로 먼저 명세). staging 병합은 사용자 결정 —
-⚠️ 병합 순서 **klow_server → klow_admin**(반대면 바이어 공간 화면이 전부 404 토스트).
+**`§7` 20·21·22행 — buyer-platform(바이어 공간) 은 코드가 전부 끝났다(2026-10-05).** `klow.kr/` 를 해외 바이어 공간
+(디자인 `KLOWBUYER/`)으로 바꾸고 어드민이 브랜드·제품·홈 구성을 세팅한다. 스펙 [`plan/buyer-platform/`](./plan/buyer-platform/README.md),
+결정 [`decisions/storefront.md` 2026-10-05](./decisions/storefront.md#2026-10-05).
+세 레포 모두 git **`feat/buyer-platform`** 에만 있고(klow_server `47cc63d`·`5b6e2c3` · klow_admin `d8b11dc`·`4061858` · klow_web `8048663`·`9eaa271`)
+**staging 미병합·push 안 함** — 병합·push 는 사용자 결정이다. 단 22행 ① **브랜드관 이탈 수정(klow_web `cdd83e6`)은 `staging` 에 직접 커밋**했다
+(`feat/buyer-platform` 의 부모이기도 하다) — 서버와 무관하게 먼저 push 해도 된다.
+⚠️ 병합·배포 순서 **klow_server → klow_admin → klow_web**(web 이 먼저면 `/` 가 빈 상태 — 구 `/shop` 은 이미 지워졌다).
 ⚠️ staging 에 병합할 때는 staging DB 에 `20261004140057_add_buyer_platform` 을 **먼저** 적용한다(신규 테이블뿐이라 롤링 안전).
-위 push·운영 작업(7·8·17·18 → 12 → 9행)과 **파일이 겹치지 않아** 병행 가능하다 — 우선순위는 사용자가 정한다.
+⚠️ klow_web 은 의존성이 하나 늘었다(`geist`) — 배포 빌드가 `npm ci` 를 돈다.
+병합 뒤 staging 에서 확인할 것은 `§9` 22행 메모. 위 push·운영 작업(7·8·17·18 → 12 → 9행)과 **파일이 겹치지 않아** 병행 가능하다.
 
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
@@ -893,7 +893,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 어드민 점검(운영 DB 실측 포함) 결과는 `implementation-plan.md §4` R1~R13 — 원본은 영어지만 **대부분 빈칸**이라 연속 편집이 본체다
 - 서버 점검은 `implementation-plan.md §5` S1~S13 — ⚠️ **MOQ 는 구간가 표가 정본**(1행=샘플 1개, 2행 시작=MOQ)이고 MOQ·소매배수 컬럼을 만들지 않는다(G10·G11)
 - 웹 점검은 `implementation-plan.md §6` W1~W11 — `/` 는 **검색 노출**, 운영 배포 후 **점진 등록**이라 빈 상태에서도 깨지지 않게. ⚠️ 디자인 정적 이미지는 출처 불명(제품 사진 `p01~p24` 반입 금지)
-- 다음: **22행 C** — `implementation-plan.md §3 3단계`(착수 세션이 명세) + `§6 W1~W11` + `server/modules/buyer.md` 공개 API + `§9` 20·21행 메모
+- 다음: **staging 병합(사용자 결정)** — 순서 server → admin → web, 병합 전 staging DB 마이그레이션. 확인 항목은 `§9` 22행 메모. 운영 배포 확인 후 트랙 퇴출(`§2`)
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -955,7 +955,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 19 | site-traffic | **어드민 대시보드 "사이트 트래픽 · 국가별 요청"**(Vercel Observability → `SiteTrafficDay` 일일 복사 + 지도) — 코드·마이그레이션(**staging DB 직접** — 사용자 지시)·문서 완료, **staging push 완료** | 완료 | ✗ | 2026-10-04 | fe5c982 / 9f2e333 / - / - / (이 커밋) |
 | 20 | buyer-platform | **A. klow_server** — 스키마·마이그레이션 `add_buyer_platform`(신규 테이블 8 · 카테고리 7종 SQL 시드 · **DB 브랜치 필수**) → `modules/buyer/`(완비 판정 함수) → `/admin/buyer/*` → 공개 `/v1/buyer/*` → 문의 저장+메일 → `server/modules/buyer.md`. 정지점: 스키마 끝 / 어드민 API 끝 — **git `feat/buyer-platform` + Neon DB 브랜치 `ep-sparkling-sun` 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | 47cc63d · 5b6e2c3 / - / - / - / (이 커밋) |
 | 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록 — **git `feat/buyer-platform`(klow_admin) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | - / d8b11dc / - / - / (이 커밋) |
-| 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(뒤로가기·빈 카트·빈 주문·탭바·로그아웃이 `/shop` 으로 새는 11곳 → 손님의 브랜드관, 없으면 숨김 · **별도 커밋, 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS 이식 → `/` 홈 → `/shop/brands/[slug]`·`/shop/products/[id]` → 문의 드로어 → **구 소비자 `/shop` 제거** → 결정 기록·문서 → staging push 안내(**server → admin → web**) | 대기 | ✗ | | |
+| 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(폴백·CTA·탭 11곳 → `consumerReturnHref()`, 없으면 숨김 · **`staging` 에 별도 커밋 — 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS · `(buyer)/` 홈·브랜드·PDP · 문의 드로어 · OG·sitemap → **구 소비자 `/shop` 삭제**(→ `/` 308) → 결정 기록·문서 — ②~⑥은 **git `feat/buyer-platform`(klow_web) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-05 | - / 4061858 / - / cdd83e6 · 8048663 · 9eaa271 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1019,6 +1019,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-platform — 22행 C (완료 · klow_web `cdd83e6`(staging) · `8048663`·`9eaa271`(feat/buyer-platform) · klow_admin `4061858`)
+
+- **계획과 다르게 한 것**: ① 제품 응답에 브랜드 slug 가 없어 `?brand=` 없는 PDP 의 "화면이 아는 브랜드"는 breadcrumb 뿐이다(서버 무변경 유지) — 대신 `?brand=` PDP 도 breadcrumb 를 남기고 결제 완료가 breadcrumb 를 지우지 않는다 ② 로그인 화면 로고는 링크 해제, 공용 `BackButton` 기본 폴백 `/` 도 같은 규칙(돌아갈 곳 없으면 숨김) ③ 스코프 밖 진입점(헤더 Sign in·샘플박스·히어로 'Get matched'·Concierge 섹션)은 Request 드로어로 바꿨다 ④ 로고월 "Shop all X" 는 컬렉션 필터 대신 브랜드 페이지 링크 ⑤ 리다이렉트는 Next `permanent`=**308**(계획의 301 대신) ⑥ Geist 는 `geist` 패키지.
+- **실측(로컬 서버 :4030 = DB 브랜치 `ep-sparkling-sun` · 웹 :3031, Playwright)**: ① 새 탭 PDP 뒤로가기 숨김 → `?brand=blink` 담기 → `/blink` · 카트 첫 탭 `/blink` · 빈 카트 CTA → `/blink` · 맥락 없는 탭은 CTA·첫 탭·뒤로가기 없음 · 로그인 뒤로가기 → `/blink` ② 시드(승인 브랜드 3·제품 9·선반·히어로)로 홈·탭·검색·빈 검색·로고월·브랜드·PDP(구간가·계산기·인증) · 문의 저장(브랜드·제품·qty 36 연결, dev 메일 로그) · 400px 가로 넘침 0 · 없는 id 404 · 전 브랜드 비공개+히어로 0 에서 `/` 렌더(기본 히어로·"New brands are being added"·브랜드 섹션 숨김) · prod 빌드: `/shop*` 308 · sitemap 에 노출 브랜드·제품 · canonical·og:image · OG 카드. 테스트 데이터는 지웠다(카테고리 시드 7만 남음).
+- **확인하지 못한 것**: 로그아웃 후 이동·빈 주문 CTA(로그인 필요 — 코드만) · 커스텀 도메인 `/` 에서 소비자 Footer 가 그대로 보이는지(훅이라 한 프레임 뒤 판정) · 실 R2 이미지의 4:5 크롭 비율은 어드민이 올린 이미지 기준.
+- ⚠️ 빌드는 `NEXT_PUBLIC_API_URL` 을 **인라인**한다 — 로컬에서 env 없이 빌드하면 :4000(다른 브랜치 서버)을 봐서 바이어 페이지가 전부 404 로 보인다(실제로 한 번 오진했다).
+- ⚠️ 결정 색인 건수가 이미 어긋나 있다(실제 앵커 89 · `decisions/README.md` 표 85행 · CLAUDE.md "77건") — 이 세션은 +1 만 했다. 정리는 별도 작업.
+- **staging 병합 뒤 확인**: `staging` 에서 `/`(빈 상태여도 깨지지 않음) → 어드민에서 브랜드 1곳 공개 → 1분 뒤 `/` 에 노출 · `/shop` → `/` · 문의 1건(운영팀 메일 수신) · 브랜드관 손님 흐름 ①.
 
 ### buyer-platform — 21행 B (완료 · klow_admin `d8b11dc`, 브랜치 `feat/buyer-platform` · staging 미병합)
 

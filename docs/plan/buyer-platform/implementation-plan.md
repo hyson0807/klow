@@ -187,7 +187,15 @@ model BuyerInquiry   { id · kind · subject(VarChar 200 — 디자인 "Brand or
 
 ### 3. C — klow_web: 바이어 공간 화면 + 구 /shop 제거 + 마무리 (`§7` 22행)
 
-제목과 순서만 둔다 — 전제(공개 API 응답 모양)는 1단계가 끝나야 확정된다. 착수 세션에서 §5 템플릿으로 명세한다.
+- **읽을 것**: 이 절 ①·② + `§6` W1~W11 · `server/modules/buyer.md` 공개 API 절 · `PROGRESS.md §9` 20·21행 메모
+- **건드리는 레포 · 배포 순서**: klow_web(+ klow_admin 안내 한 줄). **klow_server → klow_admin → klow_web** — web 이 먼저면
+  공개 API 404 → `/` 가 빈 상태로 굳는다(60초마다 재시도는 된다). ① 커밋만은 서버와 무관해 먼저 내보낼 수 있다
+- **스키마·데이터 위험**: 없음(서버 무변경). 의존성 `geist` 추가(Next 14 `next/font/google` 에 Geist 없음)
+- **할 일**: 아래 ① → ② 순서(①은 `staging` 에 별도 커밋, ②~⑥은 `feat/buyer-platform`)
+- **완료 기준**: ① 새 탭(히스토리 없음)에서 `?brand=` PDP → 담기 → 카트 → 비우기 → CTA·탭이 `/{브랜드}` 로, 맥락 없는
+  탭은 뒤로가기·CTA·첫 탭이 **숨김** · ② `/`·브랜드·PDP 가 디자인대로(데스크탑·400px, 가로 넘침 0) · 탭·검색·빈 검색 ·
+  문의 저장(브랜드·제품·수량 연결) · 없는 id 404 · **빈 DB 로 `/` 렌더**(히어로 기본 · Collection 안내 · 브랜드 섹션 숨김) ·
+  `/shop*` 3개 → `/` 영구 리다이렉트 · sitemap 에 노출 브랜드·제품 · `npm run build`
 
 #### ① 먼저 — 브랜드관 이탈 버그 수정 (README 결정 7 · G9)
 

@@ -1,12 +1,12 @@
 # 결정 기록 색인
 
-주제별 파일에 과거 결정 76건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
+주제별 파일에 과거 결정 77건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
 `CLAUDE.md` 의 `## 결정 기록` 에 같은 색인이 실려 매 세션 자동 로드된다 — 거기서 항목을 찾고 여기서 본문을 읽는다.
 
 | 주제 | 파일 | 건수 |
 |---|---|---|
 | 제품 · 가격 · 번역 | [`products.md`](./products.md) | 10 |
-| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 12 |
+| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 13 |
 | 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 14 |
 | 정산 | [`settlement.md`](./settlement.md) | 10 |
 | EFS 배송비 후청구 | [`efs-billing.md`](./efs-billing.md) | 2 |
@@ -103,3 +103,4 @@
 | `2026-09-30` | [엑셀로 자동 국제 송장 발급 — 링크 없이 명단으로](./shipping-seeding.md#2026-09-30-5) | shipping-seeding |
 | `2026-10-01` | [고객 직접 리뷰 — 배송완료 메일 링크 + 작성 페이지 (손님 화면 배지 없음)](./products.md#2026-10-01) | products |
 | `2026-10-04` | [어드민 "사이트 트래픽 · 국가별 요청" — Vercel Observability 를 매일 DB 로 복사](./platform.md#2026-10-04) | platform |
+| `2026-10-05` | [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · `.kb` 스코프 · 키프레임 `kb-` 접두)](./storefront.md#2026-10-05) | storefront |
