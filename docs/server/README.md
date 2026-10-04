@@ -57,6 +57,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [brand-crm](./modules/brand-crm.md)                                  | 브랜드 고객 관리(CRM) + 메일 발송 (주문에서 파생하는 고객 목록 · 태그/메모 · 템플릿 · 큐 발송 · 수신거부) |
 |            | [brand-notices](./modules/brand-notices.md)                          | 브랜드관 공지 팝업 (기간 한정 안내 · 사진 · 자동 번역 · 오늘 하루 보지 않기) |
 |            | [b2b](./modules/b2b.md)                                              | B2B 도매 — 바이어 공개 페이지(도매가·MOQ·구간) + 주문서 접수·알림메일 + AI 원본 가격표 추출 |
+|            | [buyer](./modules/buyer.md)                                          | 바이어 공간(klow.kr/) — 어드민 큐레이션 오버레이(브랜드·제품·구간가·홈 구성) + 공개 API + 문의 저장·메일 |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
 |            | [storefront-stats](./modules/storefront-stats.md)                     | 브랜드관 방문(일반/할인링크/현장) → 장바구니 담기 전환 퍼널 |
