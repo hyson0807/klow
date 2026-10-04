@@ -10,8 +10,8 @@
 | G1 | **원본 테이블(`Product`·`Brand`)에 쓰지 않는다.** 바이어 공간은 1:1 오버레이(`BuyerBrand.brandId @unique` · `BuyerProduct.productId @unique`)이고 원본은 읽기만 한다. 브랜드 스튜디오·소비자 PDP·번역이 무변경이어야 한다 |
 | G2 | **기존 `B2b*` 테이블을 읽지도 쓰지도 않는다** (README 결정 2) |
 | G3 | **노출 판정은 서버 한 곳**(`buyer` 모듈의 순수 함수 `buyerProductCompleteness()`)이 한다. 어드민 배지와 공개 API 가 같은 함수를 쓴다 — 두 벌이면 "어드민은 7/7 인데 손님 화면에 없다" 가 생긴다 |
-| G4 | 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 7 완비 && Brand.status != withdrawn && Brand.slug != null` 만 낸다. 브랜드는 노출 가능한 제품이 1개 이상일 때만 목록에 뜬다 |
-| G5 | **이미지 추종 규칙**: `BuyerProduct.images = []` 이면 응답 시점에 원본 `[image, ...detailImages]` 를 싣는다. 응답에 `imagesSource: 'original' \| 'custom'` 를 함께 실어 어드민이 구분한다. 로고도 동일(`logoUrl` null → 원본) |
+| G4 | 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 7 완비 && Brand.status != withdrawn && Product.status != rejected && Brand.slug != null` 만 낸다. `Product.hidden`·구독 상태는 **보지 않는다**(README 결정 5). 어드민 응답은 노출 불가 사유(`필수 누락 · slug 없음 · 반려 · 탈퇴`)를 함께 싣는다. 브랜드는 노출 가능한 제품이 1개 이상일 때만 목록에 뜬다 |
+| G5 | **이미지 추종 규칙**: `BuyerProduct.images = []` 이면 응답 시점에 원본 **대표사진 1장**(`image`, 비었으면 `detailImages` 의 첫 비동영상)만 싣는다. `detailImages` 전체를 싣지 않는다(README 결정 6). 응답에 `imagesSource: 'original' \| 'custom'` 를 함께 실어 어드민이 구분한다. 로고도 동일(`logoUrl` null → 원본) |
 | G6 | 가격은 **USD 센트 정수**(`unitUsdCents Int`). Decimal·환율을 쓰지 않는다 |
 | G7 | 문의 POST 는 완전 공개 쓰기라 `@Throttle(THROTTLE_TIGHT)` 필수 + 메일 HTML 의 모든 입력 `escapeHtml`(선례 `b2b-order-email.ts`) |
 | G8 | klow_web 바이어 CSS 는 **`.kb` 루트 아래로 전부 스코프**한다. 전역 셀렉터(`body`·`a`·`button`·`:root` 변수) 0건 |
@@ -104,9 +104,9 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
      `prefillFromProduct()`) · `buyer-inquiry-email.ts` · 검증 `common/validation/buyer.ts`(배럴 등록)
   3. `admin-buyer.controller.ts` (`admin/buyer`, AdminGuard) ← **정지점 ②**
      - 브랜드: `GET brands`(완비 집계 포함) · `GET brand-candidates?q=`(미등록 전 브랜드 검색) ·
-       `POST brands {brandId}` · `GET/PATCH/DELETE brands/:brandId` · `PUT brands/order {ids[]}`
+       `POST brands {brandId}` · `GET/PATCH/DELETE brands/:brandId`(⚠️ DELETE 는 입력한 제품 정보까지 cascade 로 지운다 — 어드민은 확인 모달 필수, 평소엔 공개 토글 OFF 를 권한다) · `PUT brands/order {ids[]}`
      - 제품: `GET brands/:brandId/products`(그 브랜드 원본 제품 전부 + 바이어 행 유무·완비) ·
-       `POST products {productId}`(프리필) · `GET/PATCH/DELETE products/:productId` ·
+       `POST products {productId}`(프리필 — `msrpUsdCents` 는 소비자 `basePriceUsd` 에서) · `GET/PATCH/DELETE products/:productId`(GET 은 이미지 편집기용 원본 상세컷 목록 `originalImages` 포함) ·
        `PUT products/:productId/tiers {tiers[]}`(전체 교체, 최대 6, 첫 행 minQty=1, minQty 오름차순·단가 >0) ·
        `PATCH products/bulk {productIds[], categoryId?, published?}`
      - 홈: 카테고리 CRUD + `PUT categories/order` · 히어로 CRUD + order · 선반 CRUD + order + `PUT shelves/:id/items`
@@ -145,7 +145,7 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
   4. `/buyer/products/[productId]` — 2단 레이아웃. 좌: 섹션 카드(기본·인증·도매가·상세·이미지),
      우: sticky **미리보기**(바이어 카드 4:5 + PDP 상단 배지·구간가 표). 바이어 CSS 의 해당 부분만
      admin 에 `.kb-preview` 스코프로 복사. 구간가 "자동 채우기" · 이미지 업로드(`lib/upload.ts`)·
-     4:5 크롭(`ImageCropModal` 재사용)·**`@dnd-kit` 추가로 드래그 정렬**·원본으로 되돌리기 ← **정지점**
+     4:5 크롭(`ImageCropModal` 재사용)·**`@dnd-kit` 추가로 드래그 정렬**·**원본 상세컷에서 골라 넣기**(`originalImages` 피커)·원본으로 되돌리기 ← **정지점**
   5. `/buyer/home` — 탭 3개: 카테고리(이름 인라인 편집·드래그 순서·삭제 시 소속 제품 수 경고) ·
      히어로(이미지·연결 제품·캡션·순서) · 선반(제목·리드·4/8·제품 피커 모달·태그·순서)
   6. `/buyer/inquiries` — 목록(종류·브랜드/제품·회사·이메일·상태) + 상세 드로어(처리 완료·메모)

@@ -56,11 +56,16 @@
 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 완비` 인 것만 낸다.
 필수 7: **카테고리 · 구간가 ≥1행 · About · Size · Made in · Ingredients · 이미지 ≥1장(원본 포함)**.
 소비자 쪽 구독 게이트(`PUBLIC_PRODUCT_WHERE`)와 **무관**하다 — 이 공간의 게이트는 어드민 큐레이션이다.
-단 브랜드 `status = withdrawn` 은 제외한다. 미완비여도 저장은 막지 않고 어드민이 "필수 n/7" 로 보여준다.
+자동으로 내리는 것은 **브랜드 탈퇴(`withdrawn`)와 제품 반려(`Product.status = rejected`) 둘뿐**이다 — 브랜드의
+제품 가리기(`hidden`)·구독 해지는 소비자 판매의 문제라 바이어 공간은 어드민 공개 토글이 정한다(2026-10-04 사용자 결정).
+`Brand.slug` 가 없는 브랜드는 바이어 브랜드 페이지 주소가 없어 노출할 수 없다 — 어드민에 "slug 없음" 으로 띄운다. 미완비여도 저장은 막지 않고 어드민이 "필수 n/7" 로 보여준다.
 
 ### 6. 이미지 — 비어 있으면 브랜드 원본을 따라가고, 세팅하면 덮는다
 
-`BuyerProduct.images` 가 **빈 배열이면 원본(`Product.image` + `detailImages`)을 실시간으로 쓴다.**
+`BuyerProduct.images` 가 **빈 배열이면 원본 대표사진 1장(`Product.image`, 비었으면 `detailImages` 의 첫 사진)을
+실시간으로 쓴다.** `detailImages` 는 소비자 PDP 본문용 상세컷(세로로 긴 한글 상세페이지·동영상 포함)이라 바이어
+갤러리에 통째로 넣지 않는다(2026-10-04 사용자 결정) — 어드민 이미지 편집기에서 **"원본 상세컷에서 골라 넣기"** 로
+한 장씩 가져올 수는 있다.
 관리자가 한 장이라도 세팅하면 그 배열이 정본이 된다. "원본 이미지로 되돌리기" = 배열 비우기.
 처음 올리면 브랜드가 꾸민 이미지가 그대로 보이고(사용자 요구), 관리자가 바꾼 뒤엔 브랜드가 원본을
 고쳐도 바이어 공간이 흔들리지 않는다. 브랜드 로고도 같은 규칙(`BuyerBrand.logoUrl` null = 원본 로고).
@@ -76,6 +81,12 @@
 브랜드) → 이 탭에서 마지막으로 본 브랜드관(sessionStorage breadcrumb `klow-brand-return`)` 이다.
 셋 다 없으면 **버튼을 숨긴다**(엉뚱한 곳으로 보내느니 없는 게 낫다). 이 판단은 `lib/brandReturn.ts` 의
 헬퍼 하나가 하고 호출부는 그걸 부른다. 대상 목록은 `implementation-plan.md §3 3단계 ①`.
+
+### 8. 디자인 문구는 그대로, 문의 수신은 KLOW 운영팀만 (2026-10-04 사용자 결정)
+
+히어로("Samples at wholesale price. Even just one unit.")·기둥(1 unit / 5 SKUs)·Sample program 섹션·구간가 첫 행
+`sample` 은 **디자인 문구 그대로** 둔다. 샘플 요청은 그동안 문의 폼으로 받는다(샘플 버튼 자체는 결정 4대로 숨김).
+문의는 **KLOW 운영팀만** 받는다 — 브랜드에 사본을 보내지 않고 klow_brand 도 무변경이다.
 
 ## 스코프 밖
 

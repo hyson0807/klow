@@ -32,7 +32,7 @@
 | 구간가 "자동 채우기" | MOQ·기준 도매가를 넣으면 디자인 비율(1~MOQ-1 샘플=기준가, MOQ=기준가, 3×MOQ ×0.94, 8×MOQ ×0.88, 20×MOQ ×0.82)로 5행 생성 → 수기 수정 |
 | 카테고리 일괄 지정 | 브랜드 제품 표에서 체크 → 드롭다운 한 번 |
 | 실시간 미리보기 | 바이어 공간의 카드(4:5)와 PDP 상단을 같은 CSS 로 렌더 — "예쁘게 다시 세팅" 하는 작업의 피드백 루프 |
-| 이미지 드래그 정렬 · 4:5 크롭 · 원본으로 되돌리기 | 이미지 재세팅이 이 트랙의 핵심 작업이다(사용자 강조) |
+| 이미지 드래그 정렬 · 4:5 크롭 · 원본 상세컷에서 골라 넣기 · 원본으로 되돌리기 | 이미지 재세팅이 이 트랙의 핵심 작업이다(사용자 강조) |
 
 ## 2. 디자인 필드 ↔ 스키마 매핑
 
@@ -53,10 +53,10 @@
 | Shelf life | `copy.shelfMonths` | `BuyerProduct.shelfLifeMonths Int?` | "N months unopened" |
 | Made in | `brand.city, Korea · on market since` | `BuyerProduct.madeIn` 자유 텍스트 | |
 | Ingredients | `copy.inci` | `BuyerProduct.ingredients` | |
-| 갤러리 | 팩샷 + 공용 연출컷 | `BuyerProduct.images String[]` (빈 배열 = 원본 추종) | 카드 4:5 |
+| 갤러리 | 팩샷 + 공용 연출컷 | `BuyerProduct.images String[]` (빈 배열 = 원본 대표사진 1장) | 카드 4:5. 상세컷은 골라 넣기로만 |
 | 카테고리 | `category` 7종 | `BuyerProduct.categoryId → BuyerCategory` | 7종 시드 |
 | 뱃지(Bestseller/New) | `badge` | `BuyerProduct.badge String?` | 선택 |
-| MSRP | `msrp` | `BuyerProduct.msrpUsdCents Int?` | 선택 — 카드·선반 태그용 |
+| MSRP | `msrp` | `BuyerProduct.msrpUsdCents Int?` | 선택 — 카드·선반 태그용. 소비자 `basePriceUsd` 프리필 |
 
 ### 브랜드 (`BrandDetail.tsx`, `Brands.tsx`)
 
