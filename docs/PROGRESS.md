@@ -881,6 +881,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
   `BuyerProduct`)만 쓴다(G1·G2). 도매 구간가도 바이어 전용 `BuyerPriceTier`(USD 센트)다
 - ⚠️ **노출 판정 함수는 서버에 하나**(G3) — 어드민 "필수 n/7" 배지와 공개 API 가 같은 함수를 쓴다
 - ⚠️ 이미지는 **빈 배열 = 브랜드 원본 추종**, 세팅하면 덮는다(G5)
+- ⚠️⚠️ **브랜드관 손님이 `/shop`(또는 바뀐 뒤의 `/` = 바이어 공간)으로 새는 것은 지금도 버그다** — 22행 ①이
+  폴백·CTA·탭 11곳을 "그 손님의 브랜드관(없으면 숨김)" 으로 고친다(README 결정 7 · G9). 폴백을 `/` 로 바꿔 끼우지 말 것
 - ⚠️ 22행(C)은 구 소비자 `/shop` 을 **삭제**한다 — **서버 배포 후에만** klow_web 을 내보낸다(먼저면 `/` 가 빈 화면)
 - 다음: **20행 A** — `implementation-plan.md §3 1단계`
 
@@ -944,7 +946,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 19 | site-traffic | **어드민 대시보드 "사이트 트래픽 · 국가별 요청"**(Vercel Observability → `SiteTrafficDay` 일일 복사 + 지도) — 코드·마이그레이션(**staging DB 직접** — 사용자 지시)·문서 완료, **staging push 완료** | 완료 | ✗ | 2026-10-04 | fe5c982 / 9f2e333 / - / - / (이 커밋) |
 | 20 | buyer-platform | **A. klow_server** — 스키마·마이그레이션 `add_buyer_platform`(신규 테이블 8 · 카테고리 7종 SQL 시드 · **DB 브랜치 필수**) → `modules/buyer/`(완비 판정 함수) → `/admin/buyer/*` → 공개 `/v1/buyer/*` → 문의 저장+메일 → `server/modules/buyer.md`. 정지점: 스키마 끝 / 어드민 API 끝 | 대기 | ✗ | | |
 | 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록. 정지점: 제품 편집기 끝 | 대기 | ✗ | | |
-| 22 | buyer-platform | **C. klow_web 바이어 공간** — `.kb` 스코프 CSS 이식 → `/` 홈 → `/shop/brands/[slug]`·`/shop/products/[id]` → 문의 드로어 → **구 소비자 `/shop` 제거** → 결정 기록·문서 → staging push 안내(**server → admin → web**) | 대기 | ✗ | | |
+| 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(뒤로가기·빈 카트·빈 주문·탭바·로그아웃이 `/shop` 으로 새는 11곳 → 손님의 브랜드관, 없으면 숨김 · **별도 커밋, 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS 이식 → `/` 홈 → `/shop/brands/[slug]`·`/shop/products/[id]` → 문의 드로어 → **구 소비자 `/shop` 제거** → 결정 기록·문서 → staging push 안내(**server → admin → web**) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포

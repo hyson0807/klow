@@ -15,6 +15,7 @@
 | G6 | 가격은 **USD 센트 정수**(`unitUsdCents Int`). Decimal·환율을 쓰지 않는다 |
 | G7 | 문의 POST 는 완전 공개 쓰기라 `@Throttle(THROTTLE_TIGHT)` 필수 + 메일 HTML 의 모든 입력 `escapeHtml`(선례 `b2b-order-email.ts`) |
 | G8 | klow_web 바이어 CSS 는 **`.kb` 루트 아래로 전부 스코프**한다. 전역 셀렉터(`body`·`a`·`button`·`:root` 변수) 0건 |
+| G9 | **소비자 화면은 `/shop`·`/` 로 보내지 않는다** — 폴백·CTA·탭의 목적지는 `consumerReturnHref()`(브랜드관) 하나로만 정하고, 없으면 숨긴다(README 결정 7). 바이어 화면(`/`·`/shop/*`)과 소비자 화면 사이에 링크가 0건이어야 한다 |
 
 ## §2 스키마 초안 (1단계에서 확정)
 
@@ -157,20 +158,51 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
 
 제목과 순서만 둔다 — 전제(공개 API 응답 모양)는 1단계가 끝나야 확정된다. 착수 세션에서 §5 템플릿으로 명세한다.
 
-세션 안 순서: ① `KLOWBUYER/app/globals.css` 를 `.kb` 스코프로 이식 + Geist 폰트 + 바이어 전용 Header/Footer
-(BottomTabBar·소비자 Footer·Onboarding 은 `/` 와 `/shop/*` 에서 숨김) → ② `/` 홈(HeroSlides · Collection:
-Curated 선반 / All / 카테고리 탭 + 검색 · 브랜드 로고월 + 패널) → ③ `/shop/brands/[slug]` · `/shop/products/[id]`
-(갤러리 · 인증 배지 · 구간가 표 + 수량 계산기 · 상세 스펙 · More from brand) → ④ Request 드로어 →
-`POST /v1/buyer/inquiries` → ⑤ 구 `/shop`·`/shop/search`·`/shop/recommendations` 삭제, 탭바 shop 탭 정리,
-`useSmartBack('/shop')` 6곳 → `/`, onboarding·`sitemap.ts` 정리 → ⑥ 결정 기록(`decisions/storefront.md` +
+#### ① 먼저 — 브랜드관 이탈 버그 수정 (README 결정 7 · G9)
+
+**바이어 공간과 독립이라 세션 첫 순서로 하고 커밋을 따로 뗀다** — 서버 배포와 무관하게 먼저 내보낼 수 있다.
+`lib/brandReturn.ts` 에 `consumerReturnHref(ctx)` 를 두고(우선순위: 현장 복귀 → 화면이 아는 브랜드 →
+`readBrandReturn()` → `null`) 아래 호출부를 전부 그걸로 바꾼다. `null` 이면 버튼·링크·탭을 **숨긴다.**
+
+| 위치 (2026-10-04 실측) | 지금 | 바꿀 것 |
+|---|---|---|
+| `components/brand/BrandStorefront.tsx:127` (`BrandError` 뒤로가기) | `useSmartBack("/shop")` | 히스토리 없으면 `readBrandReturn()`, 없으면 숨김 |
+| `app/product/[id]/page.tsx:107` 뒤로가기 | `brandHref ?? "/shop"` | `?brand=` 없으면 **제품 응답의 브랜드 slug**(착수 시 DTO 필드 확인) |
+| `app/product/[id]/page.tsx:182` 담기 후 이동 | `readOnsiteReturn() \|\| "/shop"` · `brandHref ?? "/shop"` | 같은 헬퍼 |
+| `app/cart/page.tsx:64-68` `backHref`(헤더 뒤로 + 빈 카트 CTA) | 현장/브랜드 없으면 `/shop` | 헬퍼 + 카트 아이템의 브랜드 |
+| `app/checkout/onsite/page.tsx:29` | `useSmartBack('/shop')` | `readOnsiteReturn()` |
+| `app/orders/page.tsx:145` 빈 주문 "쇼핑 시작" | `href="/shop"` | 헬퍼, 없으면 CTA 숨김 |
+| `components/layout/BottomTabBar.tsx:21` shop 탭(`/cart`·`/my` 에서 보임) | `/shop` | **"브랜드관" 탭 → `readBrandReturn()`**, 없으면 탭 생략 |
+| `app/my/page.tsx:125` 로그아웃 후 | `router.replace('/')` | 헬퍼, 없으면 `/login` |
+| `app/login/page.tsx:65·76` 뒤로 폴백 · 로고 링크 | `'/'` | 헬퍼 / 로고는 링크 해제 |
+| `components/auth/{LoginForm:41,SignupForm:80}` `returnTo` 기본값 | `'/'` | 헬퍼, 없으면 `/my` |
+| `middleware.ts:45` 주석 | `/shop` 언급 | 갱신 |
+
+이미 맞게 된 선례: `checkout/_components/SuccessView.tsx` 의 "계속 쇼핑"(돌아갈 브랜드관을 알 때만 띄운다) —
+같은 정책을 전 화면으로 넓히는 것이다. ⚠️ breadcrumb 는 **sessionStorage(탭 한정)** 라 새 탭에서는 비어 있다 —
+그래서 "화면이 아는 브랜드"가 앞순위다.
+
+완료 기준: 브랜드관 링크를 **새 탭(히스토리 없음)**으로 열고 → 제품 → 카트 → 카트 비우기 → 뒤로/CTA,
+`/my`·`/orders` 탭 이동, 로그아웃까지 해도 **주소창이 `/shop`·`/` 가 되는 순간이 0번**. `grep -rn "'/shop'\|\"/shop\"" src`
+결과가 바이어 페이지 외 0건.
+
+#### ② 이후 — 바이어 공간
+
+세션 안 순서: ② `KLOWBUYER/app/globals.css` 를 `.kb` 스코프로 이식 + Geist 폰트 + 바이어 전용 Header/Footer
+(BottomTabBar·소비자 Footer·Onboarding 은 `/` 와 `/shop/*` 에서 숨김) → ③ `/` 홈(HeroSlides · Collection:
+Curated 선반 / All / 카테고리 탭 + 검색 · 브랜드 로고월 + 패널) → ④ `/shop/brands/[slug]` · `/shop/products/[id]`
+(갤러리 · 인증 배지 · 구간가 표 + 수량 계산기 · 상세 스펙 · More from brand) → ⑤ Request 드로어 →
+`POST /v1/buyer/inquiries` → ⑥ 구 `/shop`·`/shop/search`·`/shop/recommendations` 삭제(①로 참조가 이미 0건),
+onboarding 자동 노출 경로·`sitemap.ts` 정리 → ⑦ 결정 기록(`decisions/storefront.md` +
 `decisions/README.md` + CLAUDE.md 색인) · CLAUDE.md `klow_web pages` 갱신 · staging push 안내
 
 ⚠️ 착수 시 확인할 것
 - **커스텀 도메인**: `/` 는 커스텀 도메인에서 브랜드관으로 rewrite 되므로 영향 없음. `shop` 은 이미
   `KLOW_ONLY_SEGMENTS`(→ klow.kr 307) — `/shop/*` 바이어 페이지도 klow.kr 로 간다(의도와 일치)
 - **SEO**: `/` 의 메타·OG 가 소비자 문구다 → 바이어 문구로. 구 `/shop` URL 은 `/` 로 301
-- `useSmartBack` 폴백을 `/` 로 바꾸면 소비자 브랜드관에서 뒤로가기 폴백이 바이어 홈이 된다 — 수용 가능한지
-  착수 시 사용자에게 한 줄 확인
+- ⚠️ ⑥ 의 삭제는 **① 이 끝난 뒤에만** — 순서가 뒤집히면 남은 `/shop` 링크가 404 가 된다
+- onboarding 자동 노출이 지금 `/shop` 한 곳에만 걸려 있다(`OnboardingMount.tsx:23`) — 삭제 후 국가 선택이
+  브랜드관 유입의 `useGuestCountryPrompt` 로만 도는지 확인
 - 디자인의 Sample 버튼·샘플박스 바·AskProduct·리뷰·`/match`·signin 은 **이식하지 않는다**(README 스코프 밖)
 
 배포 순서: **klow_server → klow_admin → klow_web**. web 이 먼저면 공개 API 404 → `/` 가 빈 화면(구 `/shop`
