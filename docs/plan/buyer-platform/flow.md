@@ -27,8 +27,9 @@
 
 | 장치 | 왜 |
 |---|---|
-| 원본 값 프리필 | 제품 추가 시 `volume`→Size, `ingredients`→Ingredients, `countryOfOrigin`→Made in, `expiryInfo` 에서 개월수 추출 시도→Shelf life, `keyIngredients`→Key actives. 빈칸에서 시작하지 않는다 |
-| 완비 배지 `필수 n/7` | 브랜드 표·제품 표 양쪽. 무엇이 빠졌는지 hover 로 목록 |
+| 원본 값 프리필 (보조 — 운영 원본은 대부분 빈칸, `implementation-plan.md §4` R2) | 제품 추가 시 `volume`→Size, `ingredients`→Ingredients, `countryOfOrigin`→Made in, `expiryInfo` 에서 개월수 추출 시도→Shelf life, `keyIngredients`→Key actives. 빈칸에서 시작하지 않는다 |
+| 완비 배지 `필수 n/7` · 칸별 누락 점 | 브랜드 카드·제품 표 양쪽. 노출 불가 사유(필수 누락·slug 없음·미승인)도 함께 |
+| **저장하고 다음 미완비 제품 →** | 대량 입력의 본체(사용자 결정 — 엑셀·AI 초안 대신). 같은 브랜드 안에서 다음 미완비 제품으로 바로 넘어간다 |
 | 구간가 "자동 채우기" | MOQ·기준 도매가를 넣으면 디자인 비율(1~MOQ-1 샘플=기준가, MOQ=기준가, 3×MOQ ×0.94, 8×MOQ ×0.88, 20×MOQ ×0.82)로 5행 생성 → 수기 수정 |
 | 카테고리 일괄 지정 | 브랜드 제품 표에서 체크 → 드롭다운 한 번 |
 | 실시간 미리보기 | 바이어 공간의 카드(4:5)와 PDP 상단을 같은 CSS 로 렌더 — "예쁘게 다시 세팅" 하는 작업의 피드백 루프 |

@@ -10,7 +10,7 @@
 | G1 | **원본 테이블(`Product`·`Brand`)에 쓰지 않는다.** 바이어 공간은 1:1 오버레이(`BuyerBrand.brandId @unique` · `BuyerProduct.productId @unique`)이고 원본은 읽기만 한다. 브랜드 스튜디오·소비자 PDP·번역이 무변경이어야 한다 |
 | G2 | **기존 `B2b*` 테이블을 읽지도 쓰지도 않는다** (README 결정 2) |
 | G3 | **노출 판정은 서버 한 곳**(`buyer` 모듈의 순수 함수 `buyerProductCompleteness()`)이 한다. 어드민 배지와 공개 API 가 같은 함수를 쓴다 — 두 벌이면 "어드민은 7/7 인데 손님 화면에 없다" 가 생긴다 |
-| G4 | 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 7 완비 && Brand.status != withdrawn && Product.status != rejected && Brand.slug != null` 만 낸다. `Product.hidden`·구독 상태는 **보지 않는다**(README 결정 5). 어드민 응답은 노출 불가 사유(`필수 누락 · slug 없음 · 반려 · 탈퇴`)를 함께 싣는다. 브랜드는 노출 가능한 제품이 1개 이상일 때만 목록에 뜬다 |
+| G4 | 공개 API 는 `BuyerBrand.published && BuyerProduct.published && 필수 7 완비 && Brand.status = approved && Product.status = approved && Brand.slug != null` 만 낸다. `Product.hidden`·구독 상태는 **보지 않는다**(README 결정 5). 어드민 응답은 노출 불가 사유(`필수 누락 · slug 없음 · 브랜드 미승인 · 제품 미승인`)를 함께 싣는다. 브랜드는 노출 가능한 제품이 1개 이상일 때만 목록에 뜬다 |
 | G5 | **이미지 추종 규칙**: `BuyerProduct.images = []` 이면 응답 시점에 원본 **대표사진 1장**(`image`, 비었으면 `detailImages` 의 첫 비동영상)만 싣는다. `detailImages` 전체를 싣지 않는다(README 결정 6). 응답에 `imagesSource: 'original' \| 'custom'` 를 함께 실어 어드민이 구분한다. 로고도 동일(`logoUrl` null → 원본) |
 | G6 | 가격은 **USD 센트 정수**(`unitUsdCents Int`). Decimal·환율을 쓰지 않는다 |
 | G7 | 문의 POST 는 완전 공개 쓰기라 `@Throttle(THROTTLE_TIGHT)` 필수 + 메일 HTML 의 모든 입력 `escapeHtml`(선례 `b2b-order-email.ts`) |
@@ -103,14 +103,19 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
      `buyer-public.service.ts` · `buyer.mapper.ts` · `buyer-completeness.ts`(G3 순수 함수 + 프리필 함수
      `prefillFromProduct()`) · `buyer-inquiry-email.ts` · 검증 `common/validation/buyer.ts`(배럴 등록)
   3. `admin-buyer.controller.ts` (`admin/buyer`, AdminGuard) ← **정지점 ②**
-     - 브랜드: `GET brands`(완비 집계 포함) · `GET brand-candidates?q=`(미등록 전 브랜드 검색) ·
+     - 브랜드: `GET brands`(완비 집계 + 필수 칸별 누락 수 + 노출 제품 수) · `GET brand-candidates?q=`(**승인 브랜드만**, 이미 올린 것은 `added:true` — 기존 `GET /admin/brands` 는 승인 필터·추가 여부가 없어 재사용하지 않는다) ·
        `POST brands {brandId}` · `GET/PATCH/DELETE brands/:brandId`(⚠️ DELETE 는 입력한 제품 정보까지 cascade 로 지운다 — 어드민은 확인 모달 필수, 평소엔 공개 토글 OFF 를 권한다) · `PUT brands/order {ids[]}`
-     - 제품: `GET brands/:brandId/products`(그 브랜드 원본 제품 전부 + 바이어 행 유무·완비) ·
-       `POST products {productId}`(프리필 — `msrpUsdCents` 는 소비자 `basePriceUsd` 에서) · `GET/PATCH/DELETE products/:productId`(GET 은 이미지 편집기용 원본 상세컷 목록 `originalImages` 포함) ·
-       `PUT products/:productId/tiers {tiers[]}`(전체 교체, 최대 6, 첫 행 minQty=1, minQty 오름차순·단가 >0) ·
+     - 제품: `GET brands/:brandId/products`(그 브랜드 **승인** 제품 + 바이어 행 유무·필수 칸별 누락·노출 불가 사유) ·
+       `POST products {productId}`(**승인 제품만** · 프리필 — 원본은 영어로 저장돼 있어 그대로 옮긴다: `name`→nameEn · `volume`→Size · `ingredients` · `countryOfOrigin`→Made in · `expiryInfo` 개월수 · `keyIngredients`→Key actives · `basePriceUsd`→msrp. ⚠️ 운영 실측상 대부분 **빈칸**이라 프리필이 해결책이 아니다 — 아래 §4) · `GET/PATCH/DELETE products/:productId`(GET 은 이미지 편집기용 원본 상세컷 목록 `originalImages` 포함) ·
+       구간가는 **`PATCH products/:productId` 의 `tiers` 필드로 같은 트랜잭션에서 전체 교체**(최대 6, 첫 행 minQty=1, minQty 오름차순·단가 >0) — 별도 PUT 로 떼면 편집기 저장 한 번이 요청 둘이 되어 반쪽 저장이 생긴다. GET 응답에 `preview`(공개 매퍼로 만든 PDP 모양, published 무시)와 `nextIncompleteProductId`(같은 브랜드의 다음 미완비 제품)를 싣는다 ·
        `PATCH products/bulk {productIds[], categoryId?, published?}`
-     - 홈: 카테고리 CRUD + `PUT categories/order` · 히어로 CRUD + order · 선반 CRUD + order + `PUT shelves/:id/items`
+     - 홈: 카테고리 CRUD + `PUT categories/order`(⚠️ **소속 제품이 있으면 DELETE 409** — `SetNull` 로 두면 그 제품들이 필수 미달이 되어 바이어 화면에서 **조용히 사라진다**) · 히어로 CRUD + order · 선반 CRUD + order + `PUT shelves/:id/items`
      - 문의: `GET inquiries?status=` · `PATCH inquiries/:id {status, adminNote}`
+     - 이미지 재크롭용: `GET image-source?url=` — 기존 이미지(브랜드 원본·이미 올린 것)를 받아 크롭 모달에 넣기 위한 프록시.
+       ⚠️ **SSRF 축**이라 호스트를 `R2_PUBLIC_BASE` 와 운영 CDN(`cdn.klow.kr`) 로 **고정 화이트리스트**한다. 2단계 착수 시
+       R2 CORS 가 어드민 오리진 GET 을 이미 허용하면 이 라우트는 만들지 않는다(그 판정을 인계 메모에 남길 것)
+     - 모든 PATCH 스키마는 **`patchOf()`**(`common/validation/shared.ts`) — `.partial()` 은 zod v4 에서 default 를 주입해
+       보내지 않은 칸을 덮는다(2026-07 사고)
   4. `public-buyer.controller.ts` (`v1/buyer`, public)
      - `GET home` → `{ heroSlides, categories, shelves(+items 카드), brands(로고월+패널 요약) }`
      - `GET products?category=&q=&take=&cursor=` → 카드 목록
@@ -135,23 +140,37 @@ model BuyerInquiry   { id · kind · brandId? · productId? · qty? · company �
 - **건드리는 레포 · 배포 순서**: klow_admin. 서버(1단계)가 먼저 — 뒤집으면 모든 화면 404 토스트
 - **스키마·데이터 위험**: 없음
 - **할 일** (세션 안 순서 = 정지점)
-  1. `lib/api/buyer.ts`(DTO + `buyerApi`, 배럴 export) · `Sidebar.tsx` 에 그룹 **"바이어 공간"**
-     (`/buyer` 브랜드 · `/buyer/home` 홈 구성 · `/buyer/inquiries` 문의) · `components/tabs/routeLabels.ts`
+  1. `lib/api/buyer.ts`(DTO + `buyerApi`, 배럴 export) · `Sidebar.tsx` `NAV` 에 그룹 **"바이어 공간"**(lucide 아이콘
+     필수 · **모든 어드민** — `superOnly` 없음, 2026-10-04 사용자 결정; `/buyer` 브랜드 · `/buyer/home` 홈 구성 ·
+     `/buyer/inquiries` 문의) · `components/tabs/routeLabels.ts` 에 `/buyer`·`/buyer/brands`·`/buyer/products`·
+     `/buyer/home`·`/buyer/inquiries` 를 **각각** 등록(접두 최장일치라 상세 라우트도 이 라벨을 탄다 — 안 넣으면
+     탭 제목이 경로 조각이 된다)
   2. `/buyer` — 올린 브랜드 카드 목록(로고·이름·공개 토글·`필수 완비 제품 n/m`·드래그 순서) +
      "브랜드 추가" 검색 모달
   3. `/buyer/brands/[brandId]` — 상단 브랜드 프로필 폼(지역은 칩 멀티선택, 로고 교체/원본으로) +
-     하단 제품 표(썸네일·이름·추가 토글·카테고리 드롭다운·완비 배지(hover 로 빠진 항목)·공개 토글·
-     체크박스 일괄 카테고리/공개)
-  4. `/buyer/products/[productId]` — 2단 레이아웃. 좌: 섹션 카드(기본·인증·도매가·상세·이미지),
-     우: sticky **미리보기**(바이어 카드 4:5 + PDP 상단 배지·구간가 표). 바이어 CSS 의 해당 부분만
-     admin 에 `.kb-preview` 스코프로 복사. 구간가 "자동 채우기" · 이미지 업로드(`lib/upload.ts`)·
-     4:5 크롭(`ImageCropModal` 재사용)·**`@dnd-kit` 추가로 드래그 정렬**·**원본 상세컷에서 골라 넣기**(`originalImages` 피커)·원본으로 되돌리기 ← **정지점**
-  5. `/buyer/home` — 탭 3개: 카테고리(이름 인라인 편집·드래그 순서·삭제 시 소속 제품 수 경고) ·
-     히어로(이미지·연결 제품·캡션·순서) · 선반(제목·리드·4/8·제품 피커 모달·태그·순서)
+     하단 제품 표(썸네일·이름·**필수 7칸 누락 점 표시**·카테고리 드롭다운·노출 불가 사유·공개 토글·체크박스
+     일괄 카테고리/공개). ⚠️ 표의 "빼기"는 **공개 OFF** 다 — 바이어 행 삭제(입력값 전부 소멸)는 행 메뉴의 별도
+     항목 + 확인 모달. 공개 ON 인데 노출 제품 0 이면 브랜드 상단에 "바이어 화면에 안 보임" 경고
+  4. `/buyer/products/[productId]` — ⚠️ **`useFormState` 를 쓰지 않는다** — 저장 후 `router.push(redirectPath)` 로
+     떠나고 dirty 추적이 없어서 연속 편집과 맞지 않는다. 전용 상태 + 토스트 직접 호출(CLAUDE.md 규칙) +
+     **미저장 경고**(`beforeunload` + 페이지 안 링크 이동 확인 — 어드민에 선례가 0건이라 새로 만든다).
+     버튼은 `저장` / **`저장하고 다음 미완비 제품 →`**(`nextIncompleteProductId`, 2026-10-04 사용자 결정 — 대량 입력은
+     화면 연속 편집으로 한다) / `← 브랜드로`(iframe 탭이라 같은 탭 안 이동이다). 2단 레이아웃. 좌: 섹션 카드(기본·인증·도매가·상세·이미지),
+     우: sticky **미리보기**(바이어 카드 4:5 + PDP 상단 배지·구간가 표). 선례 `components/preview/ProductPreviewPanel.tsx`
+     (klow_web PDP 의 **로컬 미러 컴포넌트**, iframe 아님)를 따라 `components/preview/BuyerPreview*.tsx` 로 만들고 파일
+     머리에 "`KLOWBUYER/` · klow_web 바이어 화면과 동기화" 주석을 단다. CSS 는 `.kb-preview` 스코프, 폰트는 어드민에
+     `next/font` 가 없으니 시스템 폰트 폴백을 허용한다(레이아웃 확인용). 가격 입력은 **달러로 받고 센트로 변환**. 구간가 "자동 채우기" · 이미지 업로드(`lib/upload.ts`)·
+     4:5 크롭(`ImageCropModal` 은 `aspect={4/5}` 그대로 됨. `MultiImageUpload` 는 크롭이 없어 **새 `BuyerImageList`** 를
+     만든다 — 업로드 시 크롭 + 기존 이미지 재크롭(1단계 `image-source` 또는 R2 CORS) · preset `product-main`)·
+     **`@dnd-kit` 추가로 드래그 정렬**(어드민에 DnD 라이브러리 0개 — klow_brand 버전에 맞춘다)·**원본 상세컷에서 골라 넣기**(`originalImages` 피커)·원본으로 되돌리기 ← **정지점**
+  5. `/buyer/home` — 탭 3개: 카테고리(이름 인라인 편집·드래그 순서·소속 제품 수 표시·**제품이 있으면 삭제 비활성**) ·
+     히어로(이미지는 디자인 프레임 비율 4/4.6 로 크롭·연결 제품·캡션·순서) · 선반(제목·리드·4/8·**노출 제품만 고르는**
+     피커 모달·태그·순서). 선반·히어로가 가리키는 제품이 비노출이 되면 "비노출" 배지(공개 API 는 자동 제외)
   6. `/buyer/inquiries` — 목록(종류·브랜드/제품·회사·이메일·상태) + 상세 드로어(처리 완료·메모)
 - **완료 기준**
   - 모든 저장/삭제/오류가 토스트(CLAUDE.md 규칙) · `npm run build` 통과
-  - 화면: 브랜드 추가 → 제품 3개 추가·채움 → 미리보기가 입력과 함께 바뀜 → 이미지 순서 바꾸고 새로고침
+  - 화면: 브랜드 추가(후보에 승인 브랜드만) → 제품 3개 추가 → **"저장하고 다음"** 으로 셋을 연달아 채움 → 미저장 상태로
+    탭 이동 시 경고 → 브랜드 원본 이미지를 4:5 로 재크롭해 저장 → 미리보기가 입력과 함께 바뀜 → 이미지 순서 바꾸고 새로고침
     후 유지 → "원본으로" 시 브랜드 원본 이미지 복귀 → 홈 구성에서 선반에 넣은 제품이 `GET /v1/buyer/home` 에 보임
 
 ### 3. C — klow_web: 바이어 공간 화면 + 구 /shop 제거 + 마무리 (`§7` 22행)
@@ -207,3 +226,23 @@ onboarding 자동 노출 경로·`sitemap.ts` 정리 → ⑦ 결정 기록(`deci
 
 배포 순서: **klow_server → klow_admin → klow_web**. web 이 먼저면 공개 API 404 → `/` 가 빈 화면(구 `/shop`
 은 이미 삭제됨) — **반드시 서버 배포 후**.
+
+## §4 어드민 점검 기록 (2026-10-04)
+
+계획 단계에서 어드민 코드와 **운영 DB(읽기 전용 SELECT)** 를 대조해 찾은 것. 위 1·2단계 명세에 이미 반영했다.
+
+| # | 찾은 것 | 근거 | 반영 |
+|---|---|---|---|
+| R1 | 원본 텍스트는 **영어**다(제품명 한글 0/263 · 브랜드명 0/49). 번역 캐시(`ProductTranslation` en)는 0행 | 운영 SELECT | 프리필은 원본 그대로. 한글 감지 로직 불필요 |
+| R2 | 원본이 **대부분 빈칸** — 성분 83% · 용량 76% · 원산지 ~76% · 유통기한 ~78% · 상세설명 거의 전부 · **이미지 아예 없음 35%(93/263)** | 운영 SELECT | 프리필은 보조일 뿐. **연속 편집**(`저장하고 다음 미완비 →`) + 칸별 누락 표시가 본체. 엑셀 왕복·AI 초안은 하지 않는다(사용자 결정) |
+| R3 | 제품명에 운영 메모가 섞여 있다 — `(ONLY@ SURF EXPO SAMPLE SALE 15$) …`, `(MIN 1 BOX 72EA, ONLY FOR RETAILER …` | 운영 SELECT | `nameEn` 덮어쓰기 칸을 편집기 첫 칸에 둔다 |
+| R4 | 브랜드 49 = 승인 28 · pending 8 · draft 13, 제품 263 중 pending 57 | 운영 SELECT | 후보·노출 = **승인만**(사용자 결정, G4) |
+| R5 | `useFormState` 는 저장 후 다른 경로로 이동하고 dirty 추적이 없다 · 어드민 전체에 미저장 경고 선례 0건 | `hooks/useFormState.ts` | 제품 편집기는 전용 상태 + 미저장 경고 신설 |
+| R6 | `MultiImageUpload` 는 크롭·정렬 불가, DnD 라이브러리 없음 · `ImageCropModal` 은 `File` 만 받는다 | `components/*Upload.tsx` | `BuyerImageList` 신설 + `@dnd-kit`. 기존 URL 재크롭은 R2 CORS 확인 → 안 되면 화이트리스트 프록시 |
+| R7 | 탭 라벨은 접두 최장일치 정적 목록 · iframe 탭이라 `<Link>` 이동은 같은 탭을 갈아끼운다 | `components/tabs/*` | `/buyer/*` 라벨 5개 · 편집기에 `← 브랜드로` |
+| R8 | 감사 로그는 본문 **10KB 초과 시 잘린다** — 성분 8000자 + About 4000자 PATCH 는 잘릴 수 있다 | `admin-audit.interceptor.ts:14` | 수용(앞부분으로 충분). 한도를 올리지 않는다 |
+| R9 | zod v4 `.partial()` default 주입 버그 | `common/validation/shared.ts:60` | 모든 Patch 스키마 `patchOf()` |
+| R10 | 카테고리 삭제가 `SetNull` 이면 소속 제품이 필수 미달 → 바이어 화면에서 **조용히 사라진다** | 설계 검토 | 소속 제품 있으면 409 · 화면에서 삭제 비활성 |
+| R11 | 브랜드 표의 "빼기"가 행 삭제면 입력한 12칸이 cascade 로 소멸 | 설계 검토 | 빼기 = 공개 OFF, 삭제는 별도 메뉴 + 확인 |
+| R12 | 편집기 저장이 필드 PATCH + 구간가 PUT 둘이면 반쪽 저장 가능 | 설계 검토 | `tiers` 를 PATCH 에 넣어 한 트랜잭션 |
+| R13 | 원본 로고 없음: 승인 브랜드 28 중 3 | 운영 SELECT | `logoUrl` 업로드 or 텍스트 워드마크 폴백(디자인과 동일) — 필수 아님 |
