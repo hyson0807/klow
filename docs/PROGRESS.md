@@ -62,6 +62,8 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 [`plan/buyer-platform/mock-parity.md`](./plan/buyer-platform/mock-parity.md), 실구현은 **24·25행(대기 — 착수 전 계획 세션)**.
 ⚠️ 목업 결제 완료·채팅 이메일 이관은 **실제 문의(`BuyerInquiry` + 운영팀 메일)를 보낸다** — staging 병합 뒤 운영팀이 메일을 받는 게 정상이다.
 
+**`§7` 26행 — EMS-DTP 캐리어는 2026-10-05 에 끝났다(네 레포 `staging` 커밋 + push 완료 · staging DB 마이그레이션 적용).** 남은 건 ① staging 에서 한 국가를 EMS-DTP 로 지정하고 **실발급 1건** — ⚠️ `EMSDTP` 는 EFS 정산표에서 본 원문이지만 발급 API 로 보낸 적은 없다. `Service type is invalid` 면 문자열을 추측으로 고치지 말고 EFS 에 확인 · ② 운영 배포(**`migrate deploy` → klow_server → 프론트 3개**). `feat/buyer-platform` 에는 같은 커밋을 cherry-pick 해 두어 병합 시 충돌 없음(`git merge-tree` 확인). 결정 [`decisions/shipping-seeding.md` 2026-10-05](./decisions/shipping-seeding.md#2026-10-05).
+
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
 그다음이 **`§7` 9행 — cafe24-fulfillment 6단계(운영 배포)** 이고, 거기 남은 것은 아래 🔲 **백필 하나**다.
@@ -965,6 +967,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 23 | buyer-platform | **D. klow_web 디자인 전면 일치(목업)** — 헤더 Sign in·Sample box·Find my brands · 카드 호버 샘플 담기 · 샘플박스 바·드로어 · `/shop/{signin,signup,match,checkout(/pay,/complete),account(/requests/[id])}` · 제품 채팅 · 리뷰 섹션(빈 상태). 상태는 localStorage `kb.*` 만, 실동작은 문의 API(결제 완료·채팅 이메일 이관) — 정본 `plan/buyer-platform/mock-parity.md` · **git `feat/buyer-platform` 에만** | 완료 | ✗ | 2026-10-05 | 389f6ff · ab09529 / - / - / 0253b6d · 98cc48f / 201fd5b · (이 커밋) |
 | 24 | buyer-platform | **E. 실구현 — 바이어 계정 + 샘플박스 주문·결제** — 가입·로그인(세션)·이메일 OTP·서류 업로드·검수 배지 · 서버 장바구니 · 샘플 주문 테이블·상태 · Eximbay 실결제 · 계정·요청 상세. 목업 화면을 그대로 실데이터에 잇는다(`mock-parity.md` 표 24). **스키마·마이그레이션 = DB 브랜치 필수** · 착수 전 계획 세션(결제 모듈 재사용 범위 결정 — 샘플 단가는 구간표 1행으로 정해졌다) | 대기 | ✗ | | |
 | 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
+| 26 | ems-dtp-carrier | **EMS-DTP 캐리어 추가** — 배송비용 탭 국가 고정 캐리어 선택지 + EFS 3번 필드 `EMSDTP`. 마이그레이션 `20261005062641_add_ems_dtp_carrier`(ADD VALUE · staging DB 적용됨 · `feat/buyer-platform` 에도 cherry-pick `7385669` + DB 브랜치 `ep-sparkling-sun` 적용). 남은 것: **staging 실발급 1건**(EMS-DTP 국가 지정 → EFS 가 `EMSDTP` 수락 확인) → 운영 `migrate deploy` 후 서버 → 프론트 3개 배포 | 완료 | ✗ | 2026-10-05 | 4a258b9 / 591f1ec / e7c1594 / 542ac40 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포

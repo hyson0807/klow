@@ -225,3 +225,14 @@ klow_brand 단독 변경(서버·마이그레이션 없음, 배포 순서 제약
 
 **마이그레이션·백필 없음 · cron 불변 · 라우트 +1 · klow_brand 의존성 +1(`libphonenumber-js`).** 배포 순서 **klow_server → klow_brand**(반대면 정리 호출이 404 → 토스트 후 원본 그대로 — 깨지진 않는다). 회귀 잠금: 서버 `seeding/__tests__/bulk-address-ai.spec.ts`(21 — 부분문자열·낱말 유실·`(10000)` 떼기·사서함 되돌리기·제도 없는 나라·2차 우편번호·`"undefined"`·70자 넘김) · 클라 `npm run check:bulk-invoice`(한셀 합성 파일 — `bookSST: true` 로 써야 sharedStrings 가 생겨 재현된다 · 수식 번호 · 예시값 · 전화 7종 · 요청 필터·반영). 범위 밖: 같은 SheetJS 를 쓰는 다른 업로드(서버 `readWorkbook`·수동 시딩 추출·B2B 가격표)의 한셀 대응 — `sanitizeOoxml` 을 순수 함수로 둬 재사용할 수 있다.
 
+
+<a id="2026-10-05"></a>
+## EMS-DTP 캐리어 추가 — EFS 토큰 `EMSDTP` (2026-10-05)
+
+**사용자 요청.** 특정 국가는 EFS 서비스 타입 `EMSDTP`(EMS, 관부가세 발송인 부담)로 송장을 내야 한다 — 어드민 **배송비용** 탭의 국가 고정 캐리어 선택지에 `EMS-DTP` 를 더했다. 2026-08 EMS_PREMIUM 추가와 같은 모양이다: prisma enum `ShippingCarrier.EMS_DTP`(하이픈 불가라 언더스코어 정본, 화면은 `carrierLabel()` 로 `EMS-DTP`) → `payload-builder` `CARRIER_TO_EFS_SERVICE_TYPE` 에서 `EMSDTP` 로 번역. 2026-09-30 부터 송장 캐리어 = 국가 고정 캐리어라 시딩·일반 주문 모두 그대로 따라간다. 무게 분기는 EFS/EMS 전용이라 손대지 않았다(예상 배송비 표시 전용).
+
+⚠️⚠️ **토큰 근거는 EFS 정산표다** — `EMSDTP` 는 우리가 보낸 적은 없고 EFS 가 정산표 서비스 타입 칸에 회신한 원문이다(`efs-billing/statement-invoice.ts`). 추측은 아니지만 **발급 API 로 보낸 실적은 아직 없다** — 첫 실발급에서 `Service type is invalid` 가 나면 문자열을 고쳐 보지 말고 EFS 에 확인한다(EMS_PREMIUM 선례).
+
+라스트마일 추적은 우체국 EMS 와 같으므로 별도 키를 만들지 않았다 — 서버 `local-tracking.ts` 는 `ems`, 어드민·브랜드 `tracking-url.ts` 는 EMS 라벨로 떨어진다.
+
+**마이그레이션 `20261005062641_add_ems_dtp_carrier`**(`ALTER TYPE … ADD VALUE` 하나 — 롤링 안전, `efsServiceType` VarChar(20) 은 확장 불필요). staging DB 에는 적용됨. 미병합 `feat/buyer-platform` 에도 같은 커밋을 cherry-pick 하고 그 DB 브랜치(`ep-sparkling-sun`)에 적용해 두었다 — 병합 시 같은 파일이라 충돌이 없고, staging DB 에서는 `add_buyer_platform`(더 이른 타임스탬프)만 미적용으로 남는데 prisma 는 미적용분만 적용하므로 문제없다. 배포 순서 **klow_server → klow_admin·klow_brand·klow_web**(반대면 어드민에서 EMS-DTP 저장이 zod 400).
