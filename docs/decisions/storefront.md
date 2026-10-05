@@ -129,7 +129,7 @@ PC 브랜드관·PC 제품 상세에서 **전역 푸터가 모바일 폭(580px)�
 
 위 2026-10-05 의 "스코프 밖 진입점은 전부 Request 드로어로 바꿨다" 를 **같은 날 사용자가 뒤집었다** — *"KLOWBUYER 랑 웬만하면 모든 게 동일해야 해. 실제로 동작하지 않는 목업일지라도."* 헤더 Sign in·Sample box·Find my brands, 카드 호버 "Sample 1 unit", 샘플박스 바·드로어, 로그인·가입 3단계, Concierge, 체크아웃·Eximbay 결제창·완료, 계정·요청 상세, 제품 채팅, 리뷰 섹션이 디자인 그대로 들어왔다(klow_web `components/buyer-space/Kb*` · 라우트 `/shop/{signin,signup,match,checkout(/pay,/complete),account(/requests/[id])}`). **무엇이 가짜이고 실제로 만들려면 무엇이 필요한지의 정본은 [`plan/buyer-platform/mock-parity.md`](../plan/buyer-platform/mock-parity.md)**, 실구현은 진행표 24·25행이다.
 
-⚠️⚠️ **목업의 상태는 이 브라우저 localStorage(`kb.*`)에만 산다** — 서버 계정·주문·장바구니가 없다. 키를 `klow.*`(디자인) 대신 `kb.*` 로 둔 건 같은 도메인의 소비자 앱 키와 섞이지 않게 하려는 것이다. 샘플박스는 디자인처럼 id 만 담지 않고 **카드 스냅샷**을 담는다(클라에 카탈로그가 없다) — 가격은 담은 시점 값이고, 샘플 단가는 카드 도매가(MOQ 구간가)다.
+⚠️⚠️ **목업의 상태는 이 브라우저 localStorage(`kb.*`)에만 산다** — 서버 계정·주문·장바구니가 없다. 키를 `klow.*`(디자인) 대신 `kb.*` 로 둔 건 같은 도메인의 소비자 앱 키와 섞이지 않게 하려는 것이다. 샘플박스는 디자인처럼 id 만 담지 않고 **카드 스냅샷**을 담는다(클라에 카탈로그가 없다) — 가격은 담은 시점 값이고, ⚠️ **샘플 단가는 구간표 1행(1개) 단가**다(서버 카드 `sampleUsdCents` · `samplePrice()`) — 카드 대표가 `priceUsdCents`(MOQ 구간, G11)로 담았다가 사용자가 잡아 고쳤다(BLINK: 대표가 $5 · 샘플 $6). 스냅샷 필드 이름도 `sampleUsdCents` 로 둬 혼동을 막았다.
 
 ⚠️⚠️ **실제로 운영팀에 닿는 건 기존 문의 API 하나**다. Request 드로어에 더해 **목업 결제 완료**(샘플 목록·합계·배송국가·바이어)와 **채팅 이메일 이관**(그 질문)이 `POST /v1/buyer/inquiries` 로 간다 — 결제 화면의 "Payments aren't live yet — our Seoul team will e-mail you" 안내(사용자 결정)를 참으로 만들기 위해서다. **카드 입력값은 컴포넌트 state 에만 있고 어떤 형태로도 전송·저장하지 않는다**(마스킹 문자열조차 문의에 넣지 않는다 — Playwright 로 요청 본문 확인). 서버 문의는 이메일 필수라 WhatsApp 만 남긴 채팅 이관은 이 브라우저에만 남는다.
 
