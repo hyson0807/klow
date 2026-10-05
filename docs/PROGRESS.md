@@ -57,6 +57,10 @@ klow_web 국가별 트래픽 지도(영업용). 결정은 [`decisions/platform.m
 ⚠️ staging 에 병합할 때는 staging DB 에 `20261004140057_add_buyer_platform` 을 **먼저** 적용한다(신규 테이블뿐이라 롤링 안전).
 ⚠️ klow_web 은 의존성이 하나 늘었다(`geist`) — 배포 빌드가 `npm ci` 를 돈다.
 병합 뒤 staging 에서 확인할 것은 `§9` 22행 메모. 위 push·운영 작업(7·8·17·18 → 12 → 9행)과 **파일이 겹치지 않아** 병행 가능하다.
+**23행(2026-10-05)** — 같은 날 사용자 결정으로 **디자인 `KLOWBUYER` 와 전면 일치**시켰다: 샘플박스·로그인·가입·Concierge·체크아웃·계정·제품 채팅·리뷰가
+**목업으로** 들어왔다(klow_web `0253b6d` · klow_server `389f6ff` — 역시 `feat/buyer-platform` 에만). 무엇이 가짜이고 실제로 만들려면 무엇이 필요한지는
+[`plan/buyer-platform/mock-parity.md`](./plan/buyer-platform/mock-parity.md), 실구현은 **24·25행(대기 — 착수 전 계획 세션)**.
+⚠️ 목업 결제 완료·채팅 이메일 이관은 **실제 문의(`BuyerInquiry` + 운영팀 메일)를 보낸다** — staging 병합 뒤 운영팀이 메일을 받는 게 정상이다.
 
 **`§7` 12행 — brand-shipping-fee 단위 전환(원 → USD 센트)의 staging 배포**(= 사용자 `git push`).
 코드·마이그레이션·문서는 2026-09-30 에 끝났고 **staging DB 에는 이미 적용**돼 있다.
@@ -893,7 +897,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 어드민 점검(운영 DB 실측 포함) 결과는 `implementation-plan.md §4` R1~R13 — 원본은 영어지만 **대부분 빈칸**이라 연속 편집이 본체다
 - 서버 점검은 `implementation-plan.md §5` S1~S13 — ⚠️ **MOQ 는 구간가 표가 정본**(1행=샘플 1개, 2행 시작=MOQ)이고 MOQ·소매배수 컬럼을 만들지 않는다(G10·G11)
 - 웹 점검은 `implementation-plan.md §6` W1~W11 — `/` 는 **검색 노출**, 운영 배포 후 **점진 등록**이라 빈 상태에서도 깨지지 않게. ⚠️ 디자인 정적 이미지는 출처 불명(제품 사진 `p01~p24` 반입 금지)
-- 다음: **staging 병합(사용자 결정)** — 순서 server → admin → web, 병합 전 staging DB 마이그레이션. 확인 항목은 `§9` 22행 메모. 운영 배포 확인 후 트랙 퇴출(`§2`)
+- ⚠️ **2026-10-05 사용자 결정으로 결정 4·"스코프 밖"이 뒤집혔다** — 디자인의 모든 화면이 **목업으로** 있다(23행). 정본 [`plan/buyer-platform/mock-parity.md`](./plan/buyer-platform/mock-parity.md):
+  상태는 이 브라우저 localStorage `kb.*` 만, 실동작은 문의 API 하나(결제 완료·채팅 이메일 이관 포함), **카드 정보는 어떤 형태로도 전송하지 않는다**. 실구현은 24(계정·주문·결제)·25(Concierge 데이터·채팅·리뷰)행
+- 다음: **staging 병합(사용자 결정)** — 순서 server → admin → web, 병합 전 staging DB 마이그레이션. 확인 항목은 `§9` 22·23행 메모. 그 뒤 24행은 **계획 세션부터**(샘플 단가 정본 · 소비자 `payment` 모듈 재사용 범위 · 바이어 세션을 소비자 `User` 와 가를지). 운영 배포 확인 후 22행까지는 퇴출 가능(`§2`) — 24·25행은 남는다
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -956,6 +962,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 20 | buyer-platform | **A. klow_server** — 스키마·마이그레이션 `add_buyer_platform`(신규 테이블 8 · 카테고리 7종 SQL 시드 · **DB 브랜치 필수**) → `modules/buyer/`(완비 판정 함수) → `/admin/buyer/*` → 공개 `/v1/buyer/*` → 문의 저장+메일 → `server/modules/buyer.md`. 정지점: 스키마 끝 / 어드민 API 끝 — **git `feat/buyer-platform` + Neon DB 브랜치 `ep-sparkling-sun` 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | 47cc63d · 5b6e2c3 / - / - / - / (이 커밋) |
 | 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록 — **git `feat/buyer-platform`(klow_admin) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | - / d8b11dc / - / - / (이 커밋) |
 | 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(폴백·CTA·탭 11곳 → `consumerReturnHref()`, 없으면 숨김 · **`staging` 에 별도 커밋 — 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS · `(buyer)/` 홈·브랜드·PDP · 문의 드로어 · OG·sitemap → **구 소비자 `/shop` 삭제**(→ `/` 308) → 결정 기록·문서 — ②~⑥은 **git `feat/buyer-platform`(klow_web) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-05 | - / 4061858 / - / cdd83e6 · 8048663 · 9eaa271 / (이 커밋) |
+| 23 | buyer-platform | **D. klow_web 디자인 전면 일치(목업)** — 헤더 Sign in·Sample box·Find my brands · 카드 호버 샘플 담기 · 샘플박스 바·드로어 · `/shop/{signin,signup,match,checkout(/pay,/complete),account(/requests/[id])}` · 제품 채팅 · 리뷰 섹션(빈 상태). 상태는 localStorage `kb.*` 만, 실동작은 문의 API(결제 완료·채팅 이메일 이관) — 정본 `plan/buyer-platform/mock-parity.md` · **git `feat/buyer-platform` 에만** | 완료 | ✗ | 2026-10-05 | 389f6ff / - / - / 0253b6d / (이 커밋) |
+| 24 | buyer-platform | **E. 실구현 — 바이어 계정 + 샘플박스 주문·결제** — 가입·로그인(세션)·이메일 OTP·서류 업로드·검수 배지 · 서버 장바구니 · 샘플 주문 테이블·상태 · Eximbay 실결제 · 계정·요청 상세. 목업 화면을 그대로 실데이터에 잇는다(`mock-parity.md` 표 24). **스키마·마이그레이션 = DB 브랜치 필수** · 착수 전 계획 세션(샘플 단가 정본·결제 모듈 재사용 범위 결정) | 대기 | ✗ | | |
+| 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1019,6 +1028,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-platform — 23행 D (완료 · klow_web `0253b6d` · klow_server `389f6ff`, 브랜치 `feat/buyer-platform` · staging 미병합)
+
+- **한 것**: 디자인 컴포넌트를 `Kb*` 로 1:1 이식(`KbSampleBox`·`KbBuyer`·`KbSignup`·`KbConcierge`·`KbCheckout`·`KbPayment`·`KbComplete`·`KbAccount`·`KbRequestDetail`·`KbAskProduct`) + 공용 `lib/buyer-space-mock.ts`(디자인 `lib/buyer.ts`·`lib/match.ts`). 헤더·카드·로고월·히어로·컬렉션·푸터·브랜드·PDP 를 디자인 원문·동작으로 되돌림(Request 대체 삭제). `KbProductCard` 는 `'use client'`(카드 `is-added`). 브랜드 필터는 홈 데이터가 브랜드당 4장뿐이라 `api.buyerSpace.brand(slug)` 로 받는다. PDP 는 브랜드 프로필(`getKbBrand`)도 받아 Marketing support·채팅 즉답·"All N products" 에 쓴다.
+- **디자인과 의도적으로 다른 곳**: `mock-parity.md` 맨 아래 목록이 전부다(밴드 필터 없음 · `.page` 좌우 여백 · 청구 문구 · 빈 칸 숨김 · 화살표 글리프).
+- **실측(로컬 서버 :4030 = DB 브랜치 `ep-sparkling-sun` · 격리 복사본 웹 :3031 · 디자인 :3041, Playwright)**: 헤더 nav·act·히어로 CTA·Closing·푸터 문구가 디자인과 **문자열 동일** · 카드 호버 → 담기 → 헤더 1/5·하단 바·`is-added` → 드로어 → Request samples → 체크아웃(DE·노트) → 비로그인 Verify & pay → 가입 3단계(관심 브랜드 피커 = 실브랜드) → 결제(안내 문구·Agree to all·아무 16자리) → 완료 → **문의 1건 전송(카드 정보 없음 확인)** → 계정 Requests → 상세 → Reorder 2/5 → 프로필 → Sign out → Sign in 복원 · Concierge 5문항 → 결과(Medibt 81%) · PDP Sample 1 unit·즉답·이메일 이관 → 문의 전송 · 브랜드 Sample the range 4/5 · 로고월 Shop all → 컬렉션 브랜드 필터 · 400px 가로 넘침 0(8개 경로) · pageerror 0. 테스트 데이터는 지웠다(**BLINK 는 다른 세션 데이터라 남겼다**).
+- ⚠️ **프로덕션 빌드는 못 돌렸다** — 디스크 여유 0.2~0.4GB(ENOSPC). tsc·lint·dev 실행으로 대신했다. 병합 전 `NEXT_PUBLIC_API_URL` 을 준 `npm run build` 1회 필요.
+- ⚠️ 같은 폴더에서 `next dev` 를 둘 띄우면 `.next` 를 공유해 **한쪽 라우트가 generic 404 로 꼬인다**(이 세션에서 사용자 :3001 이 실제로 그렇게 됐다 — `rm -rf .next` 후 재시작). 테스트는 `rsync` + `cp -Rc node_modules` 격리 복사본으로 할 것.
+- ⚠️ BLINK 의 `BuyerBrand.tagline` 에 `__klow_brand_tags_v1__:…` 가 이미 저장돼 있다(수정 전 서버로 추가됨) — 어드민 바이어 공간에서 tagline 을 고쳐야 한다(서버 수정은 새로 추가하는 브랜드만 막는다).
 
 ### buyer-platform — 22행 C (완료 · klow_web `cdd83e6`(staging) · `8048663`·`9eaa271`(feat/buyer-platform) · klow_admin `4061858`)
 

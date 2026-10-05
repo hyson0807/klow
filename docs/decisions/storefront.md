@@ -123,3 +123,18 @@ PC 브랜드관·PC 제품 상세에서 **전역 푸터가 모바일 폭(580px)�
 ⚠️ **바이어 페이지는 서버 컴포넌트 + `revalidate: 60`**(`lib/buyer-space-server.ts`) — 어드민 수정이 최대 1분 뒤 보인다(어드민 화면에 안내 한 줄). `cache: 'no-store'` 로 바꾸지 말 것 — Vercel SSR fetch 는 egress IP 를 공유해 서버 전역 throttle 에 걸린다. 탭·검색·문의 드로어만 클라이언트(`components/buyer-space/` · `api.buyerSpace` — `components/b2b/Buyer*`(브랜드 B2B 링크)와 이름을 일부러 갈랐다). ⚠️ sitemap 은 노출 중인 바이어 브랜드·제품을 싣는데, **fetch 의 짧은 revalidate 가 라우트 주기를 끌어내리므로** `getAllKbCards(revalidate)` 로 sitemap 주기(3600)를 넘긴다(안 넘기면 sitemap 이 60초 주기가 됐다 — 빌드 매니페스트로 확인).
 
 **점진 등록(운영 배포 직후 브랜드 0~몇 개)에서도 깨지지 않는다** — 히어로 0장 → 기본 연출컷(`public/buyer/hero.jpg`, 디자인 연출컷은 2026-10-04 사용자가 라이선스 확인 · 제품 사진 `p01~p24` 는 반입 금지) · 노출 제품 0 → Collection 이 "New brands are being added" + Request · 브랜드 0 → 로고월 섹션 숨김 · 선반 0 → Curated 탭 없이 All 로 시작. 로고월이 패널 높이로 늘어나 빈 상자가 되던 것은 `align-self: start` 로 막았다. 디자인 문구는 그대로이고(README 결정 8), **스코프 밖(샘플박스·로그인·채팅·리뷰·Concierge `/match`)의 진입점은 전부 Request 드로어로 바꿨다**(헤더 오른쪽 칸·히어로 보조 CTA·closing 섹션). 소비자 `Footer` 는 바이어 경로에서 숨고(커스텀 도메인의 `/` 는 브랜드관 rewrite 라 제외), 온보딩 자동 노출(구 `/shop` 전용)은 걷었다 — 국가는 `useGuestCountryPrompt` 만 묻는다. ⚠️ 어드민 사이트 트래픽 지도([2026-10-04](./platform.md#2026-10-04))는 klow_web 전체 요청을 세므로 **배포 후엔 바이어 트래픽이 섞인다.** 배포 순서 **klow_server → klow_admin → klow_web**(web 이 먼저면 공개 API 404 → `/` 가 빈 상태로 굳는다. 단 ① 브랜드관 이탈 수정 커밋만은 서버와 무관하다).
+
+<a id="2026-10-05-2"></a>
+## 바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (2026-10-05)
+
+위 2026-10-05 의 "스코프 밖 진입점은 전부 Request 드로어로 바꿨다" 를 **같은 날 사용자가 뒤집었다** — *"KLOWBUYER 랑 웬만하면 모든 게 동일해야 해. 실제로 동작하지 않는 목업일지라도."* 헤더 Sign in·Sample box·Find my brands, 카드 호버 "Sample 1 unit", 샘플박스 바·드로어, 로그인·가입 3단계, Concierge, 체크아웃·Eximbay 결제창·완료, 계정·요청 상세, 제품 채팅, 리뷰 섹션이 디자인 그대로 들어왔다(klow_web `components/buyer-space/Kb*` · 라우트 `/shop/{signin,signup,match,checkout(/pay,/complete),account(/requests/[id])}`). **무엇이 가짜이고 실제로 만들려면 무엇이 필요한지의 정본은 [`plan/buyer-platform/mock-parity.md`](../plan/buyer-platform/mock-parity.md)**, 실구현은 진행표 24·25행이다.
+
+⚠️⚠️ **목업의 상태는 이 브라우저 localStorage(`kb.*`)에만 산다** — 서버 계정·주문·장바구니가 없다. 키를 `klow.*`(디자인) 대신 `kb.*` 로 둔 건 같은 도메인의 소비자 앱 키와 섞이지 않게 하려는 것이다. 샘플박스는 디자인처럼 id 만 담지 않고 **카드 스냅샷**을 담는다(클라에 카탈로그가 없다) — 가격은 담은 시점 값이고, 샘플 단가는 카드 도매가(MOQ 구간가)다.
+
+⚠️⚠️ **실제로 운영팀에 닿는 건 기존 문의 API 하나**다. Request 드로어에 더해 **목업 결제 완료**(샘플 목록·합계·배송국가·바이어)와 **채팅 이메일 이관**(그 질문)이 `POST /v1/buyer/inquiries` 로 간다 — 결제 화면의 "Payments aren't live yet — our Seoul team will e-mail you" 안내(사용자 결정)를 참으로 만들기 위해서다. **카드 입력값은 컴포넌트 state 에만 있고 어떤 형태로도 전송·저장하지 않는다**(마스킹 문자열조차 문의에 넣지 않는다 — Playwright 로 요청 본문 확인). 서버 문의는 이메일 필수라 WhatsApp 만 남긴 채팅 이관은 이 브라우저에만 남는다.
+
+⚠️ **실사이트라 디자인의 가짜 데이터를 진짜처럼 보이지 않게 했다** — 리뷰 섹션은 빈 상태("No buyer reviews yet", 사용자 결정), 목업 로그인은 데모 회사("Lumen Beauty Co.")를 지어내지 않고 데모 주문을 심지 않는다, 결제·완료·요청 상세의 "charged/paid" 문구는 "아직 청구 안 됨"으로. 목업 페이지는 전부 `noindex` · sitemap 미포함.
+
+⚠️ 경로는 디자인의 `/signin`·`/signup`·`/match`·`/checkout`·`/account` 가 아니라 **`/shop/*`** 다 — `/signup`·`/checkout` 은 소비자 라우트와 겹쳐 빌드가 깨지고, 나머지는 `[brandSlug]` 브랜드관을 가리거나 커스텀 도메인 rewrite 대상이 된다. `shop` 은 이미 예약어·KLOW_ONLY 라 미들웨어·`reserved-slugs` 를 안 건드린다. 하단 샘플바를 숨기는 `QUIET_ROUTES` 도 `/shop/checkout`·`/shop/signup`·`/shop/signin`.
+
+같은 작업에서: 소비자 `Footer` 의 바이어 경로 목록(`isBuyerSpacePath`)을 걷고 `buyer-space.css` 의 `body:has(.kb) [data-site-footer]{display:none}` 한 줄로 바꿨다(커스텀 도메인 `/` 의 푸터 깜빡임도 사라진다 — 전역 셀렉터 예외가 `body:has(.kb)` 두 줄이 됐다). 디자인 CSS 의 `.page { padding: … 0 … }` 가 `.wrap` 좌우 여백을 0 으로 덮어 목업 페이지 본문이 화면 끝에 붙던 것은 `padding-block` 으로 고쳤다(디자인에도 있는 버그 — 의도적 차이). 서버는 브랜드 추가 tagline 프리필이 `Brand.tagline` 의 **브랜드관 태그 인코딩 문자열(`__klow_brand_tags_v1__:…`)을 그대로 복사**하던 것을 `plainBrandTagline()` 으로 막았다(B2B 의 B5 와 같은 함정 — 실제로 BLINK 에서 바이어 화면에 찍혔다). 배포 순서는 22행과 같다(klow_server → klow_admin → klow_web).
