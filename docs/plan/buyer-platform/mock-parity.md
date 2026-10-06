@@ -30,7 +30,7 @@ README 의 결정 4("행동 버튼은 문의 폼 하나")·"스코프 밖" 을 �
 | 체크아웃 `/shop/checkout` → 결제 `/shop/checkout/pay` → 완료 `/shop/checkout/complete` (`KbCheckout`·`KbPayment`·`KbComplete`) | Eximbay 결제창 **목업**(아무 16자리). "Payments aren't live yet" 안내. Pay 시 목업 주문 저장 + **샘플 목록·합계·배송국가·바이어를 문의 API 로 운영팀에 전송** | Eximbay 실결제(USD — 소비자 결제 흐름 `payment` 모듈 재사용 검토: prepare/verify/webhook), 동의 4종 저장, 배송지 전체 주소, 5 SKU 무료배송·$18 정책의 정본, 브랜드별 출고(3PL·EFS) | 24 |
 | Concierge `/shop/match` (`KbConcierge`) | 질문 5개 디자인 그대로. 점수는 디자인 규칙을 **가진 필드로만** 계산(`lib/buyer-space-mock#matchBrands`) — 라인은 `icons`/`gems` 만 tier 로, 판매채널은 가중치 0 | `BuyerBrand` 에 **취급 라인(`lines`)·적합 채널(`channels`)** 컬럼 + 어드민 입력, (선택) 답변 저장해 운영팀 리드로 | 25 |
 | 제품 채팅 (`KbAskProduct`) | 즉답 3개는 실데이터(브랜드 도시·리드타임·서류 지역·인증·구간가). 이관 카드에 **이메일**을 남기면 그 질문을 문의 API 로 전송, WhatsApp 만 남기면 이 브라우저에만(서버 문의가 이메일 필수) | 실시간 채팅 또는 브랜드 담당자 이관 큐, WhatsApp 채널, 스레드 서버 저장, `BuyerInquiry` 에 연락 채널 컬럼 | 25 |
-| 바이어 리뷰 (PDP `#reviews`) | 섹션·제목만, **"No buyer reviews yet"** | 바이어 주문 기반 리뷰 수집(검증된 주문만), 사진 업로드, 번역 메뉴(디자인 Translate — 7개 언어) | 25 |
+| 리뷰 (PDP `#reviews`, `KbReviews`) | **그 제품에 이미 등록된 리뷰**(브랜드 등록 + 고객 작성, `/v1/reviews?productId=`)를 영어 번역으로 노출(2026-10-06). 리뷰 개수는 표시하지 않는다(평균 별점만). 바이어 주문 리뷰가 아니라서 "verified buyers" 문구는 뺐다. 0건이면 빈 문구 | 바이어 주문 기반 리뷰 수집(검증된 주문만), 사진 업로드, 번역 메뉴(디자인 Translate — 7개 언어) | 25 |
 
 ## 디자인과 의도적으로 다른 곳 (전부)
 

@@ -133,7 +133,7 @@ PC 브랜드관·PC 제품 상세에서 **전역 푸터가 모바일 폭(580px)�
 
 ⚠️⚠️ **실제로 운영팀에 닿는 건 기존 문의 API 하나**다. Request 드로어에 더해 **목업 결제 완료**(샘플 목록·합계·배송국가·바이어)와 **채팅 이메일 이관**(그 질문)이 `POST /v1/buyer/inquiries` 로 간다 — 결제 화면의 "Payments aren't live yet — our Seoul team will e-mail you" 안내(사용자 결정)를 참으로 만들기 위해서다. **카드 입력값은 컴포넌트 state 에만 있고 어떤 형태로도 전송·저장하지 않는다**(마스킹 문자열조차 문의에 넣지 않는다 — Playwright 로 요청 본문 확인). 서버 문의는 이메일 필수라 WhatsApp 만 남긴 채팅 이관은 이 브라우저에만 남는다.
 
-⚠️ **실사이트라 디자인의 가짜 데이터를 진짜처럼 보이지 않게 했다** — 리뷰 섹션은 빈 상태("No buyer reviews yet", 사용자 결정), 목업 로그인은 데모 회사("Lumen Beauty Co.")를 지어내지 않고 데모 주문을 심지 않는다, 결제·완료·요청 상세의 "charged/paid" 문구는 "아직 청구 안 됨"으로. 목업 페이지는 전부 `noindex` · sitemap 미포함.
+⚠️ **실사이트라 디자인의 가짜 데이터를 진짜처럼 보이지 않게 했다** — 리뷰 섹션은 빈 상태("No buyer reviews yet", 사용자 결정) → **2026-10-06 후속: 그 제품에 이미 등록된 리뷰(브랜드 등록 + 고객 작성)를 영어 번역으로 노출**한다(사용자 결정 — 브랜드 전체가 아니라 그 제품만, 서버 무변경). 바이어 주문 리뷰가 아니므로 "verified buyers" 문구는 쓰지 않는다, 목업 로그인은 데모 회사("Lumen Beauty Co.")를 지어내지 않고 데모 주문을 심지 않는다, 결제·완료·요청 상세의 "charged/paid" 문구는 "아직 청구 안 됨"으로. 목업 페이지는 전부 `noindex` · sitemap 미포함.
 
 ⚠️ 경로는 디자인의 `/signin`·`/signup`·`/match`·`/checkout`·`/account` 가 아니라 **`/shop/*`** 다 — `/signup`·`/checkout` 은 소비자 라우트와 겹쳐 빌드가 깨지고, 나머지는 `[brandSlug]` 브랜드관을 가리거나 커스텀 도메인 rewrite 대상이 된다. `shop` 은 이미 예약어·KLOW_ONLY 라 미들웨어·`reserved-slugs` 를 안 건드린다. 하단 샘플바를 숨기는 `QUIET_ROUTES` 도 `/shop/checkout`·`/shop/signup`·`/shop/signin`.
 
