@@ -14,7 +14,7 @@
 | G4 | **바이어 세션은 클라이언트에서만** — `buyer-space-server.ts` 의 ISR fetch(무자격 · `revalidate 60`)에 섞지 않는다. 섞으면 한 바이어의 응답이 캐시로 모두에게 간다 |
 | G5 | **새 DB 브랜치 기준선 확인** — fork 직후 `_prisma_migrations` 에 `20261004140057_add_buyer_platform`·`20261005062641_add_ems_dtp_carrier` 가 있는지 SELECT. 없으면 기준선이 틀린 것이다(멈추고 묻는다) |
 | G6 | **이메일 정규화 하나** — 저장·조회·OTP 모두 `trim().toLowerCase()`. 소비자·브랜드와 같은 규칙 |
-| G7 | **OTP 메일은 영어** — `issueOtp` 는 purpose 접두로 템플릿을 고르고 모르는 접두는 **한국어 소비자 가입 메일**로 떨어진다. `buyer-` 분기를 **먼저** 넣고 나서 purpose 를 쓴다 |
+| G7 | **OTP 메일은 영어** — `issueOtp` 는 purpose 접두로 템플릿을 고르고 모르는 접두는 **한국어 소비자 가입 메일**로 떨어진다. `buyer-` 분기를 **먼저** 넣고 나서 purpose 를 쓴다 (구현: 접두 분기 대신 `issueOtp(…, send)` 로 템플릿을 명시 — 2026-10-08 점검) |
 
 ## §2 데이터 모델 (A단계)
 

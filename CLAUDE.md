@@ -183,7 +183,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-29` [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](docs/decisions/storefront.md#2026-09-29)
 - `2026-10-05` [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · 폴백은 `consumerReturnHref` 하나 · `.kb` 스코프 · 키프레임 `kb-` 접두)](docs/decisions/storefront.md#2026-10-05)
 - `2026-10-05` [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지 · 경로는 `/shop/*`)](docs/decisions/storefront.md#2026-10-05-2)
-- `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP purpose `buyer-` 접두)](docs/decisions/storefront.md#2026-10-08)
+- `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](docs/decisions/storefront.md#2026-10-08)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 
