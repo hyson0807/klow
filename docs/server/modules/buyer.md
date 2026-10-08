@@ -92,7 +92,7 @@
 Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디자인 "Brand or product"), needs?(≤2000), market?(≤200 · "Business & market"), email, brandSlug?, productId?, qty?, website? }` → `200 { ok: true }`.
 
 - `brandSlug`·`productId` 는 **노출 중인 것만** 연결한다(아니면 null로 저장). 제품이 연결되면 그 브랜드도 연결된다.
-- `website` 는 honeypot — 채워져 오면 200 을 주고 저장하지 않는다.
+- `website` 는 honeypot — 채워져 오면 200 을 주고 저장·메일하지 않되 **warn 로그**(`buyer inquiry dropped by honeypot` · kind·ip·이메일 도메인)를 남긴다. ⚠️ klow_web 의 숨김 입력 DOM `name` 은 `kb_hp_x`(+ 비밀번호 관리자 무시 속성)다 — `website` 로 두었을 때 **브라우저 자동완성이 채워 운영의 진짜 견적 요청이 성공 화면만 띄우고 버려졌다**(2026-10-08). 서버로 보내는 키만 `website` 로 유지한다.
 - `req.ip`(trust proxy 기준, `clientIp()`)를 저장한다.
 - 메일은 **저장 후** 보내고, **실패는 삼키고 로그**한다(contact 와 반대 — 정본이 테이블이라서). 모든 입력은 `escapeHtml`(G7).
 
