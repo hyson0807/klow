@@ -19,6 +19,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 | `AdminGuard`       | `klow_admin_sid`| 어드민 세션. 60분 idle / 24h 절대만료(`ADMIN_IDLE_TIMEOUT_MINUTES` / `ADMIN_SESSION_TTL_HOURS`). |
 | `SuperAdminGuard`  | (위와 동일)     | 어드민 중 `super` role 만 허용(`AdminRole` = `operator`\|`super`). `admins`, `audit-logs`, `efs-billing` 라우트. |
 | `BrandGuard`       | `klow_brand_sid`| 브랜드 사용자 세션. 7일 만료, phone/email/google 가입 모두 호환.      |
+| `BuyerGuard`       | `klow_buyer_sid`| 바이어 공간(klow.kr/) 계정 세션. 30일 + 슬라이딩 연장. 소비자 `klow_sid` 와 완전 분리. |
 | `AuthGuard('google')` 등 | (Passport)| Google OAuth callback 처리용.                                         |
 | `public`           | -               | 누구나. 단, sensitive 라우트는 `Throttler` 적용.                       |
 
@@ -58,6 +59,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [brand-notices](./modules/brand-notices.md)                          | 브랜드관 공지 팝업 (기간 한정 안내 · 사진 · 자동 번역 · 오늘 하루 보지 않기) |
 |            | [b2b](./modules/b2b.md)                                              | B2B 도매 — 바이어 공개 페이지(도매가·MOQ·구간) + 주문서 접수·알림메일 + AI 원본 가격표 추출 |
 |            | [buyer](./modules/buyer.md)                                          | 바이어 공간(klow.kr/) — 어드민 큐레이션 오버레이(브랜드·제품·구간가·홈 구성) + 공개 API + 문의 저장·메일 |
+|            | [buyer-auth](./modules/buyer-auth.md)                                | 바이어 계정 — 이메일+비번 로그인·가입(이메일 OTP·서류 R2 비공개 업로드)·비번 찾기 + 어드민 검수 상태(배지)·서류 프록시 |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
 |            | [storefront-stats](./modules/storefront-stats.md)                     | 브랜드관 방문(일반/할인링크/현장) → 장바구니 담기 전환 퍼널 |

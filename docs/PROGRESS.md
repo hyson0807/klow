@@ -22,10 +22,10 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**⚠️ 2026-10-08 사용자 결정 — 가장 먼저: `§7` 27행 buyer-auth A(klow_server 바이어 계정).** buyer-platform 24행에서
-**바이어 로그인·가입만 떼어** 새 트랙으로 만들었다(이메일+비번 · 세션 30일 슬라이딩 · 가입 이메일 OTP · 서류 R2 · 비번 찾기 ·
-어드민 검수 배지). 스펙 [`plan/buyer-auth/`](./plan/buyer-auth/README.md) — 27 → 28(klow_web) → 29(klow_admin + 마무리) 순.
-⚠️ 27행은 마이그레이션이 있다 — **git `feat/buyer-auth` + Neon DB 브랜치부터**(트랙 문서 §1 G5). 아래 push·운영 작업은 그대로 사용자 몫이다.
+**⚠️ 2026-10-08 사용자 결정 — 가장 먼저: `§7` 28행 buyer-auth B(klow_web 목업 로그인·가입 실연결).** 27행(A · klow_server)은
+2026-10-08 에 끝났다 — klow_server `6cbe563`, git **`feat/buyer-auth`** + Neon DB 브랜치 **`ep-billowing-snow`** 에만 있다(staging 미병합).
+28행은 **같은 git 브랜치 이름(`feat/buyer-auth`)을 klow_web 에** 파고, 로컬 서버는 A 의 DB 브랜치로 띄운다(`§9` 27행 메모).
+스펙 [`plan/buyer-auth/`](./plan/buyer-auth/README.md) — 28(klow_web) → 29(klow_admin + 마무리) 순. 아래 push·운영 작업은 그대로 사용자 몫이다.
 
 **`§7` 7·8행 — seeding-bulk-invoice 의 staging push**(= 사용자 `git push`). 코드·문서는 2026-09-30 에
 끝났다. ⚠️ **push 순서: `klow_server` → `klow_admin`·`klow_web` → `klow_brand`**(brand 가 먼저면 새 버튼이
@@ -997,7 +997,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 21 | buyer-platform | **B. klow_admin "바이어 공간"** — 브랜드 선택·프로필 → 제품 편집기(인증·구간가 자동 채우기·스펙·**실시간 미리보기**·이미지 크롭/드래그 정렬/원본으로) → 홈 구성(카테고리·히어로·선반) → 문의 목록 — **git `feat/buyer-platform`(klow_admin) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-04 | - / d8b11dc / - / - / (이 커밋) |
 | 22 | buyer-platform | **C. klow_web** — ① **브랜드관 이탈 버그 수정**(폴백·CTA·탭 11곳 → `consumerReturnHref()`, 없으면 숨김 · **`staging` 에 별도 커밋 — 서버와 무관하게 먼저 배포 가능**) → `.kb` 스코프 CSS · `(buyer)/` 홈·브랜드·PDP · 문의 드로어 · OG·sitemap → **구 소비자 `/shop` 삭제**(→ `/` 308) → 결정 기록·문서 — ②~⑥은 **git `feat/buyer-platform`(klow_web) 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-05 | - / 4061858 / - / cdd83e6 · 8048663 · 9eaa271 / (이 커밋) |
 | 23 | buyer-platform | **D. klow_web 디자인 전면 일치(목업)** — 헤더 Sign in·Sample box·Find my brands · 카드 호버 샘플 담기 · 샘플박스 바·드로어 · `/shop/{signin,signup,match,checkout(/pay,/complete),account(/requests/[id])}` · 제품 채팅 · 리뷰 섹션(빈 상태). 상태는 localStorage `kb.*` 만, 실동작은 문의 API(결제 완료·채팅 이메일 이관) — 정본 `plan/buyer-platform/mock-parity.md` · **git `feat/buyer-platform` 에만** | 완료 | ✗ | 2026-10-05 | 389f6ff · ab09529 / - / - / 0253b6d · 98cc48f / 201fd5b · (이 커밋) |
-| 27 | buyer-auth | **A. klow_server** — 스키마·마이그레이션 `add_buyer_auth`(`BuyerUser`·`BuyerSession`·`BuyerUserDocument` · **DB 브랜치 필수**) → `modules/buyer-auth/` 공개 API(가입 OTP·서류 presign·signup·login·logout·me·비번 찾기 · 쿠키 `klow_buyer_sid` 30일 슬라이딩) → 어드민 계정 API(목록·상세·상태·서류 프록시) → `server/modules/buyer-auth.md`. 정지점: 마이그레이션 / 공개 API / 어드민 API | 대기 | ✗ | | |
+| 27 | buyer-auth | **A. klow_server** — 스키마·마이그레이션 `add_buyer_auth`(`BuyerUser`·`BuyerSession`·`BuyerUserDocument` · **DB 브랜치 필수**) → `modules/buyer-auth/` 공개 API(가입 OTP·서류 presign·signup·login·logout·me·비번 찾기 · 쿠키 `klow_buyer_sid` 30일 슬라이딩) → 어드민 계정 API(목록·상세·상태·서류 프록시) → `server/modules/buyer-auth.md`. 정지점: 마이그레이션 / 공개 API / 어드민 API — **git `feat/buyer-auth` + DB 브랜치 `ep-billowing-snow` 에만 있다(staging 미병합)** | 완료 | ✗ | 2026-10-08 | 6cbe563 / - / - / (이 커밋) |
 | 28 | buyer-auth | **B. klow_web** — 목업 `KbBuyer`·`KbSignup` 실연결(로그인·Keep me signed in·비번 찾기·가입 3단계 실 OTP·서류 업로드) · 계정 배지(Under review/Verified) · 프로필 PATCH · 소비자 `SessionSyncMount` 바이어 경로 정지 · mock-parity 갱신 | 대기 | ✗ | | |
 | 29 | buyer-auth | **C. klow_admin "바이어 계정"** — 목록·상세(가입 정보·서류 미리보기)·상태(배지)+메모 + 결정 기록·색인 · staging 병합 메모(server → admin·web) | 대기 | ✗ | | |
 | 24 | buyer-platform | **E. 실구현 — 샘플박스 주문·결제** — ~~가입·로그인(세션)·이메일 OTP·서류 업로드·검수 배지~~(→ buyer-auth 27~29행으로 분리, 2026-10-08) · 서버 장바구니 · 샘플 주문 테이블·상태 · Eximbay 실결제 · 계정·요청 상세. 목업 화면을 그대로 실데이터에 잇는다(`mock-parity.md` 표 24). **스키마·마이그레이션 = DB 브랜치 필수** · 착수 전 계획 세션(결제 모듈 재사용 범위 결정 — 샘플 단가는 구간표 1행으로 정해졌다) | 대기 | ✗ | | |
@@ -1068,6 +1068,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-auth — 27행 A (완료 · klow_server `6cbe563`, 브랜치 `feat/buyer-auth` · DB 브랜치 `ep-billowing-snow` · staging 미병합)
+
+- **환경**: klow_server `.env` 의 `DATABASE_URL` 이 지금 **`ep-billowing-snow`**(staging `ep-icy-flower` fork, G5 확인 176=176)를 가리킨다 — 1행에 원래 값 주석. 병합 후 되돌릴 것. ⚠️ Neon MCP 는 KLOW org 를 못 본다(브랜치는 사용자가 만들었다)
+- **실측(로컬 :4050 · `RESEND_API_KEY=` · 실 R2 staging 버킷 PUT)**: 가입 왕복 · `Max-Age=2592000` · `keepSignedIn:false` = Max-Age 없음 · `expiresAt` 10일로 당긴 뒤 me → 30.00일 + 쿠키 재발급 · 비번 찾기 후 구 쿠키 401 · 없는/틀린 로그인 같은 401 · 소비자↔바이어 쿠키 교차 401(양방향) · 소비자 계정 이메일로 바이어 send-code 통과 · 어드민 목록·상세·상태(감사 로그 기록)·서류 바이트 일치 · 응답에 `r2.dev`/`buyer-docs/` 0건 · 라우트 +15(459) · jest 1592 · e2e 통과
+- **스펙과 다르게/더 한 것**: 비번 찾기 confirm 은 항상 영속 세션 · 서류 크기는 선언값이 아니라 R2 `HEAD` 실측 · `signup` 이 업로드 존재를 `HEAD` 로 확인 · 어드민 목록에 `statusCounts` · 서류 프록시에 `CSP: sandbox` · `EmailVerificationService.assertSignupToken`(소비 없는 검증) 추가 · 에러는 `{code, message}` 영어(`email_taken`·`invalid_code`·`verification_expired`·`invalid_document`·`invalid_credentials`)
+- **28행(klow_web)이 알 것**: ⚠️ 디자인 업로드 힌트는 "30MB or less" 인데 서버 상한은 스펙대로 **10MB** — 문구를 10MB 로 고칠 것 · 서류 형식은 pdf/jpeg/png/webp 만(`accept="image/*"` 는 HEIC 를 고르게 둔다 → 400) · 사업자등록증은 선택 · presign → R2 PUT(`Content-Type` 헤더 필수) → signup 에 `key` 를 돌려준다 · ⚠️ 브라우저 PUT 은 **R2 버킷 CORS** 가 klow_web 오리진을 허용해야 한다(`localhost:3001` 은 staging 버킷에 이미 있음) · 409 `email_taken` 은 send-code 와 signup 둘 다에서 온다
+- **확인하지 못한 것**: 실 Resend 영어 메일 렌더(콘솔 로그로만 확인) · 브라우저 CORS PUT(curl 로만)
 
 ### buyer-platform — 23행 D (완료 · klow_web `0253b6d` · klow_server `389f6ff`, 브랜치 `feat/buyer-platform` · staging 미병합)
 
