@@ -57,14 +57,14 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
 | API 엔드포인트 문서           | `docs/server/README.md` (모듈 색인) + `docs/server/modules/<module>.md` — 컨트롤러 변경 시 함께 갱신     |
-| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, buyer, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, site-traffic, stats, subscription, translation, upload) |
+| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, buyer, buyer-auth, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, site-traffic, stats, subscription, translation, upload) |
 | Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | 가격 커널 (공유)              | `klow_server/src/pricing/` (배럴 — formulas/fx/country-price/promotion/price-line/chargeable-brands). **`modules/` 의 형제**이고 6개 모듈이 의존한다 |
 | 카페24 자사몰 연동            | `klow_server/src/modules/cafe24/` (OAuth 왕복 · 상품 매핑 · 주문 미러 → 3PL 출고신청 전환). ⚠️ **`mallId` 가 그대로 API 호스트가 되는 SSRF 축**이라 zod + `cafe24ApiOrigin()` 두 겹으로 막는다. 엔드포인트: `docs/server/modules/cafe24.md` |
 | 3PL 풀필먼트(콜로세움)        | `klow_server/src/modules/fulfillment/` (재고 + 출고신청 + 엑셀 2종 — **EFS·`Shipment` 와 별개 축**) · 어드민 `klow_admin /fulfillment` + 브랜드 상세 `?tab=inventory` · 브랜드 스튜디오 홈 `재고` 탭. 엔드포인트: `docs/server/modules/fulfillment.md` |
 | 제품 카탈로그 게이트          | `klow_server/src/modules/products/product-selects.ts` (노출·구매 가능 판정만 — 가격 계산은 위 `src/pricing/`)  |
 | 제품 텍스트 로케일화           | `klow_server/src/modules/products/product-translation.service.ts` (MT 캐시 + overlay) · `product-translation-overrides.ts` (브랜드 수동 번역 순수 로직) · klow_brand `studio/_hooks/useProductTranslations.ts` + `_components/TranslationDriftModal.tsx` |
-| Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, brand-subscriptions, brand-withdrawals, reviews, orders, refunds, returns, shipments, tracking, sales-report, settlement, promotions, influencers, customers, seeding-cost, shipping-countries, shipping-rates, fulfillment, buyer(바이어 공간 — 브랜드·제품 편집기·홈 구성·문의), audit-logs, admins) |
+| Admin pages (보호)            | `klow_admin/src/app/(authed)/` (products, brands, brand-subscriptions, brand-withdrawals, reviews, orders, refunds, returns, shipments, tracking, sales-report, settlement, promotions, influencers, customers, seeding-cost, shipping-countries, shipping-rates, fulfillment, buyer(바이어 공간 — 브랜드·제품 편집기·홈 구성·문의·바이어 계정), audit-logs, admins) |
 | Admin pages (공개)            | `klow_admin/src/app/login/`, `klow_admin/src/app/accept-invite/[token]/`                                |
 | Admin API client              | `klow_admin/src/lib/api/` (도메인별 파일 + index.ts 배럴 — import 경로는 `@/lib/api` 유지). 하부 `client.ts` 가 `BASE`·`fetchJson`·`postMultipart`·`downloadFile`·`extractApiError` 소유 (credentials:'include' + 401 자동 /login 리다이렉트, 단 `/admin/auth/*` 는 자체 처리) |
 | Admin upload helper           | `klow_admin/src/lib/upload.ts`                                                                          |
@@ -92,6 +92,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
 | 서버 인증 모듈                | `klow_server/src/modules/web-auth/` (service, controller, password/session, email/phone OTP, Solapi SMS, google strategy) |
 | UserGuard + CurrentUser       | `klow_server/src/modules/web-auth/user.guard.ts`, `klow_server/src/modules/web-auth/current-user.decorator.ts` |
+| 바이어 계정 (buyer-auth)       | 서버 `klow_server/src/modules/buyer-auth/`(소비자 `web-auth` 와 **별개** — `BuyerUser`·쿠키 `klow_buyer_sid`·`/v1/buyer/auth/*` + 어드민 `/admin/buyer/accounts/*` 서류 중계) · klow_web `components/buyer-space/{KbBuyer,KbSignup,KbAccount}.tsx` · klow_admin `(authed)/buyer/accounts/`. 엔드포인트: `docs/server/modules/buyer-auth.md` |
 | 고객 직접 리뷰                | 서버 `klow_server/src/modules/reviews/`(`customer-review.service.ts` 토큰 게이트 · `review-request.{service,cron}.ts` 메일 큐 — cron **기본 off**) · 손님 작성 페이지 `klow_web/src/app/review/[orderId]/` + `src/lib/upload.ts` · klow_brand `studio/_components/product-reviews/ReviewListItem.tsx`(고객 작성은 읽기 전용). 엔드포인트: `docs/server/modules/reviews.md` |
 | Admin toast feedback          | `klow_admin/src/components/Toast.tsx` (`useToast()`) + wired into `klow_admin/src/hooks/useFormState.ts` |
 
@@ -143,9 +144,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 78건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 87건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 78건 중 62건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 87건 중 62건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -182,6 +183,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-29` [PC/모바일 분기 — 정적인 것은 CSS, 마운트를 갈라야 하는 것만 훅](docs/decisions/storefront.md#2026-09-29)
 - `2026-10-05` [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · 폴백은 `consumerReturnHref` 하나 · `.kb` 스코프 · 키프레임 `kb-` 접두)](docs/decisions/storefront.md#2026-10-05)
 - `2026-10-05` [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지 · 경로는 `/shop/*`)](docs/decisions/storefront.md#2026-10-05-2)
+- `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP purpose `buyer-` 접두)](docs/decisions/storefront.md#2026-10-08)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

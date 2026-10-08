@@ -1,19 +1,19 @@
 # 결정 기록 색인
 
-주제별 파일에 과거 결정 77건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
+주제별 파일에 과거 결정 87건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
 `CLAUDE.md` 의 `## 결정 기록` 에 같은 색인이 실려 매 세션 자동 로드된다 — 거기서 항목을 찾고 여기서 본문을 읽는다.
 
 | 주제 | 파일 | 건수 |
 |---|---|---|
-| 제품 · 가격 · 번역 | [`products.md`](./products.md) | 10 |
-| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 13 |
-| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 14 |
+| 제품 · 가격 · 번역 | [`products.md`](./products.md) | 11 |
+| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 18 |
+| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 19 |
 | 정산 | [`settlement.md`](./settlement.md) | 10 |
 | EFS 배송비 후청구 | [`efs-billing.md`](./efs-billing.md) | 2 |
 | 결제 (PG) | [`payment.md`](./payment.md) | 3 |
 | 브랜드 계정 · 온보딩 · 스튜디오 · CRM | [`brand-account.md`](./brand-account.md) | 8 |
 | 브랜드 커스텀 도메인 | [`custom-domain.md`](./custom-domain.md) | 5 |
-| 플랫폼 · 인프라 · i18n · 제거된 기능 | [`platform.md`](./platform.md) | 10 |
+| 플랫폼 · 인프라 · i18n · 제거된 기능 | [`platform.md`](./platform.md) | 11 |
 
 ---
 
@@ -105,3 +105,4 @@
 | `2026-10-04` | [어드민 "사이트 트래픽 · 국가별 요청" — Vercel Observability 를 매일 DB 로 복사](./platform.md#2026-10-04) | platform |
 | `2026-10-05` | [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · `.kb` 스코프 · 키프레임 `kb-` 접두)](./storefront.md#2026-10-05) | storefront |
 | `2026-10-05` | [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지)](./storefront.md#2026-10-05-2) | storefront |
+| `2026-10-08` | [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · OTP purpose `buyer-` 접두)](./storefront.md#2026-10-08) | storefront |

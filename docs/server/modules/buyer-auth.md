@@ -53,7 +53,7 @@
 
 ## admin-buyer-accounts.controller.ts (`@Controller('admin/buyer/accounts')`, AdminGuard — 모든 어드민)
 
-mutation 은 `AdminAuditInterceptor` 가 자동 기록한다.
+mutation 은 `AdminAuditInterceptor` 가 자동 기록한다. 화면은 klow_admin **바이어 공간 > 바이어 계정**(`(authed)/buyer/accounts/` — 서류는 인증 fetch → Blob 으로 미리보기).
 
 | 메서드 · 경로 | 동작 |
 |---|---|

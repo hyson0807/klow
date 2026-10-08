@@ -138,3 +138,18 @@ PC 브랜드관·PC 제품 상세에서 **전역 푸터가 모바일 폭(580px)�
 ⚠️ 경로는 디자인의 `/signin`·`/signup`·`/match`·`/checkout`·`/account` 가 아니라 **`/shop/*`** 다 — `/signup`·`/checkout` 은 소비자 라우트와 겹쳐 빌드가 깨지고, 나머지는 `[brandSlug]` 브랜드관을 가리거나 커스텀 도메인 rewrite 대상이 된다. `shop` 은 이미 예약어·KLOW_ONLY 라 미들웨어·`reserved-slugs` 를 안 건드린다. 하단 샘플바를 숨기는 `QUIET_ROUTES` 도 `/shop/checkout`·`/shop/signup`·`/shop/signin`.
 
 같은 작업에서: 소비자 `Footer` 의 바이어 경로 목록(`isBuyerSpacePath`)을 걷고 `buyer-space.css` 의 `body:has(.kb) [data-site-footer]{display:none}` 한 줄로 바꿨다(커스텀 도메인 `/` 의 푸터 깜빡임도 사라진다 — 전역 셀렉터 예외가 `body:has(.kb)` 두 줄이 됐다). 디자인 CSS 의 `.page { padding: … 0 … }` 가 `.wrap` 좌우 여백을 0 으로 덮어 목업 페이지 본문이 화면 끝에 붙던 것은 `padding-block` 으로 고쳤다(디자인에도 있는 버그 — 의도적 차이). 서버는 브랜드 추가 tagline 프리필이 `Brand.tagline` 의 **브랜드관 태그 인코딩 문자열(`__klow_brand_tags_v1__:…`)을 그대로 복사**하던 것을 `plainBrandTagline()` 으로 막았다(B2B 의 B5 와 같은 함정 — 실제로 BLINK 에서 바이어 화면에 찍혔다). 배포 순서는 22행과 같다(klow_server → klow_admin → klow_web).
+
+<a id="2026-10-08"></a>
+## 바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (2026-10-08)
+
+바이어 공간(`klow.kr/`)의 목업 로그인·가입(위 2026-10-05-2 — localStorage `kb.buyer`)을 **서버 계정**으로 바꿨다. 스펙 [`plan/buyer-auth/`](../plan/buyer-auth/README.md), API [`server/modules/buyer-auth.md`](../server/modules/buyer-auth.md). 이메일+비밀번호만(소셜 없음), 가입 3단계 마지막에 **실제 이메일 OTP**, 사업자등록증·매장 사진은 R2 에 실제로 올린다. 어드민은 **바이어 공간 > 바이어 계정**(`klow_admin /buyer/accounts`)에서 가입 정보·서류를 보고 상태를 정한다.
+
+⚠️⚠️ **소비자 로그인과 완전히 분리했다(G1)** — 테이블 `BuyerUser`·`BuyerSession`·`BuyerUserDocument`, 쿠키 `klow_buyer_sid`, 라우트 `/v1/buyer/auth/*`, 클라 쿼리키 `['buyer-session']` 전부 따로다. 같은 이메일이 소비자 계정과 바이어 계정을 둘 다 가져도 서로 모른다. 재사용은 `EmailVerificationService`(purpose 로 분리)·`common/password`·`common/cookies` 배관까지만. ⚠️ 소비자 `SessionSyncMount`(로그인 직후 국가 PATCH·카트 merge)는 **바이어 경로(`/`·`/shop/*`)에서 서게** 했다 — 안 막으면 소비자로도 로그인된 사람이 바이어 화면을 열 때 소비자 프로필·카트가 돈다(Playwright 로 요청 0건 확인).
+
+⚠️⚠️ **두 단계의 자격을 가른다** — **구간가 블러 해제 = 로그인한 바이어 전원(상태 무관)**, **"Verified buyer" 배지 = 어드민 승인(`verified`)**. 가입하면 `pending` 으로 시작하고 반려는 `rejected`. 어드민 메모(`statusNote`)는 바이어에게 안 보인다. 바이어 화면은 다음 `me`(staleTime 60s·새로고침) 때 바뀐 배지를 본다. ⚠️ **블러는 여전히 화면 가림이다** — 공개 응답(ISR 캐시)에 구간가가 실린다. 서버측 은닉은 스코프 밖(별도 결정)이고, **바이어 세션을 `buyer-space-server.ts` 의 ISR fetch 에 섞지 말 것**(G4 — 한 바이어의 응답이 캐시로 모두에게 간다).
+
+⚠️⚠️ **서류는 공개 URL 을 어디에도 내지 않는다(G2)** — R2 버킷이 공개 버킷이라 키를 알면 누구나 읽는다. 키는 서버가 추측 불가하게 만들고(`buyer-docs/<uuid>/<128bit hex>.<ext>`), 응답·DB·로그에 `publicUrl` 이 없다. 어드민은 `GET /admin/buyer/accounts/:id/documents/:docId` **서버 중계**로만 받고, 화면은 그 응답을 인증 쿠키 실은 fetch → Blob → object URL 로 띄운다(이미지 인라인 · PDF 새 탭 — `klow_admin` `buyer/accounts/_components/BuyerDocumentCard.tsx`). `<img src>` 로 서버를 직접 가리키지 않는 건 쿠키 SameSite 에 기대지 않기 위해서다. ⚠️ 가입 업로드는 브라우저 → R2 직접 PUT 이라 **버킷 CORS 에 klow_web 오리진**이 필요하다(고객 리뷰 사진과 같은 조건 — [2026-10-01](./products.md#2026-10-01)).
+
+세션: TTL 30일 + **슬라이딩**(남은 기간 < 15일이면 다시 30일 — 한 달에 한 번이라도 오면 안 끊긴다). "Keep me signed in" 해제 = 같은 서버 TTL + maxAge 없는 브라우저 세션 쿠키이고, `BuyerSession.persistent` 로 슬라이딩 재발급이 세션 쿠키를 영속 쿠키로 바꾸지 않게 한다(`makeCookieHelpers().set(…, { persistent })` 는 이를 위해 하위호환으로 추가). 비밀번호 찾기는 **없는 이메일도 200**(가입 여부 비공개 — 브랜드와 다르다), confirm 은 그 계정 전 세션을 지운다. ⚠️ **OTP 메일은 영어(G7)** — `issueOtp` 는 purpose 접두로 템플릿을 고르고 모르는 접두는 한국어 소비자 가입 메일로 떨어진다. 새 바이어 purpose 도 반드시 `buyer-` 로 시작할 것.
+
+마이그레이션 `20261008050340_add_buyer_auth`(신규 테이블 3 + enum 2 — 롤링 안전, 백필 없음). env `BUYER_SESSION_COOKIE_NAME`·`BUYER_SESSION_TTL_DAYS`(기본값이 있어 없어도 부팅한다). 배포 순서 **klow_server → klow_admin·klow_web**(web 이 먼저면 로그인·가입 404 — 목업보다 못하다, admin 이 먼저면 바이어 계정 화면만 404). 스코프 밖: 샘플 주문·결제(진행표 24행) · 문의를 계정에 연결 · 탈퇴(Request 드로어로 대신) · 로그인 실패 잠금(스로틀로 대신) · 이메일 변경 · 2FA.
