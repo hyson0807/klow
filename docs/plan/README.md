@@ -18,6 +18,7 @@
 | [seeding-bulk-invoice/](./seeding-bulk-invoice/README.md) | 브랜드가 **수령인 명단 엑셀**로 링크 없이 EFS 송장을 일괄 발급한다(taeyoung30 목업 실연결). 같은 트랙에서 **송장 캐리어 = 국가 고정 캐리어**로 고정 — 무게 분기는 예상 배송비 전용 |
 | [customer-reviews/](./customer-reviews/README.md) | 손님(구매자)이 제품 리뷰를 직접 쓴다. 배송완료(EFS 33·47·74 / 국내 발송처리 / 현장 결제+N일)를 cron 이 스캔해 **(주문 × 브랜드) 1통**씩 리뷰 요청 메일을 보내고, 전용 HMAC 토큰 링크로 비로그인 진입해 **그 브랜드 판매중 전 제품 중 자유 선택**해 평점·글·사진을 남긴다. `ReviewRequest` 행의 `@@unique([orderId, brandId])` 가 중복 발송 금지의 정본이고, `Review.source=customer` 는 브랜드가 수정·삭제할 수 없다 |
 | [buyer-platform/](./buyer-platform/README.md) | `klow.kr/` 를 해외 **바이어 공간**(디자인 `KLOWBUYER/`)으로 — 어드민이 브랜드를 골라 올리고 제품별 인증·도매 구간가·스펙·이미지·카테고리·홈 선반을 세팅한다. 원본 `Product`·`Brand`·`B2b*` 에 쓰지 않는 **1:1 오버레이 테이블**, 이미지는 빈 배열 = 브랜드 원본 추종. 로그인·채팅·샘플·결제는 스코프 밖 |
+| [buyer-auth/](./buyer-auth/README.md) | 바이어 공간의 **바이어 계정** — 이메일+비밀번호 로그인·가입(가입 이메일 OTP · 사업자 서류 R2 · 비번 찾기 · 세션 30일 슬라이딩) + 어드민 "바이어 계정"(목록·서류·검수 배지). 소비자 로그인(`klow_sid`)과 테이블·쿠키·라우트 전부 분리 |
 
 ## 새 트랙을 만들 때
 

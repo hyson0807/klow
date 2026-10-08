@@ -43,6 +43,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/seeding-bulk-invoice/](./plan/seeding-bulk-invoice/README.md) | 엑셀 명단으로 시딩 송장 일괄 발급 + 송장 캐리어를 국가 고정 캐리어로 고정(무게 분기는 예상 배송비 전용) |
 | [plan/customer-reviews/](./plan/customer-reviews/README.md) | 손님이 리뷰를 **직접** 쓴다 — 배송완료 → (주문 × 브랜드) 1통 리뷰 요청 메일 → 토큰 링크로 로그인 없이 그 브랜드 제품 자유 선택. 지금 PDP 리뷰는 전부 어드민·브랜드 대행 입력이고 고객 작성 경로가 0개다 |
 | [plan/buyer-platform/](./plan/buyer-platform/README.md) | 바이어 공간(`klow.kr/`) — 어드민 큐레이션으로 브랜드·제품(인증·도매 구간가·스펙·이미지)·카테고리·홈 선반을 세팅해 해외 바이어에게 노출. 디자인은 `KLOWBUYER/` |
+| [plan/buyer-auth/](./plan/buyer-auth/README.md) | 바이어 계정 — 이메일/비밀번호 로그인·가입 · 가입 OTP · 서류 업로드 · 비번 찾기 · 어드민 검수 배지. 소비자 로그인과 완전 분리 |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
 | [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
 
