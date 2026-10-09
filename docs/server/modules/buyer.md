@@ -42,9 +42,9 @@
 |---|---|---|
 | GET | `/admin/buyer/brands` | 올린 브랜드 목록 — 제품 수·완비 수·노출 수·**필수 칸별 누락 수**(`missingCounts`)·브랜드 단위 사유 |
 | GET | `/admin/buyer/brand-candidates?q=` | **승인 브랜드만** 후보(최대 50) — `added`·승인 제품 수 |
-| POST | `/admin/buyer/brands` `{brandId}` | 브랜드 올리기(승인만, 중복 409 `already_added`). tagline 은 원본 프리필 |
+| POST | `/admin/buyer/brands` `{brandId}` | 브랜드 올리기(승인만, 중복 409 `already_added`) |
 | PUT | `/admin/buyer/brands/order` `{ids: brandId[]}` | 브랜드 순서 |
-| GET | `/admin/buyer/brands/:brandId` | 프로필 + 원본 로고/tagline + `openingOrder`·`retailMultiple` |
+| GET | `/admin/buyer/brands/:brandId` | 프로필 + 원본 로고 + `openingOrder`·`retailMultiple` |
 | PATCH | `/admin/buyer/brands/:brandId` | 프로필·공개 토글 (`logoUrl: null` = 원본 로고로) |
 | DELETE | `/admin/buyer/brands/:brandId` | ⚠️ 입력한 제품 정보·구간가까지 cascade 삭제 — 평소엔 공개 OFF |
 | GET | `/admin/buyer/brands/:brandId/products` | 그 브랜드 **승인 제품** + 이미 올린 행(승인이 풀린 것 포함). `buyer: null` = 안 올림, 있으면 `missing`·`reasons`·`visible`·썸네일 |

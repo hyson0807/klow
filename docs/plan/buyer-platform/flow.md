@@ -8,7 +8,7 @@
 [어드민 /buyer]  "브랜드 추가" → 전 브랜드 검색 모달 → 선택
       │            (BuyerBrand 생성 · published=false · 원본 로고 추종)
       ▼
-[/buyer/brands/:brandId]  브랜드 프로필(tier·tagline·city·리드타임…  MOQ 는 제품 구간가에서 계산)
+[/buyer/brands/:brandId]  브랜드 프로필(tier·city·지역…  MOQ 는 제품 구간가에서 계산)
       │                    + 그 브랜드 제품 표 → 제품마다 "추가" 토글
       │                      (BuyerProduct 생성 · 원본 값 프리필 · 이미지 원본 추종)
       │                    + 카테고리 인라인 지정 / 여러 개 골라 일괄 지정
@@ -64,10 +64,8 @@
 | 디자인 | 저장 위치 |
 |---|---|
 | tier (K-Beauty icon / Hidden gem) | `BuyerBrand.tier` enum |
-| tagline | `BuyerBrand.tagline` (원본 `Brand.tagline` 프리필) |
-| From city · est. year | `city` · `founded Int?` |
+| From city | `city` |
 | Opening order MOQ | **계산값** — 노출 제품 MOQ 최솟값 (입력 칸 없음) |
-| Dispatch lead days | `leadDays Int?` |
 | Avg. retail multiple | **계산값** — 노출 제품 `MSRP ÷ MOQ 구간가` 평균 (MSRP 있는 제품만) |
 | Export documents (지역) | `exportRegions String[]` (us·ca·uk·eu·gcc·sea·au·latam) |
 | Exclusivity open | `exclusiveRegions String[]` |
