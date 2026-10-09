@@ -15,7 +15,7 @@
 | `BuyerPriceTier` | 도매 구간가(USD 센트). **MOQ 의 정본**(아래) |
 | `BuyerCategory` | 홈 카테고리 탭 |
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
-| `BuyerShelf` · `BuyerShelfItem` | 홈 큐레이션 선반(수동으로 고른 제품) |
+| `BuyerShelf` · `BuyerShelfItem` · `BuyerShelfBand` | 홈 큐레이션 선반(수동으로 고른 제품) + 선반 안 필터 칩(band — 제품 속성이 아니라 그 선반 한정 분류, `BuyerShelfItem.bandId` 로 제품당 0~1개, 칩 삭제 시 `SetNull`) |
 | `BuyerInquiry` | Request 드로어 문의. 브랜드·제품 FK 는 `SetNull`(영업 기록이라 남는다) |
 
 ⚠️⚠️ **원본 `Product`·`Brand` 에 쓰지 않고(G1) `B2b*` 테이블은 읽지도 않는다(G2).** 기존 B2B 도매(`/[slug]/b2b`, 브랜드가 입력)와 이 공간의 가격은 별개다.
@@ -62,7 +62,8 @@
 | GET/POST | `/admin/buyer/shelves` | 목록(아이템 + 각 제품 `visible`) / 추가 `{title, lede?, preview?: 4\|8, published?}` |
 | PUT | `/admin/buyer/shelves/order` | 순서 |
 | PATCH/DELETE | `/admin/buyer/shelves/:id` | 수정 / 삭제 |
-| PUT | `/admin/buyer/shelves/:id/items` `{items: [{productId, tag?}]}` | 선반 제품 통째 교체(최대 48). 바이어 공간에 올라간 제품만(400 `product_not_added`) |
+| PUT | `/admin/buyer/shelves/:id/items` `{items: [{productId, tag?, bandId?}]}` | 선반 제품 통째 교체(최대 48). 바이어 공간에 올라간 제품만(400 `product_not_added`). `bandId` 는 이 선반의 필터만(400 `band_not_found`), 생략·null = 필터 없음 |
+| PUT | `/admin/buyer/shelves/:id/bands` `{bands: [{id?, label, note?}]}` | 선반 필터 칩 통째 교체(최대 12, 라벨 중복 400). 배열 순서 = 칩 순서. `id` 있는 칩은 유지(제품 배정 보존), 빠진 칩은 삭제되고 그 제품은 필터 없음으로. 남의 선반 칩 id 는 400 `band_not_found` |
 | GET | `/admin/buyer/inquiries?status=new\|handled` | 문의 목록(최신순 500) + 연결 브랜드·제품 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
 
@@ -75,7 +76,7 @@
 
 | Method | Path | Throttle | 기능 |
 |---|---|---|---|
-| GET | `/v1/buyer/home` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만 |
+| GET | `/v1/buyer/home` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다 |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치, `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 |
 | GET | `/v1/buyer/products/:id` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |

@@ -144,9 +144,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 87건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 88건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 87건 중 62건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 88건 중 62건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -184,6 +184,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-05` [klow.kr/ = 해외 바이어 공간 + 소비자 화면은 손님의 브랜드관으로만 돌아간다 (`/shop` 삭제 · 폴백은 `consumerReturnHref` 하나 · `.kb` 스코프 · 키프레임 `kb-` 접두)](docs/decisions/storefront.md#2026-10-05)
 - `2026-10-05` [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지 · 경로는 `/shop/*`)](docs/decisions/storefront.md#2026-10-05-2)
 - `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](docs/decisions/storefront.md#2026-10-08)
+- `2026-10-09` [큐레이션 선반 안 필터 칩 = 선반 한정 수동 분류 (제품 속성 아님 · 제품당 0~1개 · 빈 칩은 서버가 뺀다)](docs/decisions/storefront.md#2026-10-09)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

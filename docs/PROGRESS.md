@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 30행 — 큐레이션 선반 필터 칩(2026-10-09)은 `staging` 커밋까지 끝났다**(klow_server `d236ba1` · klow_admin `d6bcd18` · klow_web `8736dee`, **push 안 함**). staging DB 에 `20261009125951_add_buyer_shelf_bands` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 칩 없이 그대로 — 깨지지 않는다). `§9` 30행 메모.
+
 **⚠️ buyer-auth 트랙(`§7` 27·28·29행)은 2026-10-08 에 코드가 전부 끝났다** — klow_server `6cbe563`·`b55500f` · klow_web `9d4117b`·`e221297` · klow_admin `367a06d`·`83e58e5`(둘째 해시는 같은 날 전체 점검),
 ✅ **2026-10-08 staging 병합·배포 완료**(사용자 지시) — staging DB(`ep-icy-flower`)에 `add_buyer_auth` 적용(`migrate deploy`, 대기 1건뿐이었다) → klow_server ff·push → `api-staging` 에서 `/v1/buyer/auth/me` 401 확인 → klow_admin·klow_web ff·push. klow_server `.env` 는 staging DB 로 되돌렸다.
 남은 건 staging 실사용 확인(`§9` 29행 메모)과 **운영 배포**(그 전에 서류 비공개 버킷 결정 — 같은 메모). 결정 [`decisions/storefront.md` 2026-10-08](./decisions/storefront.md#2026-10-08).
@@ -1005,6 +1007,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 24 | buyer-platform | **E. 실구현 — 샘플박스 주문·결제** — ~~가입·로그인(세션)·이메일 OTP·서류 업로드·검수 배지~~(→ buyer-auth 27~29행으로 분리, 2026-10-08) · 서버 장바구니 · 샘플 주문 테이블·상태 · Eximbay 실결제 · 계정·요청 상세. 목업 화면을 그대로 실데이터에 잇는다(`mock-parity.md` 표 24). **스키마·마이그레이션 = DB 브랜치 필수** · 착수 전 계획 세션(결제 모듈 재사용 범위 결정 — 샘플 단가는 구간표 1행으로 정해졌다) | 대기 | ✗ | | |
 | 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
 | 26 | ems-dtp-carrier | **EMS-DTP 캐리어 추가** — 배송비용 탭 국가 고정 캐리어 선택지 + EFS 3번 필드 `EMSDTP`. 마이그레이션 `20261005062641_add_ems_dtp_carrier`(ADD VALUE · staging DB 적용됨 · `feat/buyer-platform` 에도 cherry-pick `7385669` + DB 브랜치 `ep-sparkling-sun` 적용). 남은 것: **staging 실발급 1건**(EMS-DTP 국가 지정 → EFS 가 `EMSDTP` 수락 확인) → 운영 `migrate deploy` 후 서버 → 프론트 3개 배포 | 완료 | ✗ | 2026-10-05 | 4a258b9 / 591f1ec / e7c1594 / 542ac40 / (이 커밋) |
+| 30 | buyer-shelf-bands | **큐레이션 선반 안 필터 칩** — 어드민 선반마다 칩(라벨+보조문구) 추가·순서·삭제 + 제품을 칩에 배정(제품당 0~1개) · klow_web 칩(KLOWBUYER 동일) · `PUT /admin/buyer/shelves/:id/bands` · 마이그레이션 `20261009125951_add_buyer_shelf_bands`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-09](./decisions/storefront.md#2026-10-09). 남은 것: push(server → admin·web) → staging 화면 실측 → 운영 `migrate deploy` → 배포 | 완료 | ✗ | 2026-10-09 | d236ba1 / d6bcd18 / - / 8736dee / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1070,6 +1073,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-shelf-bands — 30행 (완료 · `staging` 커밋, push 전)
+
+- **한 것**: klow_server 스키마(`BuyerShelfBand` + `BuyerShelfItem.bandId` SetNull)·`PUT …/bands`(id 유지 교체)·items `bandId`·home `bands`/`bandId`(빈 칩 제거) · klow_admin `ShelvesTab` 칩 줄·모달·제품별 select · klow_web `KbCollection` 칩
+- **확인한 것**: server typecheck·eslint·jest buyer 54·e2e / admin·web tsc·eslint·build / **staging DB 서비스 왕복**(임시 선반 — 칩 생성·배정·공개 응답의 빈 칩 제거·이름변경/순서 후 배정 유지·삭제 시 bandId null·남의 칩 id 400 둘 다 · 임시 선반 삭제 확인)
+- **확인 못 한 것**: 브라우저 화면(어드민 로그인 필요 · staging 노출 제품이 1개뿐이라 칩 전환을 눈으로 볼 데이터가 없다) — push 뒤 어드민에서 선반에 칩 2개 + 제품 배정 → `/` 에서 칩 전환·View all 유지 확인
+- **남은 일**: push(server → admin·web) → 위 화면 확인 → 운영 `migrate deploy`(CREATE TABLE + nullable ADD COLUMN — 롤링 안전) → server → admin·web
 
 ### buyer-auth — 29행 C (완료 · klow_admin `367a06d` · **2026-10-08 staging 병합·배포**) — 트랙 코드 끝
 
