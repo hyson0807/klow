@@ -183,4 +183,6 @@ KLOWBUYER 홈 선반 제목 아래의 `All | 30% & under 70%+ MARGIN | …` 칩(
 - 프로모션 할인 링크 `/{brand}/{influencer}` 와 `/faq`(소비자 결제 FAQ)는 `noindex, follow` 다. 없는 브랜드 slug 는 `{}` 대신 `noindex` 를 돌려준다(전에는 루트 기본값으로 떨어져 색인 대상이었다). 약관은 `?lang=ko` 를 쿼리 없는 경로 하나로 canonical 을 모았다. 제목 꼬리 중복(`FAQ | KLOW · KLOW`)도 고쳤다.
 - ⚠️ **JSON-LD 에 Product/Offer 를 싣지 않는다.** 가격이 없는 Product 는 Google 이 `offers`·`review`·`aggregateRating` 누락 오류로 Search Console 에 집계한다. 도매 구간가는 로그인해야 보이는 값이라 검색 결과에 내보내지 않는다(블러는 화면 가림일 뿐이라 공개 응답에는 실려 있지만, 그걸 스니펫으로 확산시키지는 않는다). 리뷰도 대부분 브랜드가 등록한 것이라 `aggregateRating` 근거로 쓰면 self-serving 정책에 걸린다. 그래서 싣는 것은 홈의 `Organization`(alternateName 클로우)·`WebSite`, 그리고 바이어 브랜드·제품의 `BreadcrumbList` 뿐이다. 컴포넌트는 `components/common/JsonLd.tsx` 이고 `<` 를 이스케이프한다.
 
+- **검색 결과의 사이트 이름은 `KLOW`** 다. 같은 날 사용자 결정으로 정했다. Google 은 홈 `WebSite` 의 `name` 과 `og:site_name` 을 사이트 이름으로 쓴다. 브랜드명 검색("klow")을 노려 둘 다 `KLOW` 로 두고, `KLOW Wholesale`·`클로우` 는 `alternateName` 에만 넣었다. 페이지 제목 템플릿(`· KLOW Wholesale`)은 그대로다.
+
 배포 뒤 할 일(수동): Search Console 에 sitemap 재제출, `/` URL 검사 → 색인 요청. 서버 변경과 마이그레이션은 없다.
