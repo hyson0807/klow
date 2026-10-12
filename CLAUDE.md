@@ -185,6 +185,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-05` [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지 · 경로는 `/shop/*`)](docs/decisions/storefront.md#2026-10-05-2)
 - `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](docs/decisions/storefront.md#2026-10-08)
 - `2026-10-09` [큐레이션 선반 안 필터 칩 = 선반 한정 수동 분류 (제품 속성 아님 · 제품당 0~1개 · 빈 칩은 서버가 뺀다)](docs/decisions/storefront.md#2026-10-09)
+- `2026-10-12` [klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음)](docs/decisions/storefront.md#2026-10-12)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

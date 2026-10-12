@@ -171,3 +171,16 @@ KLOWBUYER 홈 선반 제목 아래의 `All | 30% & under 70%+ MARGIN | …` 칩(
 
 마이그레이션 `20261009125951_add_buyer_shelf_bands`(CREATE TABLE + nullable ADD COLUMN — 롤링 안전, 백필 없음). 사용자 지시로 feat/DB 브랜치 없이 staging 에서 바로 작업했다. 배포 순서 klow_server → klow_admin·klow_web(web 은 `bands` 가 없는 구 응답도 칩 없이 그대로 그린다).
 
+
+<a id="2026-10-12"></a>
+## klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음) (2026-10-12)
+
+`klow.kr/` 가 해외 바이어 공간이 된 뒤에도 검색엔진이 보는 신호는 B2C 쇼핑몰이었다. 기본 제목은 "Global Shopping Made Simple", 키워드에는 "buy Korean cosmetics" 가 들어 있었고, sitemap 에도 소비자 `/product/*` 가 실려 있었다. 이번에 사이트 기본 메타(`klow_web/src/lib/seo.ts`)를 도매·샘플 문구로 바꿨다. 사용자 결정은 3가지다. ① 소비자 브랜드관 `/{brandSlug}` 은 계속 색인하고, `/product/[id]` 는 sitemap 에서만 뺀다(canonical 은 자기 주소). ② JSON-LD 에 가격을 싣지 않는다. ③ Google Search Console 은 DNS 로 이미 인증돼 있어 코드에 토큰을 넣지 않는다.
+
+- ⚠️⚠️ **루트 `layout.tsx` 에 `alternates.canonical` 이나 `openGraph.url` 을 두지 않는다.** Next 메타는 자기 값이 없는 하위 페이지가 그대로 물려받는다. 그래서 `/product/*`·`/faq`·`/orders` 가 전부 바이어 홈을 정본이라고 선언하고 있었다(2026-10-05 점검에서 남긴 문제). canonical 은 페이지가 직접 선언한다. `(buyer)/layout.tsx` 도 같은 이유로 canonical 을 갖지 않는다. 홈 canonical 은 `(buyer)/page.tsx` 가 갖는다. 뜻 없던 hreflang(`en`·`ko-KR` 둘 다 `/`)과 `og:alternateLocale ko_KR` 도 지웠다.
+- ⚠️ **`openGraph` 는 자식이 부모 객체를 통째로 갈아끼운다.** 그래서 `(buyer)/layout.tsx` 와 브랜드·제품 `generateMetadata` 는 `type`·`locale`·`url`·`siteName` 을 다시 적는다. 빠뜨리면 그 페이지에서 `og:url`·`og:type` 이 사라진다.
+- ⚠️ **사적·거래 화면은 `robots.txt` 가 아니라 meta noindex 로 뺀다.** disallow 하면 크롤러가 noindex 를 읽지 못해서 URL 만 색인된 채 남는다. 그래서 `/my`·`/cart`·`/checkout` disallow 를 지웠고, 크롤링만 막을 `/handoff` 하나만 disallow 로 남겼다. 이 화면들은 대부분 `'use client'` 페이지라 metadata 를 export 할 수 없다. 대신 세그먼트마다 children 만 돌려주는 `layout.tsx` 가 `noindexMetadata`(`seo.ts`)를 export 한다. 대상은 `my`·`cart`·`checkout`·`orders`·`track`·`review`·`seed`·`login`·`signup`·`handoff`·`customer-center`·`brand`(레거시 id 리다이렉트)다. **새 소비자 사적 화면을 만들면 같은 layout 을 둘 것.**
+- 프로모션 할인 링크 `/{brand}/{influencer}` 와 `/faq`(소비자 결제 FAQ)는 `noindex, follow` 다. 없는 브랜드 slug 는 `{}` 대신 `noindex` 를 돌려준다(전에는 루트 기본값으로 떨어져 색인 대상이었다). 약관은 `?lang=ko` 를 쿼리 없는 경로 하나로 canonical 을 모았다. 제목 꼬리 중복(`FAQ | KLOW · KLOW`)도 고쳤다.
+- ⚠️ **JSON-LD 에 Product/Offer 를 싣지 않는다.** 가격이 없는 Product 는 Google 이 `offers`·`review`·`aggregateRating` 누락 오류로 Search Console 에 집계한다. 도매 구간가는 로그인해야 보이는 값이라 검색 결과에 내보내지 않는다(블러는 화면 가림일 뿐이라 공개 응답에는 실려 있지만, 그걸 스니펫으로 확산시키지는 않는다). 리뷰도 대부분 브랜드가 등록한 것이라 `aggregateRating` 근거로 쓰면 self-serving 정책에 걸린다. 그래서 싣는 것은 홈의 `Organization`(alternateName 클로우)·`WebSite`, 그리고 바이어 브랜드·제품의 `BreadcrumbList` 뿐이다. 컴포넌트는 `components/common/JsonLd.tsx` 이고 `<` 를 이스케이프한다.
+
+배포 뒤 할 일(수동): Search Console 에 sitemap 재제출, `/` URL 검사 → 색인 요청. 서버 변경과 마이그레이션은 없다.
