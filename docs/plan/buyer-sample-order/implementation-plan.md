@@ -109,7 +109,7 @@ model ShopSettings {
 
 ### B. 입고 흐름 — klow_brand 샘플 요청 · 어드민 바이어 주문 · 부분환불 · 발송인 설정 (32행)
 
-klow_brand `(authed)/samples/`(StudioPillHeader 버튼 + middleware matcher · 주소 복사 = `components/shipping/ui.tsx#EfsWarehouseRows` 패턴) · klow_admin `(authed)/buyer/orders` 목록/상세(브랜드별 intake 카드 · 48h 미발송 강조 · 메일 미발송 경고 · 입고 확인 · 품목 체크 → 부분환불) · 설정에 KLOW 발송인 4칸 · 서버 §3 B 행 · 부분환불 G9 실왕복. 배포 순서 server → admin → brand. 명세는 A 가 끝난 뒤 이 자리에 정밀화한다.
+klow_brand `(authed)/samples/`(StudioPillHeader '샘플 요청' + middleware matcher · 보낼 곳 카드 + 주소 복사) · klow_admin `(authed)/buyer/orders` 목록/상세(브랜드별 입고 카드 · 48h 미발송 강조 · 메일 미발송 경고 · 입고 확인/되돌리기 · 품목 체크 → 부분환불 · 전체 취소) · 목록 헤더의 'KLOW 발송인 설정' 모달 · 서버 §3 B 행 · 부분환불 G9 실왕복. **마이그레이션 없음**(A 의 스키마로 충분). 배포 순서 server → admin → brand(admin·brand 가 먼저면 새 화면만 404 — 기존 화면은 무관). 실제 엔드포인트는 `docs/server/modules/buyer-orders.md`.
 
 ### C. 합포장 EFS 송장 + 라벨 + 트래킹 + 마무리 (33행)
 
@@ -137,3 +137,13 @@ klow_brand `(authed)/samples/`(StudioPillHeader 버튼 + middleware matcher · �
 - 견적은 내려간 샘플을 400 대신 `unavailableProductIds` 로 알린다(화면이 그 줄에 표시) — 주문 생성만 400 `samples_unavailable`.
 - 요청 상세의 "Reorder these samples" 는 뺐다 — 서버 주문 라인에 샘플박스 스냅샷(브랜드 slug·규격·MSRP)이 없다.
 - 바이어 주문 상태는 서버가 계산한다(`buyerSampleStatus` — `server/modules/buyer-orders.md`).
+
+## §7 B 단계에서 스펙과 다르게 한 것
+
+- 어드민 입고는 `POST` 가 아니라 **`PUT`/`DELETE …/received`**(되돌리기를 같은 경로의 DELETE 로).
+- 부분환불은 **남은 품목 전부를 고르면 거절**한다 — 그건 배송비까지 돌려줘야 하는 주문 취소라서 `cancel` 로 보낸다.
+- 전체 취소는 부분환불 이력이 있으면 `F` 가 아니라 **남은 잔액을 `P` 로** 돌려준다(이미 일부 환불된 거래에 원 금액 `F` 를 보낼 수 없다). 그 잔액도 `OrderPartialRefund` 에 `[전체 취소]` 행으로 남겨 환불 내역 합 = 결제액이 되게 했다. 전체 취소는 품목 `cancelledAt` 을 찍지 않는다(입고 행만 `cancelled`).
+- `refund_id` = `rf<시각36진><랜덤8hex>` (엑심베이 길이 상한을 몰라 짧게) — `OrderPartialRefund.id` 에 같은 값을 넣는다.
+- 라인 → 브랜드는 **Product.brandId** 를 본다(`productBrandIds`) — 제품 라인의 `OrderItem.brandId` 는 스키마상 NULL 이다. C 의 라인별 통관도 같은 함수를 쓸 것.
+- KLOW 발송인 설정은 별도 설정 화면이 아니라 **바이어 주문 목록 헤더의 모달**이다.
+

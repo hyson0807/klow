@@ -103,7 +103,7 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 - **pending 주문 유효기간 (24h)**: `prepare()` 는 `paymentStatus === pending` 에 더해 `createdAt` 이 24시간 이내인지 검사하고, 넘으면 400 으로 거부한다(`PENDING_ORDER_TTL_MS`). `report-failure` 는 브라우저가 호출하는 구조라 결제창에서 탭을 닫으면 발생하지 않고, 그 행은 `pending` 으로 영구히 남는다. 청구액은 주문 시점의 `totalUsd`/`fxRateSnapshot` 으로 고정되므로 가드가 없으면 몇 달 묵은 주문이 그때의 가격·환율로 결제된다. 만료된 행을 별도 상태로 정리하는 크론은 없다 — 결제가 막히면 충분하고, 동의 시각·IP 기록은 보존한다.
 - **상품 명세 (`product`/`surcharge`)**: 네이버페이는 상품명·수량·단가를 필수로 요구하고 누락 시 **X059**(`NaverPay payment fail`)로 거절한다. `buildOrderLines()` 가 `OrderItem` 을 최대 3줄로 전개하고(4개 이상이면 앞 2줄 + `"기타 N건"` 합산줄), 배송비·반올림 오차는 `surcharge` **잔차** 한 줄이 흡수해 `Σ(product) + Σ(surcharge) === payment.amount`(Eximbay Note 5)를 항상 만족시킨다. 국내·해외 양쪽 scope 모두 전송.
 - **`tax` (국내 전용)**: 네이버페이 **포인트** 결제가 전 필드를 필수로 요구해 `scope==='kr'` 일 때만 붙인다. 전액 과세 역산(`amount_taxable = round(amount/1.1)`, `amount_vat` 는 뺄셈 잔차), `receipt_status='N'`(현금영수증 발급은 수취정보 UI 필요 — 미지원).
-- **환불**: `payment.refundOrder` 가 `POST /v1/payments/{pgTid}/cancel` 호출
+- **환불**: `payment.refundOrder` 가 `POST /v1/payments/{pgTid}/cancel` 호출(전액 `F`). 부분환불(`P`)은 `refundPartial` — 바이어 샘플 주문 전용, USD 만([buyer-orders](./buyer-orders.md#부분환불-paymentservicerefundpartial-g9))
 - **관련 파일**: `payment.service.ts`, `public-payment.controller.ts`, `webhook-payment.controller.ts`
 
 ## public-payment.controller.ts (`@Controller('v1/payment')`)
