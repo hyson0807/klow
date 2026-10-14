@@ -248,7 +248,12 @@ klow_brand 단독 변경(서버·마이그레이션 없음, 배포 순서 제약
   브랜드로 거르는 조회(브랜드 정산탭·배송 현황·EFS 청구서)에서는 자연히 빠진다. **브랜드를 거르지 않는 정산·청구 조회**(어드민 정산 후보·월 롤업,
   PG 정산서 보정, EFS 청구 리포트·기간 KPI)는 조회 직후 `onlyBrandShipments()`(`shipments/shipment-settlement.ts`)로 한 번 더 거른다.
   그 함수가 `brandId` 를 `string` 으로 좁혀 주므로, 새 정산·청구 조회를 만들 때 빠뜨리면 tsc 가 대개 잡는다. 다만 `brandId` 를 읽지 않는 조회는 못 잡는다.
-  EFS 실비는 KLOW 부담이라 브랜드 청구서에 뜨면 안 된다. 정산표 업로드는 HAWB 로 매칭되므로 그 송장에 실비가 저장되기는 한다.
+  EFS 실비는 KLOW 부담이라 브랜드 청구서에 뜨면 안 된다.
+- ⚠️⚠️ **그렇다고 EFS 청구 쪽에서 통째로 빼면 안 된다**(같은 날 정정). 처음에는 월 리포트에서 합포장 송장을 빼기만 했다.
+  그러자 정산표 업로드가 그 HAWB 를 '파일에만 있는 송장'으로 띄웠고, 실비는 **어디에도 저장되지 않았다**. 수기 행으로도 닫을 수 없었다(수기 행은 브랜드가 필수이고, 기존 송장의 HAWB 는 거절한다).
+  지금은 월 리포트가 합포장 송장을 **별도 배열 `klowSamples`** 로 내고, 업로드 매칭은 두 배열을 함께 본다.
+  `report.rows`(= `buildStatement` 입력 — 청구서·publish·엑셀·KPI)에는 섞지 않는다. 어드민 배송비 청구 탭에는 'KLOW 샘플 배송비 (KLOW 부담)' 표가 따로 있다.
+  관세 시트의 합포장 건은 'KLOW 부담' 표시만 한다. 자세히는 `docs/server/modules/efs-billing.md` 'KLOW 샘플 배송비' 절.
 - ⚠️⚠️ **바이어 주문은 브랜드 단위 발급 경로를 못 탄다.** `createForOrder`·`createForBrand`·`previewForOrder` 는 `kind = buyer_sample` 이면
   400 을 낸다(`assertBrandShipmentOrder`). 이 경로를 타면 **브랜드 송화인 명의로 브랜드별 송장이 나간다** — G3 가 결제 후속효과에서 막은 그 사고가 어드민 버튼으로 재현된다.
   반대로 재발급·자동 재시도·취소 후 재발급은 기존 송장 경로를 그대로 쓴다. `retry`/`retryDue` 가 `brandId` 가 null 이면 합포장 경로로 보낸다.

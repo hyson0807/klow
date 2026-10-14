@@ -102,6 +102,6 @@ SKU(= 품목 — 샘플은 제품당 1개) **5개 이상이면 0**, 그 미만�
 - 게이트: 결제완료 · 입고 행 전부 `received`/`cancelled`(received ≥ 1). 바이어 주문은 브랜드 단위 경로(`/admin/shipments` 의 주문·브랜드 발급, 미리보기)가 400
 - 재발급·EFS 취소·취소 후 재발급·추적 새로고침은 기존 `/admin/shipments/:id/*` 그대로(어드민 상세의 '송장 상세' 링크) — `retry` 가 brandId null 을 합포장 경로로 보낸다. 자동 재시도 cron 도 같다
 - 추적 cron(`tracking-refresh`)이 다른 송장처럼 갱신하고, 전 품목 배송완료면 `Order.status = completed`
-- 정산·EFS 청구에 안 뜬다(`onlyBrandShipments`) — EFS 실비는 KLOW 부담
+- 브랜드 정산·브랜드 EFS 청구서에는 안 뜬다(`onlyBrandShipments`) — EFS 실비는 KLOW 부담. 대신 EFS 정산표 업로드가 실비를 저장하고, 어드민 배송비 청구 탭의 'KLOW 샘플 배송비' 표가 보여 준다([efs-billing](./efs-billing.md))
 - 라벨: klow_admin `components/ShippingLabel.tsx`(klow_brand 폼택 8칸 규격 복사 — 시작 칸 선택)
 
