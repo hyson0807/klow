@@ -115,6 +115,25 @@ klow_brand `(authed)/samples/`(StudioPillHeader 버튼 + middleware matcher · �
 
 `payload-builder.ts` 라인별 통관(G8) · `shipments.service.createConsolidatedForBuyerOrder` · 어드민 '송장 발급'(전 브랜드 received/cancelled 일 때만) · 라벨 출력(klow_brand `components/shipping/print.tsx`·`label-pdf.ts` 를 admin 으로 복사) · 바이어 요청 상세에 추적 이벤트 · 결정 기록(`decisions/storefront.md` 또는 `shipping-seeding.md`) + CLAUDE.md 색인. ⚠️ EFS 는 실계정 — 실발급은 **staging 1건, 사용자 확인 후**. 명세는 B 뒤에 정밀화한다.
 
-## §5 G4 전수 목록 (A 단계가 채운다)
+## §5 G4 전수 목록 (A 단계가 채웠다 — 2026-10-14)
 
-_(비어 있음)_
+`prisma.order.(findMany|count|aggregate|groupBy|findFirst)` · `orderItem.*` 집계 · 원시 SQL(`"Order"`) 전수.
+
+| 위치 | 판단 |
+|---|---|
+| `orders/contact-population.ts#CONTACT_ORDER_WHERE` | **`kind: consumer` 추가** — 브랜드 CRM · 어드민 컨택트 · 리뷰 요청 cron(웹·현장 스캔) · 고객 리뷰 링크가 이걸 쓴다. 브랜드 CRM 에 새면 G7 위반 |
+| `orders.service#buildAdminOrderWhere` | **추가** — 어드민 주문 목록·건수·매출 카드(바이어 주문은 B 의 '바이어 주문' 화면) |
+| `shipments.service#listPendingGroups` | **추가** — (주문, 브랜드) 자동 그룹 발급 대상 아님 |
+| `settlement.service#SETTLEABLE_ORDER_WHERE` | **추가**(방어 — 송장 기반이라 지금도 자연 제외지만 C 의 합포장 송장도 Shipment 다). 스펙 `settlement-recognition.spec.ts` 에 회귀 케이스 |
+| `storefront-stats/storefront-sales.service` 원시 SQL 2곳 | **추가** — 브랜드관 판매 분석(국가·제품)에 샘플이 섞이지 않게 |
+| `stats.service#orderTypeTrend` 원시 SQL | **추가** — 주별 일반/시딩/현장 막대. ⚠️ `gmvKrw`(거래액)는 **그대로 포함** — "전체 결제" 정의라 KLOW 가 받은 샘플 대금도 거래액이다 |
+| `payment.service#findReconcilableOrderIds` | **포함 유지** — 재확인 크론이 바이어 결제도 복구해야 한다 |
+| `orders.service#findMine`(userId) · 시딩 조회 · `promotions#purchaseStats`(promotionId) · `pg-settlement`(id 목록) | 자연 제외(바이어 주문은 userId·promotionId 없음, 시딩 아님). `pg-settlement` 은 엑심베이 정산서에 바이어 주문 행이 있으면 주문을 찾지만 정산 추정치가 송장 기반이라 영향 없음 — 33행 합포장 송장 뒤에 다시 볼 것 |
+
+## §6 A 단계에서 스펙과 다르게 한 것
+
+- ⚠️ **`Shipment.brandId` nullable 은 C(33행)로 미뤘다.** 바꾸면 정산·EFS 청구·송장 코드 59곳의 타입이 깨지는데(`shipment.brand.name` 등), 실제로 brandId 없는 송장이 생기는 건 C 다. C 가 두 번째 마이그레이션(ALTER DROP NOT NULL — 롤링 안전)으로 한다.
+- `Order.buyerNote`(VarChar 500) 추가 — 디자인의 메모 칸. **운영팀만 본다**(브랜드 메일·화면에 싣지 않는다 — 연락처를 적을 수 있어서). 그래서 바이어 화면 라벨을 "Note to the brands" → **"Note to the KLOW team"** 으로 바꿨다.
+- 견적은 내려간 샘플을 400 대신 `unavailableProductIds` 로 알린다(화면이 그 줄에 표시) — 주문 생성만 400 `samples_unavailable`.
+- 요청 상세의 "Reorder these samples" 는 뺐다 — 서버 주문 라인에 샘플박스 스냅샷(브랜드 slug·규격·MSRP)이 없다.
+- 바이어 주문 상태는 서버가 계산한다(`buyerSampleStatus` — `server/modules/buyer-orders.md`).

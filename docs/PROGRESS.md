@@ -27,7 +27,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 **⚠️ buyer-auth 트랙(`§7` 27·28·29행)은 2026-10-08 에 코드가 전부 끝났다** — klow_server `6cbe563`·`b55500f` · klow_web `9d4117b`·`e221297` · klow_admin `367a06d`·`83e58e5`(둘째 해시는 같은 날 전체 점검),
 ✅ **2026-10-08 staging 병합·배포 완료**(사용자 지시) — staging DB(`ep-icy-flower`)에 `add_buyer_auth` 적용(`migrate deploy`, 대기 1건뿐이었다) → klow_server ff·push → `api-staging` 에서 `/v1/buyer/auth/me` 401 확인 → klow_admin·klow_web ff·push. klow_server `.env` 는 staging DB 로 되돌렸다.
 남은 건 staging 실사용 확인(`§9` 29행 메모)과 **운영 배포**(그 전에 서류 비공개 버킷 결정 — 같은 메모). 결정 [`decisions/storefront.md` 2026-10-08](./decisions/storefront.md#2026-10-08).
-다음 대기 행은 **31행(buyer-sample-order A — 서버 주문·결제 + klow_web 실결제)** — 24행을 2026-10-14 계획 세션이 31·32·33행으로 대체했다(`§6 buyer-sample-order`). 아래 push·운영 작업은 그대로 사용자 몫이다.
+**`§7` 31행(buyer-sample-order A)은 2026-10-14 에 끝났다** — klow_server `b593ec1` · klow_web `57426ff`, 두 레포 git **`feat/buyer-sample-order`** + Neon DB 브랜치 **`ep-rough-leaf`**(마이그레이션 `20261014063926_add_buyer_sample_order` 적용) — **staging 미병합·push 안 함**. 엑심베이 테스트 MID 실결제 왕복 확인(`§9` 31행 메모). **다음 대기 행은 32행(입고 흐름)** — 같은 브랜치·같은 DB 브랜치에서 이어 간다. 아래 push·운영 작업은 그대로 사용자 몫이다.
 
 **`§7` 7·8행 — seeding-bulk-invoice 의 staging push**(= 사용자 `git push`). 코드·문서는 2026-09-30 에
 끝났다. ⚠️ **push 순서: `klow_server` → `klow_admin`·`klow_web` → `klow_brand`**(brand 가 먼저면 새 버튼이
@@ -961,7 +961,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 #### 32. B. 입고 흐름 · 33. C. 합포장 송장 + 마무리
 
-제목과 순서만 — 명세는 앞 단계가 끝난 뒤 트랙 문서 §4 B·C 에 정밀화한다. 33행이 결정 기록·색인을 맡는다.
+제목과 순서만 — 명세는 앞 단계가 끝난 뒤 트랙 문서 §4 B·C 에 정밀화한다. 33행이 결정 기록·색인(CLAUDE.md 모듈 목록에 `buyer-orders` 포함)을 맡는다.
+
+- 다음: **32행** — git `feat/buyer-sample-order`(klow_server·klow_web 에 있음, klow_admin·klow_brand 는 `staging` 에서 새로 판다) + DB 브랜치 `ep-rough-leaf` 그대로. 읽을 것: 트랙 문서 §4 B · §6(31 이 스펙과 다르게 한 것) · `server/modules/buyer-orders.md` · `§9` 31행 메모
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -1029,7 +1031,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 28 | buyer-auth | **B. klow_web** — 목업 `KbBuyer`·`KbSignup` 실연결(로그인·Keep me signed in·비번 찾기·가입 3단계 실 OTP·서류 업로드) · 계정 배지(Under review/Verified) · 프로필 PATCH · 소비자 `SessionSyncMount` 바이어 경로 정지 · mock-parity 갱신 — **staging 병합·배포 완료(2026-10-08)** | 완료 | ✗ | 2026-10-08 | - / - / - / 9d4117b · e221297 / (이 커밋) |
 | 29 | buyer-auth | **C. klow_admin "바이어 계정"** — 목록·상세(가입 정보·서류 미리보기)·상태(배지)+메모 + 결정 기록·색인 · staging 병합 메모(server → admin·web) — **staging 병합·배포 완료(2026-10-08)** | 완료 | ✗ | 2026-10-08 | - / 367a06d · 83e58e5 / - / - / (이 커밋) |
 | 24 | buyer-platform | **E. 실구현 — 샘플박스 주문·결제** — 2026-10-14 계획 세션이 **buyer-sample-order 31·32·33행으로 대체**했다(서버 장바구니는 스코프 밖으로 뺐다) | 대체됨 → 31~33 | ✗ | 2026-10-14 | |
-| 31 | buyer-sample-order | **A. 서버 주문·결제 + klow_web 실결제** — 마이그레이션 `add_buyer_sample_order`(`Order.kind`·`buyerUserId` · `OrderBrandIntake` · `OrderPartialRefund` · `Shipment.brandId` nullable · `ShopSettings` 발송인 — **git `feat/buyer-sample-order` + DB 브랜치 필수**) → 소비자 쿼리 `kind` 필터 전수 → `modules/buyer-orders/` quote·create·prepare + payment 후속효과 분기 + 브랜드/바이어 메일 → KbCheckout(전체 배송지)·KbPayment(엑심베이 실결제)·계정 서버 주문. 정지점 ①마이그레이션 ②서버 ③web — 명세 `plan/buyer-sample-order/implementation-plan.md §4 A` | 대기 | ✗ | | |
+| 31 | buyer-sample-order | **A. 서버 주문·결제 + klow_web 실결제** — 마이그레이션 `add_buyer_sample_order`(`Order.kind`·`buyerUserId` · `OrderBrandIntake` · `OrderPartialRefund` · `Shipment.brandId` nullable · `ShopSettings` 발송인 — **git `feat/buyer-sample-order` + DB 브랜치 필수**) → 소비자 쿼리 `kind` 필터 전수 → `modules/buyer-orders/` quote·create·prepare + payment 후속효과 분기 + 브랜드/바이어 메일 → KbCheckout(전체 배송지)·KbPayment(엑심베이 실결제)·계정 서버 주문. 정지점 ①마이그레이션 ②서버 ③web — 명세 `plan/buyer-sample-order/implementation-plan.md §4 A` | 완료 | ✗ | 2026-10-14 | b593ec1 / - / - / 57426ff / (이 커밋) |
 | 32 | buyer-sample-order | **B. 입고 흐름** — klow_brand '샘플 요청' 페이지(KLOW 사무실 주소 · 발송함) · klow_admin 바이어 주문 목록/상세(브랜드별 입고 확인 · 미반응 강조) · 품목 부분환불(엑심베이 `P` 실왕복) · 어드민 KLOW 발송인 설정. 배포 server → admin → brand | 대기 | ✗ | | |
 | 33 | buyer-sample-order | **C. 합포장 EFS 송장 + 라벨 + 트래킹 + 마무리** — builder 라인별 통관 · `Shipment(brandId=null)` 1장 발급(발송인 KLOW) · 어드민 라벨 출력 · 바이어 요청 상세 추적 · 결정 기록·CLAUDE.md 색인. EFS 실발급은 staging 1건(사용자 확인 후) | 대기 | ✗ | | |
 | 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
@@ -1102,6 +1104,16 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-sample-order — 31행 A (완료 · klow_server `b593ec1` · klow_web `57426ff`, 브랜치 `feat/buyer-sample-order` · DB 브랜치 `ep-rough-leaf` · staging 미병합)
+
+- **한 것**: 트랙 문서 §4 A 의 1~4 전부. 서버 = 마이그레이션 `20261014063926_add_buyer_sample_order` + `modules/buyer-orders/`(견적·생성·목록·상세·바이어 prepare) + payment 분기(prepare 소유권 · markPaid 후속효과 · return 303 목적지) + 결제 후 입고 행·메일 3종 + 소비자 집계 `kind: consumer` 필터(목록은 트랙 문서 §5). 웹 = 체크아웃 배송지 폼·서버 견적 · 엑심베이 실결제 · 완료/목록/상세 서버 주문. 문서 `server/modules/buyer-orders.md`, mock-parity 갱신
+- **스펙과 다르게 한 것**(트랙 문서 §6): ⚠️ **`Shipment.brandId` nullable 은 33행으로 미룸**(정산·EFS 청구 59곳 타입이 깨진다 — 33 이 두 번째 마이그레이션으로) · `Order.buyerNote` 추가(운영팀만 — 라벨 "Note to the KLOW team") · 견적은 내려간 샘플을 400 대신 `unavailableProductIds` 로 · "Reorder these samples" 제거
+- **실측(로컬 :4000 서버 `RESEND_API_KEY=` + 사용자 dev :3001 · DB 브랜치 `ep-rough-leaf` · 엑심베이 테스트 MID, Playwright)**: 체크아웃 프리필(이름·전화·이메일) · 필수칸 영어 문구 · 견적 $6 + US $13.36(소비자 US 요율과 같은 값) → 결제 2단계 → 엑심베이 테스트창(4111…1111) → `[0000] Success` → `/payment/return` 303 → 완료 화면 "We charged $19.36" · 샘플박스 비워짐 → DB: `paid`·`pgTid`·`pgCurrency=USD`·`buyerNote` · `OrderBrandIntake` 1행 `brandEmailedAt` 채워짐 · **`Shipment` 0행**(G3) · 메일 3통 콘솔 기록 → 계정 목록·상세. curl: 비로그인 401 · US State 누락 400 · 내려간 제품 섞인 주문 400 `samples_unavailable` · **게스트로 소비자 prepare 에 바이어 주문 id → 404** · 실패 리턴(`rescode=X059`) → `payment_failed` + 완료 화면 "Try again" · **소비자 주문 실패 리턴은 그대로 `/checkout/redirect`**. 검증: typecheck 2종 · jest 1619 · e2e · 라우트 465(+5) · klow_web tsc·eslint·`next build`(복사본)
+- **확인 못 한 것**: 엑심베이 **웹훅**(로컬이라 외부에서 안 닿는다 — 리턴 경로로만 확정) · 실 Resend 메일 렌더(브랜드 메일이 DB 브랜치의 **실제 브랜드 담당자**에게 가므로 일부러 껐다 — staging 에선 운영팀 수신함부터 볼 것) · 모바일 폭
+- **남은 데이터(DB 브랜치)**: 테스트 바이어 `delivered+kb31@resend.dev`(세션 토큰 `kb31-test-session-token`) · 주문 3건(paid 1 · failed 1 · 소비자 failed 1)
+- ⚠️ **klow_server `.env` 의 `DATABASE_URL` 이 지금 `ep-rough-leaf` 를 가리킨다**(1행 주석에 staging 값) — 32·33행이 같은 DB 브랜치를 쓰므로 그대로 둔다. staging 병합 때 되돌릴 것
+- **32행이 알 것**: 입고 행은 결제 순간 생긴다(`buyer-sample-paid.ts`) · 브랜드 메일은 `/samples` 링크를 싣는다(32 가 그 페이지를 만든다) · 바이어 상태 판정은 `buyerSampleStatus`(intake 상태만 보면 된다) · 부분환불 시 `OrderItem.cancelledAt` + `OrderPartialRefund` + 그 브랜드 품목이 다 취소되면 intake `cancelled` · 기존 `refundOrder` 는 전액(F)만 — 부분은 새 함수(G9)
 
 ### buyer-shelf-bands — 30행 (완료 · `staging` 커밋, push 전)
 

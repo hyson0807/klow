@@ -60,6 +60,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [b2b](./modules/b2b.md)                                              | B2B 도매 — 바이어 공개 페이지(도매가·MOQ·구간) + 주문서 접수·알림메일 + AI 원본 가격표 추출 |
 |            | [buyer](./modules/buyer.md)                                          | 바이어 공간(klow.kr/) — 어드민 큐레이션 오버레이(브랜드·제품·구간가·홈 구성) + 공개 API + 문의 저장·메일 |
 |            | [buyer-auth](./modules/buyer-auth.md)                                | 바이어 계정 — 이메일+비번 로그인·가입(이메일 OTP·서류 R2 비공개 업로드)·비번 찾기 + 어드민 검수 상태(배지)·서류 프록시 |
+|            | [buyer-orders](./modules/buyer-orders.md)                            | 바이어 샘플 주문·결제 — 서버 견적(500g 요율 · 5 SKU 무료) · 주문 생성(`Order.kind=buyer_sample`) · 엑심베이 prepare(바이어 전용) · 결제 후 브랜드별 입고 행 + 메일 3종
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |
 | **운영**   | [stats](./modules/stats.md)                                           | 어드민 대시보드 카운트 + 수익(KPI) + 주간 수출 물량      |
 |            | [storefront-stats](./modules/storefront-stats.md)                     | 브랜드관 방문(일반/할인링크/현장) → 장바구니 담기 전환 퍼널 |
