@@ -1,13 +1,13 @@
 # 결정 기록 색인
 
-주제별 파일에 과거 결정 87건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
+주제별 파일에 과거 결정 88건이 날짜순으로 있다. **본문은 `CLAUDE.md` 에서 원문 그대로 옮긴 것**이다.
 `CLAUDE.md` 의 `## 결정 기록` 에 같은 색인이 실려 매 세션 자동 로드된다 — 거기서 항목을 찾고 여기서 본문을 읽는다.
 
 | 주제 | 파일 | 건수 |
 |---|---|---|
 | 제품 · 가격 · 번역 | [`products.md`](./products.md) | 11 |
 | 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 18 |
-| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 19 |
+| 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 20 |
 | 정산 | [`settlement.md`](./settlement.md) | 10 |
 | EFS 배송비 후청구 | [`efs-billing.md`](./efs-billing.md) | 2 |
 | 결제 (PG) | [`payment.md`](./payment.md) | 3 |
@@ -107,3 +107,4 @@
 | `2026-10-05` | [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지)](./storefront.md#2026-10-05-2) | storefront |
 | `2026-10-08` | [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](./storefront.md#2026-10-08) | storefront |
 | `2026-10-12` | [klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음)](./storefront.md#2026-10-12) | storefront |
+| `2026-10-14` | [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400)](./shipping-seeding.md#2026-10-14) | shipping-seeding |

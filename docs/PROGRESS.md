@@ -27,7 +27,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 **⚠️ buyer-auth 트랙(`§7` 27·28·29행)은 2026-10-08 에 코드가 전부 끝났다** — klow_server `6cbe563`·`b55500f` · klow_web `9d4117b`·`e221297` · klow_admin `367a06d`·`83e58e5`(둘째 해시는 같은 날 전체 점검),
 ✅ **2026-10-08 staging 병합·배포 완료**(사용자 지시) — staging DB(`ep-icy-flower`)에 `add_buyer_auth` 적용(`migrate deploy`, 대기 1건뿐이었다) → klow_server ff·push → `api-staging` 에서 `/v1/buyer/auth/me` 401 확인 → klow_admin·klow_web ff·push. klow_server `.env` 는 staging DB 로 되돌렸다.
 남은 건 staging 실사용 확인(`§9` 29행 메모)과 **운영 배포**(그 전에 서류 비공개 버킷 결정 — 같은 메모). 결정 [`decisions/storefront.md` 2026-10-08](./decisions/storefront.md#2026-10-08).
-**`§7` 31·32행(buyer-sample-order A·B)은 2026-10-14 에 끝났다** — klow_server `b593ec1`·`0bcde9d` · klow_web `57426ff` · klow_admin `3ad4a7c` · klow_brand `25cbf5a`, 네 레포 모두 git **`feat/buyer-sample-order`** + Neon DB 브랜치 **`ep-rough-leaf`**(마이그레이션 `20261014063926_add_buyer_sample_order` 적용 — 32행은 스키마 무변경) — **staging 미병합·push 안 함**. 엑심베이 테스트 MID 로 결제 + **부분환불(`P`) 3회 실왕복** 확인(`§9` 31·32행 메모). **다음 대기 행은 33행(합포장 송장 + 마무리)** — 같은 브랜치·같은 DB 브랜치에서 이어 간다. 아래 push·운영 작업은 그대로 사용자 몫이다.
+**`§7` 31·32행(buyer-sample-order A·B)은 2026-10-14 에 끝났다** — klow_server `b593ec1`·`0bcde9d` · klow_web `57426ff` · klow_admin `3ad4a7c` · klow_brand `25cbf5a`, 네 레포 모두 git **`feat/buyer-sample-order`** + Neon DB 브랜치 **`ep-rough-leaf`**(마이그레이션 `20261014063926_add_buyer_sample_order` 적용 — 32행은 스키마 무변경) — **staging 미병합·push 안 함**. 엑심베이 테스트 MID 로 결제 + **부분환불(`P`) 3회 실왕복** 확인(`§9` 31·32행 메모). **33행(합포장 송장 + 마무리)도 2026-10-14 에 끝났다** — 트랙 코드 완료(네 레포 `feat/buyer-sample-order` · DB 브랜치에 마이그레이션 2개 추가 적용). **남은 것은 사용자 결정**: ① staging 병합(**migrate deploy 3개 → server → admin → brand → web**, `klow_server/.env` 를 staging DB 로 되돌릴 것) ② staging 에서 KLOW 발송인 입력 후 **EFS 실발급 1건**(⚠️ 실송장 — 다브랜드·라인별 통관 24번을 EFS 가 받는지 미검증) ③ 운영 배포 전 G9(부분환불) 운영 노출 확인. `§9` 33행 메모. 아래 push·운영 작업은 그대로 사용자 몫이다.
 
 **`§7` 7·8행 — seeding-bulk-invoice 의 staging push**(= 사용자 `git push`). 코드·문서는 2026-09-30 에
 끝났다. ⚠️ **push 순서: `klow_server` → `klow_admin`·`klow_web` → `klow_brand`**(brand 가 먼저면 새 버튼이
@@ -963,7 +963,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 제목과 순서만 — 명세는 앞 단계가 끝난 뒤 트랙 문서 §4 B·C 에 정밀화한다. 33행이 결정 기록·색인(CLAUDE.md 모듈 목록에 `buyer-orders` 포함)을 맡는다.
 
-- 다음: **33행** — git `feat/buyer-sample-order`(네 레포 전부 있음) + DB 브랜치 `ep-rough-leaf` 그대로. 명세 정밀화부터(트랙 문서 §4 C). 읽을 것: 트랙 문서 §4 C · §6·§7(31·32 가 스펙과 다르게 한 것) · `server/modules/buyer-orders.md` · `§9` 31·32행 메모. ⚠️ `Shipment.brandId` nullable 마이그레이션이 33행 몫이다(31행이 미뤘다)
+- 트랙 코드 완료(31·32·33). 다음 단계 없음 — 남은 것은 staging 병합·EFS 실발급 1건·운영 배포(사용자 결정, `§9` 33행 메모). 운영 배포가 확인되면 `§2` 퇴출(트랙 폴더는 `server/modules/buyer-orders.md` 가 현행 설명이라 `archive/`)
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -1033,7 +1033,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 24 | buyer-platform | **E. 실구현 — 샘플박스 주문·결제** — 2026-10-14 계획 세션이 **buyer-sample-order 31·32·33행으로 대체**했다(서버 장바구니는 스코프 밖으로 뺐다) | 대체됨 → 31~33 | ✗ | 2026-10-14 | |
 | 31 | buyer-sample-order | **A. 서버 주문·결제 + klow_web 실결제** — 마이그레이션 `add_buyer_sample_order`(`Order.kind`·`buyerUserId` · `OrderBrandIntake` · `OrderPartialRefund` · `Shipment.brandId` nullable · `ShopSettings` 발송인 — **git `feat/buyer-sample-order` + DB 브랜치 필수**) → 소비자 쿼리 `kind` 필터 전수 → `modules/buyer-orders/` quote·create·prepare + payment 후속효과 분기 + 브랜드/바이어 메일 → KbCheckout(전체 배송지)·KbPayment(엑심베이 실결제)·계정 서버 주문. 정지점 ①마이그레이션 ②서버 ③web — 명세 `plan/buyer-sample-order/implementation-plan.md §4 A` | 완료 | ✗ | 2026-10-14 | b593ec1 / - / - / 57426ff / (이 커밋) |
 | 32 | buyer-sample-order | **B. 입고 흐름** — klow_brand '샘플 요청' 페이지(KLOW 사무실 주소 · 발송함) · klow_admin 바이어 주문 목록/상세(브랜드별 입고 확인 · 미반응 강조) · 품목 부분환불(엑심베이 `P` 실왕복) · 어드민 KLOW 발송인 설정. 배포 server → admin → brand | 완료 | ✗ | 2026-10-14 | 0bcde9d / 3ad4a7c / 25cbf5a / - / (이 커밋) |
-| 33 | buyer-sample-order | **C. 합포장 EFS 송장 + 라벨 + 트래킹 + 마무리** — builder 라인별 통관 · `Shipment(brandId=null)` 1장 발급(발송인 KLOW) · 어드민 라벨 출력 · 바이어 요청 상세 추적 · 결정 기록·CLAUDE.md 색인. EFS 실발급은 staging 1건(사용자 확인 후) | 대기 | ✗ | | |
+| 33 | buyer-sample-order | **C. 합포장 EFS 송장 + 라벨 + 트래킹 + 마무리** — 마이그레이션 `shipment_brand_nullable` + `shipment_brand_fk_restrict` · builder 라인별 통관 · `Shipment(brandId=null)` 1장 발급(발송인 KLOW) · 어드민 라벨 출력 · 바이어 요청 상세 추적 · 결정 [shipping-seeding 2026-10-14](./decisions/shipping-seeding.md#2026-10-14)·CLAUDE.md 색인. **남은 것: EFS 실발급 staging 1건(사용자 확인 후) · staging 병합** | 완료 | ✗ | 2026-10-14 | 1b89c2b / fcdcc0e / - / 7d23914 / (이 커밋) |
 | 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
 | 26 | ems-dtp-carrier | **EMS-DTP 캐리어 추가** — 배송비용 탭 국가 고정 캐리어 선택지 + EFS 3번 필드 `EMSDTP`. 마이그레이션 `20261005062641_add_ems_dtp_carrier`(ADD VALUE · staging DB 적용됨 · `feat/buyer-platform` 에도 cherry-pick `7385669` + DB 브랜치 `ep-sparkling-sun` 적용). 남은 것: **staging 실발급 1건**(EMS-DTP 국가 지정 → EFS 가 `EMSDTP` 수락 확인) → 운영 `migrate deploy` 후 서버 → 프론트 3개 배포 | 완료 | ✗ | 2026-10-05 | 4a258b9 / 591f1ec / e7c1594 / 542ac40 / (이 커밋) |
 | 30 | buyer-shelf-bands | **큐레이션 선반 안 필터 칩** — 어드민 선반마다 칩(라벨+보조문구) 추가·순서·삭제 + 제품을 칩에 배정(제품당 0~1개) · klow_web 칩(KLOWBUYER 동일) · `PUT /admin/buyer/shelves/:id/bands` · 마이그레이션 `20261009125951_add_buyer_shelf_bands`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-09](./decisions/storefront.md#2026-10-09). 남은 것: push(server → admin·web) → staging 화면 실측 → 운영 `migrate deploy` → 배포 | 완료 | ✗ | 2026-10-09 | d236ba1 / d6bcd18 / - / 8736dee / (이 커밋) |
@@ -1104,6 +1104,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-sample-order — 33행 C (완료 · klow_server `1b89c2b` · klow_admin `fcdcc0e` · klow_web `7d23914`, 브랜치 `feat/buyer-sample-order` · DB 브랜치 `ep-rough-leaf` · staging 미병합) — 트랙 코드 끝
+
+- **한 것**: 마이그레이션 `20261014073857_shipment_brand_nullable`(DROP NOT NULL) + `20261014074013_shipment_brand_fk_restrict`(⚠️ Prisma 가 FK 를 `SET NULL` 로 바꿔 놓아 원래 `RESTRICT` 로 되돌림 — 브랜드 삭제가 송장을 '합포장'으로 바꾸지 않게). 서버 `createConsolidatedForBuyerOrder` · `POST /admin/buyer/orders/:id/shipment` · nullable 타입 정리(`onlyBrandShipments`) · 상태 shipped/delivered · 바이어 `tracking`. admin 합포장 카드·라벨(`react-barcode` 추가)·송장 화면 brand null. web `KbRequestDetail` 추적. 결정 [shipping-seeding 2026-10-14](./decisions/shipping-seeding.md#2026-10-14) · CLAUDE.md 색인·모듈 목록 · 모듈 문서 2개 · 트랙 문서 §4 C·§8 · mock-parity
+- **스펙과 다르게 한 것**(트랙 문서 §8): 통관 = 품목 브랜드 취급 품목(OrderItem.hsCode 아님) · 발급 뒤 환불·입고 되돌리기 400 · 재발급은 같은 엔드포인트, 취소·추적은 기존 `/admin/shipments/:id/*`
+- **실측(DB 브랜치, :4010)**: 입고 끝난 주문 `cmv7qs6s…` 상세 = `packed`·`canIssueShipment`·blocker '발송인 공란' → 발급 POST 400(EFS 호출 0) · 같은 주문을 `/admin/shipments` 로 → 400 '합포장으로만' · 합포장 송장 0행. 검증: server typecheck 2종·jest 1640·e2e·라우트 478(+1) / admin tsc·eslint·`next build` / web tsc·eslint·`next build`(복사본)
+- **확인 못 한 것**: ⚠️ **EFS 실발급 0건**(로컬 EFS 가 실계정) — payload 는 `consolidated-shipment.spec.ts` 가 잠금. 라벨 인쇄 창·어드민 카드·바이어 추적 줄 **화면 실측 안 함**(발급된 송장이 없어 렌더 경로가 비어 있다). 추적 cron 의 합포장 송장 갱신·completed 전이도 실데이터 없음
+- **남은 데이터**: 발송인은 여전히 빈 값(staging 에서 입력할 것) · 임시 어드민 세션 지웠다 · `klow_server/.env` 는 여전히 `ep-rough-leaf`
+- **병합 때 알 것**: staging DB 에 마이그레이션 **3개**(`add_buyer_sample_order` → `shipment_brand_nullable` → `shipment_brand_fk_restrict`) — 전부 롤링 안전. klow_admin 의존성 `react-barcode` 추가(배포 `npm ci`)
 
 ### buyer-sample-order — 32행 B (완료 · klow_server `0bcde9d` · klow_admin `3ad4a7c` · klow_brand `25cbf5a`, 브랜치 `feat/buyer-sample-order` · DB 브랜치 `ep-rough-leaf` · staging 미병합)
 

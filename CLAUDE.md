@@ -57,7 +57,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Database schema               | `klow_server/prisma/schema.prisma`                                                                      |
 | Migrations                    | `klow_server/prisma/migrations/`                                                                        |
 | API 엔드포인트 문서           | `docs/server/README.md` (모듈 색인) + `docs/server/modules/<module>.md` — 컨트롤러 변경 시 함께 갱신     |
-| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, buyer, buyer-auth, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, site-traffic, stats, subscription, translation, upload) |
+| Server modules                | `klow_server/src/modules/` (admin-auth, audit-logs, auth, b2b, brand-applications, brand-auth, brand-crm, brand-domains, brand-notices, brand-scraper, brands, buyer, buyer-auth, buyer-orders, cafe24, cart, contact, curated-influencers, customers, fulfillment, instagram, orders, payment, products, promotions, reviews, seeding, settlement, shipments, shipping, shop, site-traffic, stats, subscription, translation, upload) |
 | Server validation (zod)       | `klow_server/src/common/validation/` (도메인별 파일 + index.ts 배럴 — import 경로는 `common/validation` 유지)     |
 | 가격 커널 (공유)              | `klow_server/src/pricing/` (배럴 — formulas/fx/country-price/promotion/price-line/chargeable-brands). **`modules/` 의 형제**이고 6개 모듈이 의존한다 |
 | 카페24 자사몰 연동            | `klow_server/src/modules/cafe24/` (OAuth 왕복 · 상품 매핑 · 주문 미러 → 3PL 출고신청 전환). ⚠️ **`mallId` 가 그대로 API 호스트가 되는 SSRF 축**이라 zod + `cafe24ApiOrigin()` 두 겹으로 막는다. 엔드포인트: `docs/server/modules/cafe24.md` |
@@ -92,6 +92,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
 | 서버 인증 모듈                | `klow_server/src/modules/web-auth/` (service, controller, password/session, email/phone OTP, Solapi SMS, google strategy) |
 | UserGuard + CurrentUser       | `klow_server/src/modules/web-auth/user.guard.ts`, `klow_server/src/modules/web-auth/current-user.decorator.ts` |
+| 바이어 샘플 주문 (buyer-orders) | 서버 `klow_server/src/modules/buyer-orders/`(견적·주문·결제 후속효과 · 브랜드 입고 · 어드민 입고/부분환불/전체 취소 · **KLOW 합포장 EFS 송장** — 발급은 `shipments.createConsolidatedForBuyerOrder`, `Shipment.brandId = null`) · klow_web `components/buyer-space/{KbCheckout,KbPayment,KbComplete,KbAccount,KbRequestDetail}.tsx` · klow_brand `(authed)/samples/` · klow_admin `(authed)/buyer/orders/` + 라벨 `components/ShippingLabel.tsx`. ⚠️ 소비자 `Order` 재사용(`kind = buyer_sample`) — 소비자 집계는 `kind: consumer` 로 거른다. 엔드포인트: `docs/server/modules/buyer-orders.md` |
 | 바이어 계정 (buyer-auth)       | 서버 `klow_server/src/modules/buyer-auth/`(소비자 `web-auth` 와 **별개** — `BuyerUser`·쿠키 `klow_buyer_sid`·`/v1/buyer/auth/*` + 어드민 `/admin/buyer/accounts/*` 서류 중계) · klow_web `components/buyer-space/{KbBuyer,KbSignup,KbAccount}.tsx` · klow_admin `(authed)/buyer/accounts/`. 엔드포인트: `docs/server/modules/buyer-auth.md` |
 | 고객 직접 리뷰                | 서버 `klow_server/src/modules/reviews/`(`customer-review.service.ts` 토큰 게이트 · `review-request.{service,cron}.ts` 메일 큐 — cron **기본 off**) · 손님 작성 페이지 `klow_web/src/app/review/[orderId]/` + `src/lib/upload.ts` · klow_brand `studio/_components/product-reviews/ReviewListItem.tsx`(고객 작성은 읽기 전용). 엔드포인트: `docs/server/modules/reviews.md` |
 | Admin toast feedback          | `klow_admin/src/components/Toast.tsx` (`useToast()`) + wired into `klow_admin/src/hooks/useFormState.ts` |
@@ -144,9 +145,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 88건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 89건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 88건 중 62건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 89건 중 63건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -213,6 +214,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-01` [엑셀 일괄 송장이 KLOW 양식을 벗어난다 — 브랜드 자기 양식은 AI 가 열을 짚는다](docs/decisions/shipping-seeding.md#2026-10-01-2)
 - `2026-10-02` [한셀 명단이 빈 시트로 읽혔다 + 올린 명단을 업로드 직후 자동 정리한다 (주소 나누기만 AI 가 값을 옮겨 적는 예외 — 부분문자열 되짚기)](docs/decisions/shipping-seeding.md#2026-10-02)
 - `2026-10-05` [EMS-DTP 캐리어 추가 — EFS 토큰 `EMSDTP` (정산표 실측값 · 발급 경로 실검증은 staging 1건 대기)](docs/decisions/shipping-seeding.md#2026-10-05)
+- `2026-10-14` [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400 · EFS 실발급 staging 1건 대기)](docs/decisions/shipping-seeding.md#2026-10-14)
 
 ### 정산 — `settlement.md`
 

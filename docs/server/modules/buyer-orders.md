@@ -20,7 +20,7 @@
 | `POST orders/quote` `{productIds, countryCode}` | 견적. 공개 화면과 **같은 노출 판정**(`BuyerPublicService.visibleByProductIds`)을 통과하고 샘플가(구간표 1행)가 있는 제품만 계산. 내려간 제품은 거절하지 않고 `unavailableProductIds` 로 알린다(금액은 남은 것 기준). 응답 `{lines, subtotalUsdCents, shippingUsdCents, totalUsdCents, freeShipping, freeShippingSkus, unavailableProductIds}`. 국가 게이트(배송지원 제외·요율 미설정·EFS 제외구역)는 소비자와 같은 `shipping.resolveProductShipping` 이 400 |
 | `POST orders` | 주문 생성(pending). 본문 = 소비자 주문의 수화인 칸(`recipientAddressFields` — 국가별 필수 규칙 공용) + `country`·`countryCode`·`productIds`·`note?`(≤500, **운영팀만 본다**)·`email?`(생략 시 계정 이메일)·동의 3종 `literal(true)`. **내려간 제품이 하나라도 있으면 400 `samples_unavailable` + `productIds`** — 바이어가 담은 것과 다른 걸 결제시키지 않는다. 가격·배송비는 서버가 재계산(G5). → `{orderId, totalUsdCents}` |
 | `GET orders` | 내 요청 목록(최근 50) — **결제창을 연 적 없는 pending 은 뺀다**(실패·환불은 남긴다) |
-| `GET orders/:id` | 상세. 남의 주문·소비자 주문은 404. 응답의 `status` 는 서버가 계산한다(아래) |
+| `GET orders/:id` | 상세. 남의 주문·소비자 주문은 404. 응답의 `status` 는 서버가 계산한다(아래). `tracking` = 합포장 송장 추적(`buyerTracking` — EFS·현지 송장번호, 현지 조회 URL, 최근 상태, 이벤트, 발송 시각). 발급(submitted) 전엔 null |
 | `POST payment/prepare` `{orderId}` | 엑심베이 결제창 준비 — 소비자 `v1/payment/prepare` 와 **같은 payload**. 해외 카드(USD)만(국내 MID 없음). 상품 링크는 `/shop/products/:id` |
 
 ## 브랜드 API (`@Controller('v1/brand/sample-requests')`, `BrandGuard`)
@@ -41,10 +41,11 @@ klow_admin `/buyer/orders`(사이드바 '바이어 공간 › 샘플 주문'). �
 | 메서드 · 경로 | 동작 |
 |---|---|
 | `GET /admin/buyer/orders?view=open\|all&q=` | `open` = 결제완료 중 requested/preparing/packed, `all` = 결제창을 연 전부. 검색 = 주문 id·이메일·이름·회사·브랜드명. 행마다 브랜드 입고 집계(`requested/shipped/receivedCount`)·`unmailedCount`(메일 못 받은 브랜드) |
-| `GET /admin/buyer/orders/:id` | 상세 — 품목(브랜드 id 포함) · 브랜드별 입고 카드(발송·입고 시각, 입고 처리 어드민, 담당자 연락처) · 환불 내역 · `remainingUsdCents` |
+| `GET /admin/buyer/orders/:id` | 상세 — 품목(브랜드 id 포함) · 브랜드별 입고 카드(발송·입고 시각, 입고 처리 어드민, 담당자 연락처) · 환불 내역 · `remainingUsdCents` · `shipment`(가장 최근 합포장 송장 + `tracking`) · `canIssueShipment`(송장이 없거나 마지막 시도가 failed/cancelled) · `issueBlockers`(입고 미완료 · KLOW 발송인 공란 — 서버가 발급 때 같은 조건을 다시 본다) |
 | `PUT …/:id/brands/:brandId/received` | 입고 확인 — 브랜드가 '발송함'을 안 눌렀어도 된다. 결제완료 주문만 |
-| `DELETE …/:id/brands/:brandId/received` | 되돌리기 — 브랜드가 발송했었으면 `brand_shipped`, 아니면 `requested` |
-| `POST …/:id/items/cancel` `{orderItemIds, reason}` | **품목 부분환불(엑심베이 `P`)** — 고른 품목 금액만(배송비는 남는다). 남은 품목 **전부**면 400(→ 전체 취소). 순서 = **품목 선점(`cancelledAt` 조건부 update) → PG → `OrderPartialRefund` 기록**, PG 실패면 선점 해제. 그 브랜드 품목이 다 취소되면 입고 행 `cancelled` |
+| `DELETE …/:id/brands/:brandId/received` | 되돌리기 — 브랜드가 발송했었으면 `brand_shipped`, 아니면 `requested`. 합포장 송장이 pending/submitted 면 400 |
+| `POST …/:id/items/cancel` `{orderItemIds, reason}` | **품목 부분환불(엑심베이 `P`)** — 고른 품목 금액만(배송비는 남는다). 남은 품목 **전부**면 400(→ 전체 취소). 합포장 송장이 pending/submitted 면 400(전체 취소도 같다 — 먼저 EFS 송장 취소). 순서 = **품목 선점(`cancelledAt` 조건부 update) → PG → `OrderPartialRefund` 기록**, PG 실패면 선점 해제. 그 브랜드 품목이 다 취소되면 입고 행 `cancelled` |
+| `POST …/:id/shipment` | **KLOW 합포장 EFS 송장 발급**(진행표 33행) — ⚠️ EFS 실계정 호출. 실패 송장 재발급도 이 경로. → `{order(상세), warnings, error}` — EFS 거절은 throw 가 아니라 `error`(송장 행은 failed 로 남는다). 400: 결제완료 아님 · 입고 미완료 · KLOW 발송인 공란 · 국내(`DOMESTIC`) 주문. 아래 '합포장 송장' 절 |
 | `POST …/:id/cancel` `{reason}` | 전체 취소 — 남은 결제액 전부. 부분환불이 없었으면 `F`(소비자와 같은 `refundOrder`), 있었으면 **남은 잔액을 `P`** 로 + 이력 1행(`[전체 취소]`). → `refunded`/`cancelled` + 입고 행 전부 `cancelled`. pending 이면 PG 없이 취소만 |
 | `GET/PATCH /admin/settings/klow-sender` `{name, address, postalCode, phone}` | KLOW 발송인(D7) = 브랜드가 샘플을 보낼 주소 + 합포장 송장 발송인. 이름·우편번호·전화는 EFS 바이트 캡(`EFS_MAX_BYTES.sender*`), 주소는 200자 |
 
@@ -61,10 +62,12 @@ klow_admin `/buyer/orders`(사이드바 '바이어 공간 › 샘플 주문'). �
 | `payment_failed` | `failed` |
 | `requested` | 결제완료 · 아직 어느 브랜드도 발송 전(입고 행 생성 전 포함) |
 | `preparing` | 한 브랜드라도 `brand_shipped`/`received` |
-| `packed` | 취소 안 된 전 브랜드 `received` |
-| `cancelled` | `refunded`/`cancelled` 또는 전 브랜드 `cancelled` |
+| `packed` | 취소 안 된 전 브랜드 `received` (= 합포장 송장 발급 대기. 실패·취소된 송장 시도도 여기로 돌아온다) |
+| `shipped` | 합포장 송장 `submitted` |
+| `delivered` | 그 송장의 EFS 추적이 배송완료 코드(`EFS_DELIVERED_CODES`) |
+| `cancelled` | `refunded`/`cancelled` 또는 전 브랜드 `cancelled` (송장이 있어도 결제가 환불이면 이쪽) |
 
-발송·배송완료는 합포장 송장 단계(진행표 33행)가 더한다.
+어드민 목록의 `open` 은 `requested`/`preparing`/`packed` 까지다(송장 발급 전).
 
 ## 배송비 (`buyer-sample-pricing.ts`, D3)
 
@@ -87,3 +90,18 @@ SKU(= 품목 — 샘플은 제품당 1개) **5개 이상이면 0**, 그 미만�
 
 - `common/validation/order.ts` — 국가별 수화인 필수 규칙을 `checkRecipientCountryFields` 로 뽑았다(`CreateOrderInput` 동작 동일).
 - `kind: consumer` 필터 — `orders/contact-population.ts#CONTACT_ORDER_WHERE`(브랜드 CRM·어드민 컨택트·리뷰 요청) · 어드민 주문 목록 · 송장 대기 그룹 · 정산 대상 · 브랜드관 판매 통계 · 주별 주문 유형 추이. 전체 목록과 판단은 트랙 문서 §5.
+
+## 합포장 송장 (진행표 33행 · G8)
+
+여러 브랜드의 샘플을 KLOW 사무실에서 한 박스로 묶어 **EFS 송장 1장**으로 보낸다. 구현은 shipments 모듈의
+`ShipmentsService.createConsolidatedForBuyerOrder`(이 모듈은 `ShipmentsModule` 을 import 할 뿐이다). 결정 본문은
+[`decisions/shipping-seeding.md` 2026-10-14](../../decisions/shipping-seeding.md#2026-10-14).
+
+- `Shipment.brandId = null` + `ShipmentItem` = 취소 안 된 품목 전부. 발송인 = `ShopSettings.klowSender*`(이름·주소·전화 필수 — 브랜드 송화인 폴백 없음)
+- 통관 24-6/24-8 = **라인마다** 그 품목 브랜드의 취급 품목. 26번 = 남은 샘플가 합, 27번 = 주문 배송비 전액, 24-12 = `/shop/products/:id`
+- 게이트: 결제완료 · 입고 행 전부 `received`/`cancelled`(received ≥ 1). 바이어 주문은 브랜드 단위 경로(`/admin/shipments` 의 주문·브랜드 발급, 미리보기)가 400
+- 재발급·EFS 취소·취소 후 재발급·추적 새로고침은 기존 `/admin/shipments/:id/*` 그대로(어드민 상세의 '송장 상세' 링크) — `retry` 가 brandId null 을 합포장 경로로 보낸다. 자동 재시도 cron 도 같다
+- 추적 cron(`tracking-refresh`)이 다른 송장처럼 갱신하고, 전 품목 배송완료면 `Order.status = completed`
+- 정산·EFS 청구에 안 뜬다(`onlyBrandShipments`) — EFS 실비는 KLOW 부담
+- 라벨: klow_admin `components/ShippingLabel.tsx`(klow_brand 폼택 8칸 규격 복사 — 시작 칸 선택)
+

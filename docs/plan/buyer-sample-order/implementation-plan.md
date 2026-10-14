@@ -113,7 +113,13 @@ klow_brand `(authed)/samples/`(StudioPillHeader '샘플 요청' + middleware mat
 
 ### C. 합포장 EFS 송장 + 라벨 + 트래킹 + 마무리 (33행)
 
-`payload-builder.ts` 라인별 통관(G8) · `shipments.service.createConsolidatedForBuyerOrder` · 어드민 '송장 발급'(전 브랜드 received/cancelled 일 때만) · 라벨 출력(klow_brand `components/shipping/print.tsx`·`label-pdf.ts` 를 admin 으로 복사) · 바이어 요청 상세에 추적 이벤트 · 결정 기록(`decisions/storefront.md` 또는 `shipping-seeding.md`) + CLAUDE.md 색인. ⚠️ EFS 는 실계정 — 실발급은 **staging 1건, 사용자 확인 후**. 명세는 B 뒤에 정밀화한다.
+`payload-builder.ts` 라인별 통관(G8) · `shipments.service.createConsolidatedForBuyerOrder` · 어드민 '송장 발급'(전 브랜드 received/cancelled 일 때만) · 라벨 출력(klow_brand `components/shipping/print.tsx` 규격을 admin 으로 복사) · 바이어 요청 상세에 추적 · 결정 기록 + CLAUDE.md 색인. ⚠️ EFS 는 실계정 — 실발급은 **staging 1건, 사용자 확인 후**.
+
+- **마이그레이션** `shipment_brand_nullable`(`Shipment.brandId` DROP NOT NULL — 롤링 안전 · 백필 없음). A 가 미룬 것이다(§6)
+- **서버**: 송장 경로 nullable 타입 정리(동작 무변경 — 브랜드 무관 정산·청구 조회는 `onlyBrandShipments`) · 바이어 주문의 브랜드 단위 발급 400 · `retry`/`retryDue` 분기 · `POST /admin/buyer/orders/:id/shipment` · 상세에 `shipment`/`canIssueShipment`/`issueBlockers` · 발급 뒤 환불·입고 되돌리기 400 · 상태 `shipped`/`delivered` + 바이어 `tracking`
+- **admin**: 바이어 주문 상세 '합포장 송장' 카드(발급 확인 모달 · 실패 사유 · 송장 상세 링크 · 라벨 인쇄 · 추적 이벤트) · 송장 화면들의 `brand` null 표시(`shipmentBrandName`) · 의존성 `react-barcode`
+- **web**: `KbRequestDetail` 타임라인 Shipped/Delivered + 디자인 `.track` 줄
+- **배포**: migrate → server → admin → web(web·admin 이 먼저여도 새 칸이 비어 있을 뿐 깨지지 않는다). 실제 엔드포인트·동작은 `docs/server/modules/buyer-orders.md` '합포장 송장' 절
 
 ## §5 G4 전수 목록 (A 단계가 채웠다 — 2026-10-14)
 
@@ -147,3 +153,10 @@ klow_brand `(authed)/samples/`(StudioPillHeader '샘플 요청' + middleware mat
 - 라인 → 브랜드는 **Product.brandId** 를 본다(`productBrandIds`) — 제품 라인의 `OrderItem.brandId` 는 스키마상 NULL 이다. C 의 라인별 통관도 같은 함수를 쓸 것.
 - KLOW 발송인 설정은 별도 설정 화면이 아니라 **바이어 주문 목록 헤더의 모달**이다.
 
+## §8 C 단계에서 스펙과 다르게 한 것
+
+- **통관값은 `OrderItem.hsCode`·`customsCategoryEn` 이 아니라 품목 브랜드의 취급 품목**이다(G8 문구와 다르다). 현행 송장 전체가 브랜드 취급 품목을 통관 정본으로 쓰고([decisions/shipping-seeding 2026-07-31](../../decisions/shipping-seeding.md#2026-07-31)), 바이어 주문 라인에는 그 스냅샷 칸이 비어 있다.
+- 발급 엔드포인트는 실패 송장 **재발급도 겸한다**(`canIssueShipment` = 송장 없음 또는 failed/cancelled). EFS 취소·취소 후 재발급·추적 새로고침은 새로 만들지 않고 기존 `/admin/shipments/:id/*` 를 쓴다(`retry` 가 brandId null 을 합포장 경로로 보낸다).
+- 발급 뒤(pending·submitted)에는 부분환불·전체 취소·입고 되돌리기를 400 으로 막았다(스펙에 없던 가드 — 박스에 실린 품목의 돈만 돌려주는 사고 방지).
+- 라벨은 `label-pdf.ts`(PDF 저장)를 옮기지 않고 인쇄 창만 옮겼다(주문 1건 = 라벨 1장이라 일괄 PDF 가 필요 없다). 시작 칸 선택은 숫자 입력이다.
+- 바이어 화면의 추적은 이벤트 목록 없이 디자인 `.track` 한 줄(현지 송장번호 · 최근 상태 · 조회 링크)이다. 이벤트 목록은 어드민 카드에만 있다.

@@ -236,3 +236,33 @@ klow_brand 단독 변경(서버·마이그레이션 없음, 배포 순서 제약
 라스트마일 추적은 우체국 EMS 와 같으므로 별도 키를 만들지 않았다 — 서버 `local-tracking.ts` 는 `ems`, 어드민·브랜드 `tracking-url.ts` 는 EMS 라벨로 떨어진다.
 
 **마이그레이션 `20261005062641_add_ems_dtp_carrier`**(`ALTER TYPE … ADD VALUE` 하나 — 롤링 안전, `efsServiceType` VarChar(20) 은 확장 불필요). staging DB 에는 적용됨. 미병합 `feat/buyer-platform` 에도 같은 커밋을 cherry-pick 하고 그 DB 브랜치(`ep-sparkling-sun`)에 적용해 두었다 — 병합 시 같은 파일이라 충돌이 없고, staging DB 에서는 `add_buyer_platform`(더 이른 타임스탬프)만 미적용으로 남는데 prisma 는 미적용분만 적용하므로 문제없다. 배포 순서 **klow_server → klow_admin·klow_brand·klow_web**(반대면 어드민에서 EMS-DTP 저장이 zod 400).
+
+<a id="2026-10-14"></a>
+## 바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (2026-10-14)
+
+바이어 샘플 주문(buyer-sample-order 트랙)은 여러 브랜드의 샘플을 KLOW 사무실에서 한 박스로 묶어 **EFS 송장 1장**으로 보낸다.
+지금까지 송장은 "한 브랜드 = 한 송장 = 한 박스"뿐이었다. 그래서 브랜드가 없는 송장을 새로 들였다. 어드민 바이어 주문 상세의
+'EFS 송장 발급'(`POST /admin/buyer/orders/:id/shipment` → `shipments.createConsolidatedForBuyerOrder`)이 만든다.
+
+- ⚠️⚠️ **`Shipment.brandId = NULL` 이 곧 "KLOW 합포장 송장"이다**(마이그레이션 `shipment_brand_nullable` — DROP NOT NULL 하나라 롤링 안전).
+  브랜드로 거르는 조회(브랜드 정산탭·배송 현황·EFS 청구서)에서는 자연히 빠진다. **브랜드를 거르지 않는 정산·청구 조회**(어드민 정산 후보·월 롤업,
+  PG 정산서 보정, EFS 청구 리포트·기간 KPI)는 조회 직후 `onlyBrandShipments()`(`shipments/shipment-settlement.ts`)로 한 번 더 거른다.
+  그 함수가 `brandId` 를 `string` 으로 좁혀 주므로, 새 정산·청구 조회를 만들 때 빠뜨리면 tsc 가 대개 잡는다. 다만 `brandId` 를 읽지 않는 조회는 못 잡는다.
+  EFS 실비는 KLOW 부담이라 브랜드 청구서에 뜨면 안 된다. 정산표 업로드는 HAWB 로 매칭되므로 그 송장에 실비가 저장되기는 한다.
+- ⚠️⚠️ **바이어 주문은 브랜드 단위 발급 경로를 못 탄다.** `createForOrder`·`createForBrand`·`previewForOrder` 는 `kind = buyer_sample` 이면
+  400 을 낸다(`assertBrandShipmentOrder`). 이 경로를 타면 **브랜드 송화인 명의로 브랜드별 송장이 나간다** — G3 가 결제 후속효과에서 막은 그 사고가 어드민 버튼으로 재현된다.
+  반대로 재발급·자동 재시도·취소 후 재발급은 기존 송장 경로를 그대로 쓴다. `retry`/`retryDue` 가 `brandId` 가 null 이면 합포장 경로로 보낸다.
+- **발송인 = `ShopSettings.klowSender*`**(이름·주소·전화 필수). 비어 있으면 400 이고, 브랜드 송화인으로 폴백하지 않는다(G8).
+- **통관 24-6/24-8 은 라인마다** 그 품목 브랜드의 취급 품목(`BRAND_CATEGORY_CUSTOMS`)을 따른다(`BuildPayloadLine.customs`). 스펙 G8 은
+  `OrderItem.hsCode`·`customsCategoryEn` 을 적었지만 쓰지 않았다. 현행 송장 전체가 브랜드 취급 품목을 통관 정본으로 쓰고([2026-07-31](#2026-07-31)),
+  바이어 주문 라인에는 그 스냅샷 칸이 비어 있기 때문이다. 같은 제품을 한 캡슐로 합치는 키(`capsuleKey`)에도 통관값을 넣었다.
+- 26번(신고가) = 취소 안 된 라인의 샘플가 합이다. 27번(배송비) = 주문 배송비 **전액**이다(브랜드 수로 나누지 않는다). 24-12 는 `/shop/products/:id`,
+  2번 참조번호의 브랜드 자리는 `KLOW` 다. 캐리어는 주문의 국가 고정 캐리어고, `DOMESTIC` 이면 400 이다.
+- **게이트**: 입고 행이 전부 `received`/`cancelled` 이고 `received` 가 1개 이상이어야 한다. 발급(pending·submitted) 뒤에는 부분환불·전체 취소·입고 되돌리기가 400 이다.
+  박스에 이미 실린 품목의 돈만 돌려주는 일을 막기 위해서다 — 먼저 EFS 송장을 취소해야 한다.
+- `Order.status` 의 shipped/completed 전이 헬퍼(`maybeMarkOrder*`)는 `cancelledAt` 있는 품목을 뺀다. 소비자 주문에는 `cancelledAt` 이 없어서 동작은 그대로다.
+- 바이어 상태에 `shipped`(submitted 송장 있음)·`delivered`(EFS 배송완료 코드)를 더했다(`buyerSampleStatus`). 바이어 요청 상세는 현지 송장번호와 조회 링크를 보여 준다.
+- 라벨 인쇄는 klow_admin `components/ShippingLabel.tsx` 다. klow_brand `components/shipping/print.tsx` 의 폼택 8칸 규격을 복사했으므로, **규격을 바꿀 때는 두 레포를 함께 고친다.**
+
+⚠️ **EFS 실발급은 아직 0건이다**(로컬 EFS 가 실계정이라 이 세션은 보내지 않았다). payload 형태는 `shipments/__tests__/consolidated-shipment.spec.ts` 가 잠그고 있다.
+첫 발급은 staging 에서 운영팀 확인을 받은 뒤 1건만 한다. 여러 브랜드 · 서로 다른 통관값이 섞인 24번 블록을 EFS 가 받아 주는지가 미검증이다.
