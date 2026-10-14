@@ -41,7 +41,7 @@
 | `POST logout` | — | 세션 행 삭제 + 쿠키 지움 |
 | `GET me` | `BuyerGuard` | `{user}` — 비로그인 401(가드). 슬라이딩 연장 쿠키 재발급도 가드가 한다 |
 | `PATCH me` | `BuyerGuard` | 이름·전화·회사·업종·통화·채널·웹사이트(`""`/null = 지움)·관심 브랜드. 이메일·상태는 못 바꾼다(보내도 버려진다) |
-| `POST password-reset/send-otp` `{email}` | TIGHT | **없는 이메일도 200**(가입 여부 비공개 — 브랜드와 다르다). 있으면 OTP(purpose `buyer-password-reset-otp`). 60초 안 재요청은 **조용히 건너뛰고 200**(429 를 내면 가입 여부가 드러난다) |
+| `POST password-reset/send-otp` `{email}` | TIGHT | 없는 이메일은 **404 `user_not_found`**(영어 문구 — 브랜드와 같은 관례, 2026-10-14 변경. 전엔 가입 여부를 숨기려 200 이었다). 있으면 OTP(purpose `buyer-password-reset-otp`). 60초 안 재요청은 **조용히 건너뛰고 200**(앞서 보낸 코드가 유효하다) |
 | `POST password-reset/verify-otp` `{email, code}` | LOOSE | → `{token}` |
 | `POST password-reset/confirm` `{email, token, password}` | LOOSE | 비번 갱신 + 전 세션 삭제(트랜잭션) → 새 영속 세션 + 쿠키 → `{user}` |
 
