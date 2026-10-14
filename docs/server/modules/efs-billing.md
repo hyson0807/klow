@@ -81,7 +81,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 바이어 샘플 주문의 **KLOW 합포장 송장**(`Shipment.brandId = null`)도 EFS 정산표에 실려 온다. 실비는 **KLOW 부담**이다
 (브랜드에 청구하지 않는다). 결정은 [shipping-seeding 2026-10-14](../../decisions/shipping-seeding.md#2026-10-14).
 
-- `monthlyReport` 는 합포장 송장도 함께 읽는다. live 실비 조회와 현지 송장번호 backfill 을 같이 받은 뒤, 그 행을
+- `monthlyReport` 는 합포장 송장도 함께 읽는다(⚠️ **live EFS 조회에서는 뺀다** — 합계는 저장값만 세므로 매 리포트마다 EFS 를 더 부를 이유가 없다. 실비는 정산표 업로드가 채운다). 그 행을
   **`report.klowSamples`(별도 배열)** 로 갈라낸다. 실비 합은 `klowSampleChargeKrw` 이고 저장값만 센다.
   브랜드를 지정한 조회에서는 빈 배열이다.
 - ⚠️⚠️ **`report.rows` 에 섞지 않는다.** 그 배열이 `buildStatement` 의 입력이고, `buildStatement` 의 결과가
@@ -89,7 +89,7 @@ EFS 정산표엔 **시딩과 일반주문 송장이 섞여** 온다. 이전엔 �
 - **정산표 업로드는 두 배열을 함께 매칭한다**(`importPreview`). 그래서 합포장 HAWB 의 실비·청구중량·현지 송장번호가
   `importApply` 로 저장되고 `extraInFile` 경고에도 뜨지 않는다. 미리보기 행에는 `klowSample: true` 가 붙는다.
   이 처리가 없으면 그 HAWB 는 매달 '파일에만 있는 송장'으로 남는다. 수기 행으로도 닫을 수 없다(수기 행은 브랜드가 필수이고, 기존 송장의 HAWB 는 거절한다).
-- **관세 시트**: 등기번호가 합포장 송장에 닿으면 `klowSample: true` 다(`brandId` null). 미매칭 합계(`unmatchedCount`)에서 빠지고,
+- **관세 시트**: 합포장 송장은 **주인이 'KLOW' 인 히트**로 귀속 사다리를 그대로 탄다 — 등기번호가 합포장 송장 하나에만 닿으면 `klowSample: true`(`brandId` null), ⚠️ 브랜드 송장과 **겹치면 기존 "2건 이상 = 미매칭" 규칙대로 미매칭**이다(어느 쪽으로도 추측하지 않는다). `klowSample` 행은 미매칭 합계(`unmatchedCount`)에서 빠지고,
   적용 대상도 아니다(브랜드 청구 없음). KLOW 부담 관세는 지금 **표시만** 하고 저장하지 않는다.
 - 어드민 배송비 청구 탭은 브랜드 미선택일 때 'KLOW 샘플 배송비 (KLOW 부담)' 표를 보여 준다(`_components/KlowSampleSection.tsx`).
   정산표에 없는 건은 그 표의 금액 칸에서 입력한다(같은 `PATCH charge`). **정산표 총액 = 브랜드 청구 행 실비 + 이 표의 실비**로 대사한다.
