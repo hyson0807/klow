@@ -65,6 +65,7 @@ mutation 은 `AdminAuditInterceptor` 가 자동 기록한다. 화면은 klow_adm
 |---|---|
 | `GET /admin/buyer/accounts?q=&status=&page=` | 이메일·이름·회사 부분일치 검색, 상태 필터, 최신 가입순 50개/쪽 → `{items[{id,email,name,company,country,businessType,status,createdAt,lastSeenAt,documentCount,referralCount}], total, page, pageSize, statusCounts{pending,verified,rejected}}` |
 | `GET /admin/buyer/accounts/:id` | 가입 정보 전부(비번 해시 제외) + `interestedBrands[{slug, name}]` + `statusChangedBy{email,name}` + `referralCode` + `referredBy{id,company,email}` + `referrals[{id,company,email,status,createdAt}]` + 서류 메타 `[{id, kind, fileName, contentType, size, createdAt}]` |
+| `PATCH /admin/buyer/accounts/:id` `AdminBuyerProfilePatch` | 가입 정보 수정 — 바이어 본인 `PATCH /me` 칸(name·dial·phone·company·businessType·currency·channels·website·interestedBrands) **+ email·country**(본인은 못 바꾸는 칸). 보낸 칸만 바뀌고(`patchOf`) `website: ""`/`null` = 지움. 이메일은 같은 정규화(trim·소문자) · 중복 409 `email_taken` · 세션은 유지(바이어는 새 주소로 로그인) → 상세 모양 반환 |
 | `PATCH /admin/buyer/accounts/:id/status` `{status, note?}` | 상태 + 변경 시각·어드민 기록. `note` 생략 = 메모 유지, `""` = 지움 → 상세 모양 반환 |
 | `PATCH /admin/buyer/accounts/:id/referrer` `{code \| null}` | 추천인 지정(그 바이어의 추천 코드)·해제 → 상세 모양. 없는 코드 400 `referral_code_not_found`, 자기 자신·이 바이어가 데려온 바이어 400 `referral_cycle` |
 | `GET /admin/buyer/accounts/:id/documents/:docId` | 서류 원본을 **서버가 중계**(`R2Service.getBytes`) — `Content-Type` 원본 · `Content-Disposition: inline; filename*=` · `X-Content-Type-Options: nosniff` · `Content-Security-Policy: sandbox` · `Cache-Control: private, no-store` |
