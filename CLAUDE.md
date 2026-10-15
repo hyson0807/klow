@@ -311,6 +311,7 @@ cd klow_brand && npm run dev           # http://localhost:3002
 - **반드시 `npx prisma migrate dev --name <이름>`만 사용한다.** `migrate deploy`, 수동 SQL 파일 생성, `db push` 등은 사용하지 않는다.
   - 유일한 예외는 **순수 rename** 이다 — `prisma migrate dev` 가 model rename 을 감지하지 못하고 DROP + CREATE 를 생성해 데이터를 통째로 날리기 때문이다(`20260818021500_rename_campaign_to_promotion` 선례).
 - 이 명령은 interactive 프롬프트가 필요하므로, non-interactive 환경에서 실패하면 사용자에게 직접 실행을 요청한다.
+- ⚠️ **migrate 는 `DIRECT_URL`(Neon `-pooler` 를 뺀 직접 연결)로 돈다** — `schema.prisma` datasource 의 `directUrl`(2026-10-15). 앱 런타임은 계속 `DATABASE_URL`(pooler). pooler 로 migrate 하면 advisory lock 해제가 다른 서버 연결로 가서 잠금이 남고 다음 migrate 가 **P1002** 로 막힌다(실측). 로컬·Railway 모두 `DIRECT_URL` 이 있어야 migrate 가 돈다(없으면 P1012 — 앱 부팅은 무관). 자동 마이그레이션(`RUN_MIGRATIONS` · Railway Pre-deploy)을 켜면 **DROP/RENAME 같은 롤링 비안전 변경은 두 번의 배포로 나눌 것**(추가 → 코드 전환 → 삭제) — 새 버전 기동 중 이전 버전이 같은 DB 를 쓴다.
 
 ### ⚠️ 스키마를 바꾸는 작업은 git 브랜치 + **DB 브랜치**를 함께 판다
 
