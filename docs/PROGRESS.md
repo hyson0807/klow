@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 35행 — 바이어 추천인 링크(2026-10-15)는 `staging` 커밋까지 끝났다**(klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, **push 안 함**). staging DB 에 `20261015050755_add_buyer_referral` 적용됨. push 순서 **klow_server → klow_admin·klow_web**. 같은 날 klow_web `c2bf1cd`(PDP 브랜드명을 제목 위로)도 push 대기. `§9` 35행 메모.
+
 **`§7` 34행 — 바이어 브랜드 마케팅 영상(2026-10-15)은 `staging` 커밋까지 끝났다**(klow_server `2811a95` · klow_admin `c8077d0` · klow_web `0301f59`, **push 안 함**). staging DB 에 `20261015040748_add_buyer_brand_videos` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 섹션 숨김 — 깨지지 않는다). `§9` 34행 메모.
 
 **`§7` 30행 — 큐레이션 선반 필터 칩(2026-10-09)은 `staging` 커밋까지 끝났다**(klow_server `d236ba1` · klow_admin `d6bcd18` · klow_web `8736dee`, **push 안 함**). staging DB 에 `20261009125951_add_buyer_shelf_bands` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 칩 없이 그대로 — 깨지지 않는다). `§9` 30행 메모.
@@ -1040,6 +1042,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 26 | ems-dtp-carrier | **EMS-DTP 캐리어 추가** — 배송비용 탭 국가 고정 캐리어 선택지 + EFS 3번 필드 `EMSDTP`. 마이그레이션 `20261005062641_add_ems_dtp_carrier`(ADD VALUE · staging DB 적용됨 · `feat/buyer-platform` 에도 cherry-pick `7385669` + DB 브랜치 `ep-sparkling-sun` 적용). 남은 것: **staging 실발급 1건**(EMS-DTP 국가 지정 → EFS 가 `EMSDTP` 수락 확인) → 운영 `migrate deploy` 후 서버 → 프론트 3개 배포 | 완료 | ✗ | 2026-10-05 | 4a258b9 / 591f1ec / e7c1594 / 542ac40 / (이 커밋) |
 | 30 | buyer-shelf-bands | **큐레이션 선반 안 필터 칩** — 어드민 선반마다 칩(라벨+보조문구) 추가·순서·삭제 + 제품을 칩에 배정(제품당 0~1개) · klow_web 칩(KLOWBUYER 동일) · `PUT /admin/buyer/shelves/:id/bands` · 마이그레이션 `20261009125951_add_buyer_shelf_bands`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-09](./decisions/storefront.md#2026-10-09). 남은 것: push(server → admin·web) → staging 화면 실측 → 운영 `migrate deploy` → 배포 | 완료 | ✗ | 2026-10-09 | d236ba1 / d6bcd18 / - / 8736dee / (이 커밋) |
 | 34 | buyer-brand-videos | **브랜드 마케팅 영상** — 어드민 브랜드 상세에 유튜브·인스타 주소 등록 → 바이어 브랜드 페이지 + 그 브랜드의 모든 PDP 에 썸네일 줄, 모달 재생 · 인스타 썸네일은 등록 시 `og:image` → R2 복사 · 마이그레이션 `20261015040748_add_buyer_brand_videos`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-15-2](./decisions/storefront.md#2026-10-15-2) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 2811a95 / c8077d0 / - / 0301f59 / (이 커밋) |
+| 35 | buyer-referral | **바이어 추천인 링크** — 계정 Referrals 탭(링크 복사·공유·추천한 바이어 수/목록·검수 상태) · `?ref=` 30일 캡처 + 가입 폼 자동 입력 · 가입 시 1단계 연결 · 어드민 계정 목록 '추천' 열 + 상세 추천인/추천한 바이어 + 추천인 지정·해제. 보상은 시스템 밖(사용자 결정). 마이그레이션 `20261015050755_add_buyer_referral`(**staging·staging DB 직접 — 적용됨**). 결정 [storefront 2026-10-15-3](./decisions/storefront.md#2026-10-15-3) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 984f8d2 / 5638e84 / - / d559244 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1107,6 +1110,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-referral — 35행 (완료 · klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, `staging` 직접 · push 안 함)
+
+- **문서를 고친 것**: `server/modules/buyer-auth.md`(필드·엔드포인트 3개·노출 범위) · `decisions/storefront.md` 2026-10-15-3 + CLAUDE.md 색인
+- **실측(staging DB, 서비스 직접 호출)**: 코드 발급·재호출 동일 · 유효/무효 확인 · A 코드로 가입한 B 연결·틀린 코드 C 가입 성공·미연결(원문 보존) · A 목록 = B 1명(회사·국가·상태·가입일만) · 어드민 목록 추천 수·상세 추천인/추천한 바이어 · 자기 자신/맞물림/없는 코드 400 · 지정·해제. 테스트 계정 3개는 지웠다. 화면: Referrals 탭 PC·390px(탭 4개가 모바일 한 줄에 들어가게 좁힘). 검증: server typecheck 2종·jest 1684·e2e · admin build · web tsc/lint
+- **확인 못 한 것**: 추천한 바이어가 **있는** 목록 화면 · 가입 폼 "Referral applied" 표시 · 어드민 화면 — 브라우저가 사용자 실계정(staging)으로 로그인돼 있어 테스트 계정으로 못 바꿨다. ⚠️ 그 과정에서 **사용자 staging 바이어 계정에 추천 코드 `9K3D6N8P` 가 발급됐다**(탭을 처음 열면 생기는 것과 같음)
+- ⚠️ **staging DB 에 Prisma advisory lock 이 다시 남아 있다**(pooler 주소로 migrate 한 탓). 다음 마이그레이션은 `-pooler` 를 뺀 직접 주소로 돌리거나, 남은 잠금 연결이 재활용될 때까지 기다릴 것
+- **남은 일**: push klow_server → klow_admin·klow_web · staging 에서 실제 두 계정으로 링크 가입 1회 · 운영은 `migrate deploy` 선행
 
 ### buyer-brand-videos — 34행 (완료 · klow_server `2811a95` · klow_admin `c8077d0` · klow_web `0301f59`, `staging` 직접 · push 안 함)
 

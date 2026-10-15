@@ -145,9 +145,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 90건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 91건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 90건 중 64건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 91건 중 65건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -189,6 +189,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-12` [klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음)](docs/decisions/storefront.md#2026-10-12)
 - `2026-10-15` [바이어 공간 About 그룹 — 확인된 사실만 · 도매 문구는 오프라인 운영 기준 · WhatsApp 은 번호 생길 때까지 숨김 (회사 정보 정본 `lib/buyer-about/company.ts` · 다른 화면 사업자번호는 아직 개인사업자)](docs/decisions/storefront.md#2026-10-15)
 - `2026-10-15` [바이어 공간 브랜드 마케팅 영상 — 브랜드 단위 · 모달 재생 · 인스타 썸네일은 등록 시 `og:image` 1회 → R2 복사 (원본 CDN URL 저장 금지 · 실패 시 수동 업로드/로고 카드 · url 파싱이 정본 · Railway IP 실측 대기)](docs/decisions/storefront.md#2026-10-15-2)
+- `2026-10-15` [바이어 추천인 링크 — 1단계 연결만 · 보상은 시스템 밖(대량 구매 오프라인) · 추천인에게는 회사·국가·상태만 · 틀린 코드여도 가입 허용 · 추천인 변경은 어드민만 · 마이그레이션은 pooler 말고 직접 주소로](docs/decisions/storefront.md#2026-10-15-3)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 
