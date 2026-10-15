@@ -72,7 +72,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Admin 인증 모듈               | `klow_server/src/modules/admin-auth/` (service, controller, admins controller, totp, invitation, audit interceptor) |
 | AdminGuard + CurrentAdmin     | `klow_server/src/modules/admin-auth/admin.guard.ts`, `klow_server/src/modules/admin-auth/super-admin.guard.ts`, `klow_server/src/modules/admin-auth/current-admin.decorator.ts` |
 | Admin 시드 스크립트           | `klow_server/prisma/seed/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
-| klow_web pages                | `klow_web/src/app/` (product, `[brandSlug]`, brand, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) · **바이어 공간** `(buyer)/`(`/` · `shop/brands/[slug]` · `shop/products/[id]` + 목업 `shop/{signin,signup,match,checkout,account}` — `components/buyer-space/` · `lib/buyer-space*.ts` · CSS 는 `.kb` 스코프 · 목업 정본 `docs/plan/buyer-platform/mock-parity.md`) |
+| klow_web pages                | `klow_web/src/app/` (product, `[brandSlug]`, brand, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) · **바이어 공간** `(buyer)/`(`/` · `shop/brands/[slug]` · `shop/products/[id]` + 목업 `shop/{signin,signup,match,checkout,account}` + About 그룹 `shop/(about)/{about,shipping,ordering-payment,faq}`(콘텐츠 `lib/buyer-about/*`) — `components/buyer-space/` · `lib/buyer-space*.ts` · CSS 는 `.kb` 스코프 · 목업 정본 `docs/plan/buyer-platform/mock-parity.md`) |
 | klow_web UI i18n (앱 전역)    | `klow_web/src/i18n/` (en 단일 원본 → `npm run i18n:fill` 로 ja/zh/vi/th/id/ru/ar 생성) + `useT`/`useLabels` 훅. 가이드: [`klow_web/docs/i18n.md`](./klow_web/docs/i18n.md) |
 | klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, legal, `(authed)/`{studio(제품 관리), promotions, creators, seeding, instagram, crm, settings}) |
 | Instagram 연동 모듈           | `klow_server/src/modules/instagram/` (client, service, connect/resource 컨트롤러, refresh cron, token crypto) + `klow_brand/src/app/(authed)/instagram/`. 가이드: `docs/instagram-integration.md`, 엔드포인트: `docs/server/modules/instagram.md` |
@@ -187,6 +187,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-08` [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · 세션을 ISR fetch 에 섞지 않음 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](docs/decisions/storefront.md#2026-10-08)
 - `2026-10-09` [큐레이션 선반 안 필터 칩 = 선반 한정 수동 분류 (제품 속성 아님 · 제품당 0~1개 · 빈 칩은 서버가 뺀다)](docs/decisions/storefront.md#2026-10-09)
 - `2026-10-12` [klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음)](docs/decisions/storefront.md#2026-10-12)
+- `2026-10-15` [바이어 공간 About 그룹 — 확인된 사실만 · 도매 문구는 오프라인 운영 기준 · WhatsApp 은 번호 생길 때까지 숨김 (회사 정보 정본 `lib/buyer-about/company.ts` · 다른 화면 사업자번호는 아직 개인사업자)](docs/decisions/storefront.md#2026-10-15)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 
