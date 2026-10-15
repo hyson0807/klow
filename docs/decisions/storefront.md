@@ -207,3 +207,17 @@ KLOWBUYER 홈 선반 제목 아래의 `All | 30% & under 70%+ MARGIN | …` 칩(
 - `KbWelcome` 은 바이어 레이아웃에 붙어 **모든 바이어 페이지 RSC 페이로드**에 실린다. 그래서 제품은 필요한 필드만 최대 24개로 줄인다(`lib/buyer-space-welcome.ts`). ⚠️ 이 함수는 서버 레이아웃이 부르므로 `'use client'` 파일에 두면 안 된다.
 
 서버 변경·마이그레이션 없음. 남은 것: 다른 화면의 사업자번호·상호 교체, WhatsApp 번호, 창고 실사진(지금은 Unsplash), 확정되면 배송일수 등 되살리기.
+
+
+<a id="2026-10-15-2"></a>
+## 바이어 공간 브랜드 마케팅 영상 — 브랜드 단위 · 페이지 이동 없이 모달 재생 · 인스타 썸네일은 등록 시 1회 R2 복사 (2026-10-15)
+
+바이어는 "이 브랜드가 마케팅을 열심히 하는가"를 입점 판단 기준으로 본다. 어드민 **바이어 공간 > 브랜드 상세 > 마케팅 영상**에서 유튜브·인스타 주소를 넣으면 바이어 브랜드 페이지(`/shop/brands/[slug]`)와 **그 브랜드의 모든 제품 상세**에 "Brand in action" 썸네일 줄이 나오고, 누르면 모달 안에서 재생된다(사용자 요청). 디자인(KLOWBUYER)에 없는 섹션이라 `.pdp__sec` 톤을 따랐고, PDP 에서는 제품 설명 아래·"More from" 앞이다(사용자 선택).
+
+- **브랜드 단위로만 저장**한다(`BuyerBrandVideo`, 제품별 지정 없음). 공개 응답은 `/v1/buyer/brands/:slug` 에만 싣는다 — klow_web PDP 가 이미 그 응답을 받아 쓰므로 제품 엔드포인트·홈 응답은 무변경이다.
+- **URL 은 서버가 다시 파싱한 값이 정본**이다(`video-url.ts`). 유튜브 watch·youtu.be·shorts·embed·live, 인스타 reel·reels·p·tv(계정명 접두 허용)만 받고, Shorts·Reels 는 세로형(9:16) 카드·플레이어가 된다. 저장은 통째 교체(`PUT …/videos`).
+- ⚠️⚠️ **인스타 썸네일을 키 없이 가져오는 공식 방법은 없다**(oEmbed `thumbnail_url` 2025-11 제거). 그래서 사용자 결정으로 **등록 시점 1회만** 릴스 페이지의 `og:image` 를 읽어 **R2 로 복사**한다(조회 시마다 긁지 않는다). 인스타 CDN URL 은 서명 만료가 있어 원본 URL 저장 금지. 비공식이라 언제든 막힐 수 있으므로 **실패해도 등록은 된다** — 어드민이 썸네일을 직접 올리고, 안 올리면 손님 화면은 로고 카드다. Playwright·cheerio 는 쓰지 않는다(2026-09-15 Playwright 제거 · meta 정규식으로 충분). 2026-10-15 로컬(가정용 IP)에서는 실제 릴스로 성공했고, **Railway 서버 IP 에서 되는지는 staging 실측 전이다.**
+- 등록 주체는 어드민뿐이라 공개 입력 → 서버 fetch 경로는 없다. 그래도 fetch 대상은 파서가 만든 `www.instagram.com` 주소와 인스타 CDN 호스트의 https 이미지뿐이다(SSRF 축 — 페이지 2MB·이미지 5MB 상한, 5초 타임아웃).
+- 재생: 유튜브는 `youtube-nocookie.com/embed`(자동재생), 인스타는 공식 `/embed/`(자동재생 불가 — 한 번 더 탭). 모달은 `KbWelcome` 의 `.wel` 구조를 따르고(스크림·Esc·스크롤 잠금) 닫으면 iframe 이 언마운트돼 소리가 멈춘다. klow_web 에 CSP 가 없어 iframe 허용 설정은 필요 없다.
+
+마이그레이션 `20261015040748_add_buyer_brand_videos`(CREATE 만 — 롤링 안전). 사용자 지시로 feat/DB 브랜치 없이 staging 에서 바로 작업했다. 배포 순서 klow_server → klow_admin·klow_web(web 은 `videos` 가 없는 구 응답이면 섹션을 숨긴다).

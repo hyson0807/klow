@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 34행 — 바이어 브랜드 마케팅 영상(2026-10-15)은 `staging` 커밋까지 끝났다**(klow_server `2811a95` · klow_admin `c8077d0` · klow_web `0301f59`, **push 안 함**). staging DB 에 `20261015040748_add_buyer_brand_videos` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 섹션 숨김 — 깨지지 않는다). `§9` 34행 메모.
+
 **`§7` 30행 — 큐레이션 선반 필터 칩(2026-10-09)은 `staging` 커밋까지 끝났다**(klow_server `d236ba1` · klow_admin `d6bcd18` · klow_web `8736dee`, **push 안 함**). staging DB 에 `20261009125951_add_buyer_shelf_bands` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 칩 없이 그대로 — 깨지지 않는다). `§9` 30행 메모.
 
 **⚠️ buyer-auth 트랙(`§7` 27·28·29행)은 2026-10-08 에 코드가 전부 끝났다** — klow_server `6cbe563`·`b55500f` · klow_web `9d4117b`·`e221297` · klow_admin `367a06d`·`83e58e5`(둘째 해시는 같은 날 전체 점검),
@@ -1037,6 +1039,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 25 | buyer-platform | **F. 실구현 — Concierge 매칭 데이터 · 제품 채팅 이관 · 바이어 리뷰** — `BuyerBrand.lines`·`channels` + 어드민 입력 · 채팅 스레드 서버 저장·WhatsApp 채널 · 주문 기반 리뷰 수집·번역(`mock-parity.md` 표 25). 24행 뒤(리뷰는 바이어 주문이 있어야 한다) | 대기 | ✗ | | |
 | 26 | ems-dtp-carrier | **EMS-DTP 캐리어 추가** — 배송비용 탭 국가 고정 캐리어 선택지 + EFS 3번 필드 `EMSDTP`. 마이그레이션 `20261005062641_add_ems_dtp_carrier`(ADD VALUE · staging DB 적용됨 · `feat/buyer-platform` 에도 cherry-pick `7385669` + DB 브랜치 `ep-sparkling-sun` 적용). 남은 것: **staging 실발급 1건**(EMS-DTP 국가 지정 → EFS 가 `EMSDTP` 수락 확인) → 운영 `migrate deploy` 후 서버 → 프론트 3개 배포 | 완료 | ✗ | 2026-10-05 | 4a258b9 / 591f1ec / e7c1594 / 542ac40 / (이 커밋) |
 | 30 | buyer-shelf-bands | **큐레이션 선반 안 필터 칩** — 어드민 선반마다 칩(라벨+보조문구) 추가·순서·삭제 + 제품을 칩에 배정(제품당 0~1개) · klow_web 칩(KLOWBUYER 동일) · `PUT /admin/buyer/shelves/:id/bands` · 마이그레이션 `20261009125951_add_buyer_shelf_bands`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-09](./decisions/storefront.md#2026-10-09). 남은 것: push(server → admin·web) → staging 화면 실측 → 운영 `migrate deploy` → 배포 | 완료 | ✗ | 2026-10-09 | d236ba1 / d6bcd18 / - / 8736dee / (이 커밋) |
+| 34 | buyer-brand-videos | **브랜드 마케팅 영상** — 어드민 브랜드 상세에 유튜브·인스타 주소 등록 → 바이어 브랜드 페이지 + 그 브랜드의 모든 PDP 에 썸네일 줄, 모달 재생 · 인스타 썸네일은 등록 시 `og:image` → R2 복사 · 마이그레이션 `20261015040748_add_buyer_brand_videos`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-15-2](./decisions/storefront.md#2026-10-15-2) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 2811a95 / c8077d0 / - / 0301f59 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1104,6 +1107,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-brand-videos — 34행 (완료 · klow_server `2811a95` · klow_admin `c8077d0` · klow_web `0301f59`, `staging` 직접 · push 안 함)
+
+- **문서를 고친 것**: `server/modules/buyer.md`(모델·엔드포인트 2개·공개 `videos`·인스타 경고) · `decisions/storefront.md` 2026-10-15-2 + CLAUDE.md 색인
+- **실측(로컬 · staging DB · staging R2)**: `resolveVideo` 4종(유튜브 일반·Shorts 제목 / 실제 릴스 → `og:image` R2 복사 성공 / 가짜 릴스 → `thumbnailFailed`) · 400 `unsupported_video_url`·`duplicate_video` · klow_web 브랜드 페이지·PDP 섹션 + 모달(유튜브 자동재생·인스타 embed·←/→) · 390px 폭에서 가로 넘침 없음. 테스트 영상 4행은 지웠다(R2 썸네일 1장은 남음). 검증: server typecheck 2종·jest 1671·e2e · admin build · web tsc/lint
+- **확인 못 한 것**: ⚠️ **어드민 화면 실측 안 함**(TOTP 로그인 — 같은 서비스 메서드를 스크립트로 직접 불러 확인) · klow_web `next build` 생략(dev 서버가 `.next` 를 쓰고 있었다 — tsc·lint 만) · ⚠️ **Railway 서버 IP 에서 인스타 `og:image` 가 되는지**(로컬 가정용 IP 에서만 성공)
+- **남은 일 (이 순서로)**: push klow_server → klow_admin·klow_web → staging 어드민에서 실제 릴스 1건 추가해 썸네일 자동 여부 확인(실패면 수동 업로드로 운영 가능 — 막히는 건 아니다) → 운영은 `migrate deploy` 선행
 
 ### buyer-sample-order — 33행 C (완료 · klow_server `1b89c2b` · klow_admin `fcdcc0e` · klow_web `7d23914`, 브랜치 `feat/buyer-sample-order` · DB 브랜치 `ep-rough-leaf` · staging 미병합) — 트랙 코드 끝
 

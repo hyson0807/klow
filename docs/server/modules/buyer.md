@@ -4,7 +4,7 @@
 - **목적**: 해외 바이어가 `klow.kr/` 에서 둘러보는 **KLOW 가 골라 올린 브랜드·제품**의 데이터. 관리자가 klow_admin "바이어 공간"에서 채우고(`/admin/buyer/*`), klow_web 이 공개 API(`/v1/buyer/*`)로 그린다. 브랜드(klow_brand)는 무관하다.
 - **설계 정본**: [`docs/plan/buyer-platform/`](../../plan/buyer-platform/README.md) — 불변식 G1~G12 는 `implementation-plan.md §1`.
 - **관련 파일**: `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
-- **마이그레이션**: `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
+- **마이그레이션**: `20261015040748_add_buyer_brand_videos`(`BuyerBrandVideo` + enum `BuyerVideoProvider` — CREATE 만, 롤링 안전) · `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
 
 ## 데이터 모델
 
@@ -16,6 +16,7 @@
 | `BuyerCategory` | 홈 카테고리 탭 |
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
 | `BuyerShelf` · `BuyerShelfItem` · `BuyerShelfBand` | 홈 큐레이션 선반(수동으로 고른 제품) + 선반 안 필터 칩(band — 제품 속성이 아니라 그 선반 한정 분류, `BuyerShelfItem.bandId` 로 제품당 0~1개, 칩 삭제 시 `SetNull`) |
+| `BuyerBrandVideo` | 브랜드 마케팅 영상(유튜브·인스타, 브랜드당 최대 12, `sort`). `provider`·`externalId`·`vertical` 은 **서버가 url 을 파싱한 값이 정본**(`video-url.ts`). `thumbnailUrl` = R2(인스타 자동 복사 또는 수동 업로드), null 이면 유튜브는 `i.ytimg.com` 파생 · 인스타는 로고 카드 |
 | `BuyerInquiry` | Request 드로어 문의. 브랜드·제품 FK 는 `SetNull`(영업 기록이라 남는다) |
 
 ⚠️⚠️ **원본 `Product`·`Brand` 에 쓰지 않고(G1) `B2b*` 테이블은 읽지도 않는다(G2).** 기존 B2B 도매(`/[slug]/b2b`, 브랜드가 입력)와 이 공간의 가격은 별개다.
@@ -44,9 +45,11 @@
 | GET | `/admin/buyer/brand-candidates?q=` | **승인 브랜드만** 후보(최대 50) — `added`·승인 제품 수 |
 | POST | `/admin/buyer/brands` `{brandId}` | 브랜드 올리기(승인만, 중복 409 `already_added`) |
 | PUT | `/admin/buyer/brands/order` `{ids: brandId[]}` | 브랜드 순서 |
-| GET | `/admin/buyer/brands/:brandId` | 프로필 + 원본 로고 + `openingOrder`·`retailMultiple` |
+| GET | `/admin/buyer/brands/:brandId` | 프로필 + 원본 로고 + `openingOrder`·`retailMultiple` + `videos` |
 | PATCH | `/admin/buyer/brands/:brandId` | 프로필·공개 토글 (`logoUrl: null` = 원본 로고로) |
 | DELETE | `/admin/buyer/brands/:brandId` | ⚠️ 입력한 제품 정보·구간가까지 cascade 삭제 — 평소엔 공개 OFF |
+| PUT | `/admin/buyer/brands/:brandId/videos` `{videos: [{url, title?, thumbnailUrl?}]}` | 마케팅 영상 통째 교체(최대 12, 배열 순서 = 노출 순서). url 을 다시 파싱 — 유튜브·인스타 아니면 400 `unsupported_video_url`, 같은 영상 두 번 400 `duplicate_video`. 응답 = 영상 목록 |
+| POST | `/admin/buyer/videos/resolve` `{url}` | **저장 안 함** — url 정규화 + 제목(유튜브 키 없는 oEmbed · 인스타 `og:title` 캡션) + 인스타 썸네일(`og:image` → **R2 복사**). 썸네일 실패는 예외가 아니라 `thumbnailFailed: true` |
 | GET | `/admin/buyer/brands/:brandId/products` | 그 브랜드 **승인 제품** + 이미 올린 행(승인이 풀린 것 포함). `buyer: null` = 안 올림, 있으면 `missing`·`reasons`·`visible`·썸네일 |
 | POST | `/admin/buyer/products` `{productId}` | 제품 올리기(승인만 · 브랜드를 먼저 올려야 함 400 `brand_not_added`). 프리필: name→`nameEn` · volume→`size` · ingredients · countryOfOrigin→`madeIn` · expiryInfo→`shelfLifeMonths`(개월 파싱) · keyIngredients[].name→`keyActives` · basePriceUsd→`msrpUsdCents` |
 | PATCH | `/admin/buyer/products/bulk` `{productIds, categoryId?, published?}` | 일괄 카테고리/공개 |
@@ -67,6 +70,7 @@
 | GET | `/admin/buyer/inquiries?status=new\|handled` | 문의 목록(최신순 500) + 연결 브랜드·제품 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
 
+- ⚠️ **인스타 썸네일은 비공식 경로**다(oEmbed `thumbnail_url` 은 2025-11 제거). `video-meta.client.ts` 가 등록 시점 1회만 릴스 페이지를 `facebookexternalhit` UA 로 읽어 `og:image` 를 R2(`brands/buyer/videos/`)로 복사한다 — 인스타 CDN URL 은 서명 만료가 있어 **원본 URL 을 저장하지 않는다**. fetch 대상은 파서가 만든 `www.instagram.com` 주소뿐이고 이미지는 `*.cdninstagram.com`·`*.fbcdn.net` https 만(SSRF 축). 로그인 벽·IP 차단으로 실패하면 어드민이 썸네일을 직접 올린다. 결정 [storefront 2026-10-15-2](../../decisions/storefront.md#2026-10-15-2).
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
 - ⚠️ 감사 로그(`AdminAuditInterceptor`)는 본문 10KB 초과분을 자른다 — 성분 8000자 PATCH 는 잘릴 수 있다(R8, 수용).
 - 이미지 재크롭용 프록시(`image-source`)는 **만들지 않는다**(2026-10-04 판정) — R2 가 어드민 오리진 GET 을 CORS 로 허용해서 klow_admin 이 브라우저에서 직접 받아 크롭한다(운영 `cdn.klow.kr` → `admin.klow.kr` · dev 버킷 → `localhost:3000`·`admin-staging.klow.kr` 실측). ⚠️ dev 버킷은 **`localhost:3000` 만** 허용이라 어드민을 다른 포트로 띄우면 재크롭·업로드가 CORS 로 실패한다(화면은 토스트로 "파일로 다시 올려 달라"). 외부 호스트 원본 이미지도 같은 이유로 재크롭이 안 되고 파일 업로드로 대신한다.
@@ -78,7 +82,7 @@
 |---|---|---|---|
 | GET | `/v1/buyer/home` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다 |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치, `cursor` = 직전 페이지 마지막 제품 id |
-| GET | `/v1/buyer/brands/:slug` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 |
+| GET | `/v1/buyer/brands/:slug` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
