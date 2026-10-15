@@ -126,6 +126,7 @@
 | Method | Path                                      | 기능                                                   |
 |--------|-------------------------------------------|--------------------------------------------------------|
 | GET    | `/v1/brand/shipments/pending`             | 발송 대기 (submitted + 미확인) + 시딩 `seedingDuplicates` |
+| GET    | `/v1/brand/shipments/pending/export`      | 발송 대기 **일반 주문**(시딩 제외) xlsx — 브랜드가 자기 해외 3PL 에 넘기는 파일. 1행 = 주문 라인, 영문 헤더, 주(state)·영문 이름/주소 포함, 배송비(브랜드 몫 USD)는 주문 첫 행에만. 렌더러 `pending-orders-xlsx.ts` · `:id` 보다 먼저 선언 |
 | GET    | `/v1/brand/shipments/confirmed`           | 배송 현황 (패킹 확인 완료)                             |
 | GET    | `/v1/brand/shipments/:id`                 | 단일 송장 상세 (추적 타임라인 포함)                    |
 | POST   | `/v1/brand/shipments/:id/confirm-shipped` | 패킹/발송 확인 (`brandConfirmedShippedAt` 기록)         |

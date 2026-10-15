@@ -1043,6 +1043,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 30 | buyer-shelf-bands | **큐레이션 선반 안 필터 칩** — 어드민 선반마다 칩(라벨+보조문구) 추가·순서·삭제 + 제품을 칩에 배정(제품당 0~1개) · klow_web 칩(KLOWBUYER 동일) · `PUT /admin/buyer/shelves/:id/bands` · 마이그레이션 `20261009125951_add_buyer_shelf_bands`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-09](./decisions/storefront.md#2026-10-09). 남은 것: push(server → admin·web) → staging 화면 실측 → 운영 `migrate deploy` → 배포 | 완료 | ✗ | 2026-10-09 | d236ba1 / d6bcd18 / - / 8736dee / (이 커밋) |
 | 34 | buyer-brand-videos | **브랜드 마케팅 영상** — 어드민 브랜드 상세에 유튜브·인스타 주소 등록 → 바이어 브랜드 페이지 + 그 브랜드의 모든 PDP 에 썸네일 줄, 모달 재생 · 인스타 썸네일은 등록 시 `og:image` → R2 복사 · 마이그레이션 `20261015040748_add_buyer_brand_videos`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-15-2](./decisions/storefront.md#2026-10-15-2) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 2811a95 / c8077d0 / - / 0301f59 / (이 커밋) |
 | 35 | buyer-referral | **바이어 추천인 링크** — 계정 Referrals 탭(링크 복사·공유·추천한 바이어 수/목록·검수 상태) · `?ref=` 30일 캡처 + 가입 폼 자동 입력 · 가입 시 1단계 연결 · 어드민 계정 목록 '추천' 열 + 상세 추천인/추천한 바이어 + 추천인 지정·해제. 보상은 시스템 밖(사용자 결정). 마이그레이션 `20261015050755_add_buyer_referral`(**staging·staging DB 직접 — 적용됨**). 결정 [storefront 2026-10-15-3](./decisions/storefront.md#2026-10-15-3) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 984f8d2 / 5638e84 / - / d559244 / (이 커밋) |
+| 36 | brand-3pl-export | **발송 대기 일반 주문 엑셀 다운로드** — 브랜드가 KLOW 로 결제만 받고 발송은 자기 해외 3PL 에 맡기는 용도. 서버 `GET /v1/brand/shipments/pending/export`(1행 = 주문 라인 · 영문 헤더 · 주·영문 주소 포함 · 배송비 첫 행만) + klow_brand 발송 대기 탭 '엑셀 다운로드' 버튼. 스키마 무변경 — **push 안 함 · 배포 순서 server → brand** | 완료 | ✗ | 2026-10-15 | 551bb3d / - / fb5f328 / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1110,6 +1111,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### brand-3pl-export — 36행 (완료 · klow_server `551bb3d` · klow_brand `fb5f328`, `staging` 직접 · push 안 함)
+
+- **문서를 고친 것**: `server/modules/shipments.md` 브랜드 라우트 표에 `pending/export`
+- **실측(staging DB)**: blink 에 가짜 주문 4건(US·JP·DE·MX, 8라인)을 넣고 서비스+렌더러를 직접 불러 8행 확인. 검증: server typecheck 2종·렌더러 스펙 5·e2e · brand tsc·eslint
+- ⚠️ **staging DB 에 테스트 주문 4건이 남아 있다** — 이메일 `test-3pl+N@example.com` · buyerNote `[TEST 3PL 엑셀 확인용]` · 송장번호 null(추적 cron 대상 아님). blink 정산 탭·어드민 주문에도 보인다. 사용자 확인 후 지울 것(Shipment·ShipmentItem → OrderItem → Order 순)
+- **확인 못 한 것**: 브라우저에서 버튼 클릭 → 파일 저장(사용자가 로컬에서 확인 예정)
+- **범위 밖**: 3PL 브랜드도 결제 시 EFS 송장은 그대로 자동 발급된다 — 끄는 설정이 필요하면 별도 트랙
+- **남은 일**: push klow_server → klow_brand
 
 ### buyer-referral — 35행 (완료 · klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, `staging` 직접 · push 안 함)
 
