@@ -272,6 +272,14 @@
   - 커스텀 도메인 Host 회귀 1건.
 - **불변식**: G3 · G4 · G7
 
+- **B 착수 시 확정(2026-10-16)**:
+  - 레이아웃에 `dynamicParams = false` 를 두지 않는다 — 세그먼트 설정이 하위로 내려가 `[slug]`·`[id]` 가 404 가 된다. 모르는 언어는 레이아웃의 `notFound()` 가 막는다.
+  - 링크는 `kbHref` 를 호출부마다 쓰지 않고 **`KbLink`(next/link 래퍼)·`useKbRouter`** 로 일괄 처리한다 — 바이어 공간 밖 경로(`/legal/*`)·해시·외부는 건드리지 않아 import 만 바꾸면 된다. 활성 메뉴 비교는 `useKbPath()`(접두 제거).
+  - 비영어 noindex 는 페이지 메타가 아니라 **middleware 의 `X-Robots-Tag` 헤더**다 — 자식 페이지의 `robots` 가 덮지 못한다. C 가 `kbRewrite()` 의 그 한 줄을 지운다.
+  - Next 가 og:image 를 내부 경로(`/kbl/{lc}/opengraph-image`)로 만든다 — middleware 가 `/kbl/*` 중 메타데이터 세그먼트만 통과시킨다.
+  - 커스텀 도메인의 루트 fail-open(해석 실패 시 KLOW 홈)은 `/kbl/en` rewrite 로 옮겼다(`/` 페이지가 없어졌으므로).
+  - 언어 메뉴는 네이티브 select 를 투명하게 겹치고 보이는 건 코드(`JA ▾`) — select 가 최장 옵션 폭으로 헤더를 밀어서.
+
 ### C. klow_web — 용어집 · 문구 직접 번역 · SEO 켜기 · 마무리
 
 - 제목과 순서만 적는다. 명세는 B 가 끝난 뒤 정밀화한다.

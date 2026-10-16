@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 38행 — buyer-i18n B(klow_web 라우팅·자동 언어)가 다음이다.** 37행 A(klow_server `?lang=` LLM 번역 캐시 + 예약 slug)는 2026-10-16 에 끝났다 — klow_server `afa841d`, git **`feat/buyer-i18n`** + Neon DB 브랜치 **`ep-old-sound`**(마이그레이션 `20261016045800_add_buyer_translation` 적용) · **staging 미병합·push 안 함**. G1 운영 실측 충돌 0건. ⚠️ B 는 klow_web 도 `feat/buyer-i18n` 으로 파고, **예약어 미러 `klow_web/src/lib/reserved-slugs.ts` 에 `ja zh vi th id ru ar kbl` 을 맞출 것**(지금 서버만 늘었다). 로컬 확인은 klow_server 를 그 브랜치로 띄워야 `?lang=` 이 돈다. 운영 배포는 **A → B+C 함께**(B 만 나가면 영어 UI 의 중복 URL). `§9` 37행 메모 · 스펙 [`plan/buyer-i18n/`](./plan/buyer-i18n/README.md).
+**`§7` 39행 — buyer-i18n C(용어집 + 문구 Claude 직접 번역 + SEO 켜기)가 다음이다.** 37행 A(klow_server `afa841d`)·38행 B(klow_web `0c16934`)는 2026-10-16 한 세션에 끝났다(사용자 지시로 A 직후 B 진행) — 두 레포 모두 git **`feat/buyer-i18n`**, klow_server DB 브랜치 **`ep-old-sound`**(마이그레이션 `20261016045800_add_buyer_translation`) · **staging 미병합·push 안 함**. ⚠️ B 는 비영어 URL 에 `X-Robots-Tag: noindex` 를 건다(G7) — **운영은 B+C 함께**, A 는 먼저 나가도 무해. C 는 `kbRewrite()` 의 noindex 한 줄 제거 + hreflang/sitemap 을 맡는다. `§9` 37·38행 메모 · 스펙 [`plan/buyer-i18n/`](./plan/buyer-i18n/README.md).
 
 **`§7` 35행 — 바이어 추천인 링크(2026-10-15)는 `staging` 커밋까지 끝났다**(klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, **push 안 함**). staging DB 에 `20261015050755_add_buyer_referral` 적용됨. push 순서 **klow_server → klow_admin·klow_web**. 같은 날 klow_web `c2bf1cd`(PDP 브랜드명을 제목 위로)도 push 대기. `§9` 35행 메모.
 
@@ -990,9 +990,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - **완료 기준**: 트랙 문서 §3 A — `?lang=ja` 2회 호출 시 2회차 LLM 0회 · `?lang=en`/`xx` 응답 불변 · LLM 실패 시 원문 + 캐시 미기록
 - **(해당 시) 불변식**: buyer-i18n G1 · G2 · G5 · G6
 
-#### 38. B. klow_web 라우팅·자동 언어 ← 다음 · 39. C. 문구 직접 번역 + SEO 켜기
+#### 38. B. klow_web 라우팅·자동 언어 · 39. C. 문구 직접 번역 + SEO 켜기 ← 다음
 
-37 A 는 2026-10-16 완료(`§9` 37행 메모). 제목과 순서만 — 명세는 트랙 문서 §3 B·C. **운영 배포는 B+C 함께**(G7). C 가 결정 기록·색인(`decisions/storefront.md` — 2026-10-12 hreflang 부분 대체)을 맡는다.
+37 A·38 B 는 2026-10-16 완료(`§9` 37·38행 메모). C 착수 전 트랙 문서 §3 C 를 B 확정분(§3 B 끝)에 맞춰 정밀화할 것. 제목과 순서만 — 명세는 트랙 문서 §3 B·C. **운영 배포는 B+C 함께**(G7). C 가 결정 기록·색인(`decisions/storefront.md` — 2026-10-12 hreflang 부분 대체)을 맡는다.
 
 ### 일정에 없는 트랙 — custom-domain · mcf
 
@@ -1070,7 +1070,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 35 | buyer-referral | **바이어 추천인 링크** — 계정 Referrals 탭(링크 복사·공유·추천한 바이어 수/목록·검수 상태) · `?ref=` 30일 캡처 + 가입 폼 자동 입력 · 가입 시 1단계 연결 · 어드민 계정 목록 '추천' 열 + 상세 추천인/추천한 바이어 + 추천인 지정·해제. 보상은 시스템 밖(사용자 결정). 마이그레이션 `20261015050755_add_buyer_referral`(**staging·staging DB 직접 — 적용됨**). 결정 [storefront 2026-10-15-3](./decisions/storefront.md#2026-10-15-3) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 984f8d2 / 5638e84 / - / d559244 / (이 커밋) |
 | 36 | brand-3pl-export | **발송 대기 일반 주문 엑셀 다운로드** — 브랜드가 KLOW 로 결제만 받고 발송은 자기 해외 3PL 에 맡기는 용도. 서버 `GET /v1/brand/shipments/pending/export`(1행 = 주문 라인 · 영문 헤더 · 주·영문 주소 포함 · 배송비 첫 행만) + klow_brand 발송 대기 탭 '엑셀 다운로드' 버튼. 스키마 무변경 — **push 안 함 · 배포 순서 server → brand** | 완료 | ✗ | 2026-10-15 | 551bb3d / - / fb5f328 / - / (이 커밋) |
 | 37 | buyer-i18n | **A. klow_server — 바이어 데이터 번역 API + 예약어** — 운영 slug·프로모션 코드 충돌 실측(G1, **0건**) · 마이그레이션 `20261016045800_add_buyer_translation`(DB 브랜치 `ep-old-sound` 에 적용) · `/v1/buyer/*` `?lang=` + LLM 번역 캐시 · 예약어 `ja zh vi th id ru ar kbl` — git `feat/buyer-i18n` · **staging 미병합 · push 안 함** | 완료 | ✗ | 2026-10-16 | afa841d / - / - / - / (이 커밋) |
-| 38 | buyer-i18n | **B. klow_web — 라우팅·자동 언어** — `kbl/[lang]` + middleware rewrite · 첫 방문 `/` 307(쿠키 → Accept-Language → IP 국가) · 언어 메뉴 · `kbHref` · `?lang=` 조회 · 비영어 noindex(G7) | 대기 | ✗ | | |
+| 38 | buyer-i18n | **B. klow_web — 라우팅·자동 언어** — `kbl/[lang]` + middleware rewrite · 첫 방문 `/` 307(쿠키 → Accept-Language → IP 국가) · 언어 메뉴 · `KbLink`/`useKbRouter` · `?lang=` 조회 · 비영어 noindex(G7) — git `feat/buyer-i18n` · **staging 미병합 · push 안 함 · 운영은 C 와 함께** | 완료 | ✗ | 2026-10-16 | - / - / - / 0c16934 / (이 커밋) |
 | 39 | buyer-i18n | **C. klow_web — 용어집 + 문구 Claude 직접 번역 + SEO 켜기** — `kb` 네임스페이스 7개 언어 · buyer-about 7개 언어 · `kbMetadata`·hreflang·sitemap · noindex 해제 · 결정 기록. 2세션 가능 · **운영은 B+C 함께** | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
@@ -1139,6 +1139,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 ⚠️ **승격 규칙** — 단계를 `완료` 로 바꿀 때 인계 메모를 훑어 승격 대상을 `decisions/` 로 옮긴다.
 판정 한 줄: **"이 단계가 끝난 뒤에 코드를 만지는 사람이 이걸 몰라서 사고를 내는가?"** 예면 결정
 로그(영구), 아니면 인계 메모(아카이브와 함께 소멸).
+
+### buyer-i18n — 38행 B (완료 · klow_web `0c16934`, git `feat/buyer-i18n` · staging 미병합 · push 안 함)
+
+- **문서를 고친 것**: 트랙 `implementation-plan.md` §3 B 끝에 "B 착수 시 확정" 6줄 · `CLAUDE.md` Where Things Live 의 klow_web pages 행(바이어 공간 경로).
+- **스펙과 다르게 한 것**: 레이아웃 `dynamicParams=false` 안 씀(하위 `[slug]` 404 위험 — `notFound()` 로 대체) · 링크는 `KbLink`·`useKbRouter` 래퍼로 일괄 · noindex 는 middleware 헤더 · `/en/*`·`/{lc}/shop` 은 middleware 가 아니라 `next.config.js` redirects(308) · 커스텀 도메인 루트 fail-open 을 `/kbl/en` rewrite 로.
+- **확인한 것**: `next build`(kbl/[lang] 8개 언어 정적 생성) · tsc · eslint · `next start` + 로컬 klow_server(:4010, 실 OpenAI) curl 26건 — 스펙 완료 기준 전부(AL ja→307 `/ja`+쿠키 · 쿠키 en→200 · IP JP→307 · Googlebot→200 · `/ja/shop/products` 200+noindex · `/en/shop/brands` 308 · `/kbl/en` 404 · `/ja/cart` 404 · 브랜드관 `/blink` 200 · 커스텀 Host `/`·`/shop/*`·`/ja` 회귀) · Playwright: 언어 메뉴 전환(쿠키·URL·링크 접두 0 누락) · `/ja` 에서 카드 클릭 → `/ja/shop/products/:id` + 번역 데이터(水·アルコール·スキンケア) · 데스크톱/모바일 헤더 레이아웃.
+- **확인하지 못한 것**: Vercel 실배포의 `x-vercel-ip-country`(헤더 주입으로만 확인) · 로그인·체크아웃 흐름을 비영어로 끝까지(라우터 래퍼라 같은 경로지만 클릭 검증은 안 함).
+- **다음 단계(C)가 알 것**: UI 문자열은 아직 영어 그대로다. `useKbLang()`(클라)·`params.lang`(서버)로 locale 을 받는다. canonical 은 아직 영어 URL 을 가리킨다(noindex 라 무해) — C 의 `kbMetadata` 가 고친다. sitemap 도 영어만.
 
 ### buyer-i18n — 37행 A (완료 · klow_server `afa841d`, git `feat/buyer-i18n` + DB 브랜치 `ep-old-sound` · staging 미병합 · push 안 함)
 
