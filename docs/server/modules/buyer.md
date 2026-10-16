@@ -3,8 +3,8 @@
 - **모듈 경로**: `src/modules/buyer/`
 - **목적**: 해외 바이어가 `klow.kr/` 에서 둘러보는 **KLOW 가 골라 올린 브랜드·제품**의 데이터. 관리자가 klow_admin "바이어 공간"에서 채우고(`/admin/buyer/*`), klow_web 이 공개 API(`/v1/buyer/*`)로 그린다. 브랜드(klow_brand)는 무관하다.
 - **설계 정본**: [`docs/plan/buyer-platform/`](../../plan/buyer-platform/README.md) — 불변식 G1~G12 는 `implementation-plan.md §1`.
-- **관련 파일**: `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
-- **마이그레이션**: `20261015040748_add_buyer_brand_videos`(`BuyerBrandVideo` + enum `BuyerVideoProvider` — CREATE 만, 롤링 안전) · `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
+- **관련 파일**: `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-translation.service.ts`(`?lang=` LLM 번역 캐시) · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
+- **마이그레이션**: `20261016045800_add_buyer_translation`(`BuyerTranslation` — CREATE 만, 롤링 안전, 백필 없음) · `20261015040748_add_buyer_brand_videos`(`BuyerBrandVideo` + enum `BuyerVideoProvider` — CREATE 만, 롤링 안전) · `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
 
 ## 데이터 모델
 
@@ -17,6 +17,7 @@
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
 | `BuyerShelf` · `BuyerShelfItem` · `BuyerShelfBand` | 홈 큐레이션 선반(수동으로 고른 제품) + 선반 안 필터 칩(band — 제품 속성이 아니라 그 선반 한정 분류, `BuyerShelfItem.bandId` 로 제품당 0~1개, 칩 삭제 시 `SetNull`) |
 | `BuyerBrandVideo` | 브랜드 마케팅 영상(유튜브·인스타, 브랜드당 최대 12, `sort`). `provider`·`externalId`·`vertical` 은 **서버가 url 을 파싱한 값이 정본**(`video-url.ts`). `thumbnailUrl` = R2(인스타 자동 복사 또는 수동 업로드), null 이면 유튜브는 `i.ytimg.com` 파생 · 인스타는 로고 카드 |
+| `BuyerTranslation` | `?lang=` 번역 캐시 — `(entityType, entityId, locale)` 유니크, `fields` Json(번역된 필드만), 스테일 판정은 `sourceHash`(원문 필드 해시). 다형이라 FK 없음(원본이 지워진 행은 남지만 읽히지 않는다). 아래 [`?lang=` 번역](#lang-번역) |
 | `BuyerInquiry` | Request 드로어 문의. 브랜드·제품 FK 는 `SetNull`(영업 기록이라 남는다) |
 
 ⚠️⚠️ **원본 `Product`·`Brand` 에 쓰지 않고(G1) `B2b*` 테이블은 읽지도 않는다(G2).** 기존 B2B 도매(`/[slug]/b2b`, 브랜드가 입력)와 이 공간의 가격은 별개다.
@@ -80,10 +81,10 @@
 
 | Method | Path | Throttle | 기능 |
 |---|---|---|---|
-| GET | `/v1/buyer/home` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다 |
-| GET | `/v1/buyer/products?category=&q=&take=&cursor=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치, `cursor` = 직전 페이지 마지막 제품 id |
-| GET | `/v1/buyer/brands/:slug` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
-| GET | `/v1/buyer/products/:id` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
+| GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다 |
+| GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
+| GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
+| GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
 - **G12**: 없는 slug/id 와 비공개·미완비·미승인은 **같은 404**(`brand not found` / `product not found`) — 비공개 행의 존재를 새지 않는다. 브랜드는 노출 제품이 1개 이상일 때만 존재한다.
@@ -91,6 +92,27 @@
 - 조회는 throttle 을 조이지 않는다 — klow_web 은 ISR(`revalidate: 60`)로 받는다(Vercel egress IP 공유).
 - 프런트: klow_web `app/(buyer)/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
 - 서버 캐시 없음. 매 요청 노출 후보를 include 1회로 받아 메모리 판정(규모 수백 행).
+
+<a id="lang-번역"></a>
+### `?lang=` 번역 (buyer-i18n, 2026-10-16)
+
+`lang` ∈ `ja zh vi th id ru ar`(`products/product-translation.service.ts` `normalizeLocale` — 대소문자 무시) 이면 데이터 문구를 번역해 싣는다. **`en`·미지원·없음은 지금과 바이트 단위로 같은 영어 응답**(번역 서비스를 부르지도 않는다). 응답 모양은 무변경 — 같은 키에 번역된 값이 들어갈 뿐이다.
+
+| entityType | 원본 | 번역 필드 | 어느 응답 |
+|---|---|---|---|
+| `productCard` | `BuyerProduct` | `size` · `badge` | 카드가 나오는 전부(홈·목록·브랜드·PDP 의 moreFromBrand) |
+| `product` | `BuyerProduct` | `about` · `forText` · `keyActives[]` | PDP 만(홈·목록이 상세 문구까지 번역하면 첫 방문 비용이 커진다) |
+| `category` | `BuyerCategory` | `name` | 홈(노출 카테고리만) · PDP |
+| `shelf` / `shelfItem` / `band` | 선반 · 아이템 · 칩 | `title`·`lede` / `tag` / `label`·`note` | 홈 |
+| `heroSlide` | `BuyerHeroSlide` | `caption` | 홈 |
+| `video` | `BuyerBrandVideo` | `title` | 브랜드 |
+
+- ⚠️ **번역하지 않는 것**(D7·G6): 제품명(`name` = `nameEn`/원본명), 브랜드명·로고·도시·지역, `ingredients`(INCI), `madeIn`, `spf`, 인증·가격·수치. 호출부가 애초에 보내지 않는다. 보낸 필드도 **원문의 숫자 토큰이 번역문에 그대로 없으면 그 필드는 원문**이다(`keepsNumbers`).
+- 바이어 카테고리 slug(`skincare`·`sun-care`…)는 소비자 `category-presets.ts` 의 키(`cleanser`·`toner`…)와 달라 프리셋을 쓸 수 없다 — 카테고리 이름도 LLM 캐시로 번역한다.
+- **LLM** = OpenAI `OPENAI_MODEL`(기본 `gpt-4o-mini`) · temperature 0 · JSON in/out(`{items:[{k,f}]}`). 프롬프트의 용어 목록은 **임시**이고 buyer-i18n C 단계가 `docs/plan/buyer-i18n/glossary.md` 로 교체한다. 묶음 = 20건 또는 6,000자, 동시 4회. 같은 원문의 동시 번역은 1회로 합친다(in-flight).
+- ⚠️ **실패 = 영어**(G5): 키 없음·호출 실패·응답 형식 오류·응답에서 빠진 item 은 원문으로 응답하고 **캐시를 쓰지 않는다**(다음 요청이 재시도). DB 오류도 throw 하지 않는다. 일부 필드만 숫자 검사로 버려진 경우는 **캐시한다**(같은 원문을 매 요청 다시 보내 비용이 새지 않게 — 원문이 바뀌면 해시가 달라져 재번역).
+- **첫 번역은 최대 8초만 기다린다** — 넘으면 끝난 것만 싣고 나머지는 영어로 응답하며, 번역은 뒤에서 끝까지 돌아 캐시에 들어간다(klow_web ISR 60초의 다음 재생성이 받는다). 로그 `[buyer-i18n] <lc> LLM 호출 — N건` 이 호출 1회당 한 줄이라 캐시 적중은 "로그 없음"으로 확인한다.
+- 스테일 = `sourceHash` 불일치(원문이 바뀌었거나 번역 필드 집합이 바뀜). 어드민 수동 번역(override)은 없다(D9).
 
 ### POST `/v1/buyer/inquiries`
 
@@ -107,4 +129,5 @@ Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디
 |---|---|---|
 | `BUYER_INQUIRY_EMAIL` | (비움) | 문의 수신함. 비면 `CONTACT_INBOX_EMAIL` → `team@klow.kr` |
 | `ADMIN_FRONTEND_URL` | (기존) | 메일의 "어드민에서 문의 보기" 링크(`/buyer/inquiries`) |
+| `OPENAI_API_KEY` · `OPENAI_MODEL` | (기존) | `?lang=` 번역. 키가 없으면 번역 없이 영어로 응답(부팅·요청 모두 실패하지 않는다) |
 | `RESEND_API_KEY` | (기존) | 비면 `[DEV email] buyer inquiry …` 콘솔 로깅. ⚠️ dev 도 키가 있어 실발송 — 테스트는 `RESEND_API_KEY= npm run start` |

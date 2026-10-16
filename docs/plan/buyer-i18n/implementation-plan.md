@@ -142,19 +142,22 @@
 - **테이블**
 
   ```
-  BuyerTranslation(entityType, entityId, locale, fields Json, sourceUpdatedAt)
+  BuyerTranslation(entityType, entityId, locale, fields Json, sourceHash)
   @@unique([entityType, entityId, locale])
   ```
 
-  - entityType 은 `product`, `category`, `shelf`, `shelfItem`, `band`, `heroSlide`, `video` 다.
+  - entityType 은 `product`(상세 문구), `productCard`(카드 문구), `category`, `shelf`, `shelfItem`, `band`, `heroSlide`, `video` 다.
+    - A 착수 시 확정: 제품을 카드/상세로 나눴다 — 홈·목록이 상세 문구(`about` 최대 4000자)까지 번역하면 첫 방문 비용이 커진다.
+    - 스테일 판정은 `sourceUpdatedAt` 대신 **원문 필드 해시**다 — `band`·`shelfItem`·`video` 에는 `updatedAt` 이 없다.
   - `entityId` 는 각 오버레이 행의 id 다.
 
 - **번역 필드**
 
   | 대상 | 필드 |
   |---|---|
-  | 제품 | `about`, `forText`, `keyActives[]`, `badge`, `size` |
-  | 카테고리 | `name` |
+  | 제품 상세(`product`) | `about`, `forText`, `keyActives[]` |
+  | 제품 카드(`productCard`) | `badge`, `size` |
+  | 카테고리 | `name` — 바이어 slug(`skincare`…)가 `category-presets.ts` 키와 달라 프리셋은 못 쓴다(LLM 캐시) |
   | 선반 | `title`, `lede` |
   | 선반 아이템 | `tag` |
   | 칩 | `label`, `note` |
