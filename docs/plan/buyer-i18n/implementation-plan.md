@@ -308,3 +308,4 @@
   - SEO 헬퍼 이름은 `kbMetadata` 가 아니라 `lib/buyer-seo.ts` 의 `kbAlternates`·`kbOpenGraph`(페이지마다 제목·설명 조립이 달라 메타 전체를 감싸지 않았다). hreflang 중국어는 `zh-Hans`, og:locale 8개 + `alternateLocale`.
   - 헤더: 메뉴 문구 `white-space: nowrap`, 영어 밖 언어는 글자 14px·간격 축소 + **1280px 미만에서 햄버거**(1024px 에서 ja·vi·ru 가 넘쳤다 — 실측).
   - 검증: 영어 SSR 텍스트를 변경 전 빌드(`0c16934`)와 16개 페이지 diff → 차이는 `og:alternateLocale` 과 `1 units → 1 unit` 복수형 교정뿐.
+  - **/simplify 정리(같은 날)**: 사전 런타임을 `kb/runtime.tsx`(클라 안전 — 영어만)와 `kb/index.tsx`(서버 — 8개 언어 `KB_MESSAGES`)로 나눴다. 레이아웃이 `KB_MESSAGES[lang]` 하나만 `KbLocaleProvider` 로 넘기고 `t` 는 Provider 가 1회 만든다(클라 정적 청크 −396KB). `lib/buyer-about/ui.ts`(별도 8개 언어 사전)는 `kb` 의 `about` 네임스페이스로 옮겼다. 공용 `i18n/core.ts`(navigate·interpolate) · `lib/lang-param.ts`(`?lang=` 규칙) · `kbLanguages`(메타·sitemap) · `t.opt` · `kbBadgeTier` · `countryNameEn`. 서버는 `brand()` 번역 1회 · `home()` 응답분만 번역 · 캐시 upsert 병렬. 정리 전후 빌드의 SSR 텍스트를 en·ja·ru·ar × 15페이지 diff 0.
