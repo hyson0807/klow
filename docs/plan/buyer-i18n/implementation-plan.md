@@ -179,6 +179,10 @@
   - zod 로 `SUPPORTED_LOCALES` 를 검증하고, 지원 외 값은 en 으로 취급한다.
   - 소비자 `?lang=` 패턴과 같다.
 - **예약 slug:** `ja zh vi th id ru ar kbl` 을 추가한다(G1 이후).
+  - `common/reserved-slugs.ts` 한 곳만 고치면 모든 입력 경로가 함께 막힌다(2026-10-16 확인).
+    - `BrandSlugField`(`common/validation/shared.ts`)를 쓰는 곳: 어드민 브랜드 생성·수정 `BrandInput`, 입점 신청 `BrandApplicationInput`·`BrandApplicationInitInput`, 가입 `brand-auth.ts`
+    - klow_brand 실시간 중복 확인 `checkSlugAvailability`
+  - 기존 행은 검사하지 않는다. 그래서 G1 실측이 필요하다.
 
 ### 2-5. SEO (C)
 
