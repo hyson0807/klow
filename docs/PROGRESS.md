@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 37·38·39행 — buyer-i18n(바이어 공간 다국어 URL `/ja`·`/zh`… + 첫 방문 자동 언어)은 2026-10-16 계획 세션이 더했다 — 다음은 37행 A(klow_server).** ⚠️ 착수 첫 작업은 **운영 DB 에서 `Brand.slug`·프로모션 코드가 `ja zh vi th id ru ar kbl` 과 겹치는지 실측**(G1) — 겹치면 멈추고 묻는다. git `feat/buyer-i18n` + Neon DB 브랜치 필수. 운영 배포는 **A → B+C 함께**(B 만 나가면 영어 UI 의 중복 URL). 스펙 [`plan/buyer-i18n/`](./plan/buyer-i18n/README.md).
+
 **`§7` 35행 — 바이어 추천인 링크(2026-10-15)는 `staging` 커밋까지 끝났다**(klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, **push 안 함**). staging DB 에 `20261015050755_add_buyer_referral` 적용됨. push 순서 **klow_server → klow_admin·klow_web**. 같은 날 klow_web `c2bf1cd`(PDP 브랜드명을 제목 위로)도 push 대기. `§9` 35행 메모.
 
 **`§7` 34행 — 바이어 브랜드 마케팅 영상(2026-10-15)은 `staging` 커밋까지 끝났다**(klow_server `2811a95` · klow_admin `c8077d0` · klow_web `0301f59`, **push 안 함**). staging DB 에 `20261015040748_add_buyer_brand_videos` 적용됨. push 순서 **klow_server → klow_admin·klow_web**(web 은 구 응답이면 섹션 숨김 — 깨지지 않는다). `§9` 34행 메모.
@@ -969,6 +971,29 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 - 트랙 코드 완료(31·32·33). 다음 단계 없음 — 남은 것은 staging 병합·EFS 실발급 1건·운영 배포(사용자 결정, `§9` 33행 메모). 운영 배포가 확인되면 `§2` 퇴출(트랙 폴더는 `server/modules/buyer-orders.md` 가 현행 설명이라 `archive/`)
 
+### buyer-i18n — 바이어 공간 다국어 URL + 첫 방문 자동 언어
+
+스펙: [`plan/buyer-i18n/`](./plan/buyer-i18n/README.md) — 결정 D1~D9 는 `README.md`, **빌드 스펙 정본은 `implementation-plan.md`**(§1 게이트 G1~G7 · §2 설계 · §3 A·B·C).
+
+`klow.kr/` 바이어 공간을 8개 언어(`/`=en · `/ja` `/zh` `/vi` `/th` `/id` `/ru` `/ar`)로 열고, 첫 방문 `/` 에서만 쿠키 → `Accept-Language` → `x-vercel-ip-country` 순으로 언어를 골라 307. 하드코딩 문구는 **Claude 직접 번역**(용어집), DB 데이터는 **서버 LLM 번역 + `BuyerTranslation` 캐시**.
+
+- ⚠️⚠️ 예약어(`ja zh vi th id ru ar kbl`)를 넣는 순간 같은 slug 브랜드관이 깨진다 — **운영 실측 먼저**(G1)
+- ⚠️ `[brandSlug]` 와 형제 동적 세그먼트 불가 → 내부 경로 `kbl/[lang]` + middleware rewrite. middleware 새 로직은 fetch 없는 순수 판정 + try(G4)
+- ⚠️ 언어가 박힌 URL 은 절대 자동 리다이렉트하지 않는다(G3 — 구글봇은 미국 IP)
+
+#### 37. A. klow_server — 바이어 데이터 번역 API + 예약어
+
+- **읽을 것**: 트랙 문서 `implementation-plan.md` §0·§1·§2-4·§3 A
+- **건드리는 레포 · 배포 순서**: klow_server 단독 — B·C 보다 먼저(구 웹은 `lang` 미전송이라 무해)
+- **스키마·데이터 위험**: `add_buyer_translation`(신규 테이블 1 · 롤링 안전 · 백필 없음). ⚠️ git `feat/buyer-i18n`(staging 에서) + Neon DB 브랜치 필수(G2). 예약어는 운영 실측 후(G1)
+- **할 일**: 트랙 문서 §3 A 의 1~5(정지점 ① 실측 ② 마이그레이션 ③ 서비스·컨트롤러 ④ 예약어 ⑤ 모듈 문서)
+- **완료 기준**: 트랙 문서 §3 A — `?lang=ja` 2회 호출 시 2회차 LLM 0회 · `?lang=en`/`xx` 응답 불변 · LLM 실패 시 원문 + 캐시 미기록
+- **(해당 시) 불변식**: buyer-i18n G1 · G2 · G5 · G6
+
+#### 38. B. klow_web 라우팅·자동 언어 · 39. C. 문구 직접 번역 + SEO 켜기
+
+제목과 순서만 — 명세는 트랙 문서 §3 B·C. **운영 배포는 B+C 함께**(G7). C 가 결정 기록·색인(`decisions/storefront.md` — 2026-10-12 hreflang 부분 대체)을 맡는다.
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -1044,6 +1069,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 34 | buyer-brand-videos | **브랜드 마케팅 영상** — 어드민 브랜드 상세에 유튜브·인스타 주소 등록 → 바이어 브랜드 페이지 + 그 브랜드의 모든 PDP 에 썸네일 줄, 모달 재생 · 인스타 썸네일은 등록 시 `og:image` → R2 복사 · 마이그레이션 `20261015040748_add_buyer_brand_videos`(**사용자 지시로 staging·staging DB 에서 직접 — 적용됨**). 결정 [storefront 2026-10-15-2](./decisions/storefront.md#2026-10-15-2) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 2811a95 / c8077d0 / - / 0301f59 / (이 커밋) |
 | 35 | buyer-referral | **바이어 추천인 링크** — 계정 Referrals 탭(링크 복사·공유·추천한 바이어 수/목록·검수 상태) · `?ref=` 30일 캡처 + 가입 폼 자동 입력 · 가입 시 1단계 연결 · 어드민 계정 목록 '추천' 열 + 상세 추천인/추천한 바이어 + 추천인 지정·해제. 보상은 시스템 밖(사용자 결정). 마이그레이션 `20261015050755_add_buyer_referral`(**staging·staging DB 직접 — 적용됨**). 결정 [storefront 2026-10-15-3](./decisions/storefront.md#2026-10-15-3) — **push 안 함** | 완료 | ✗ | 2026-10-15 | 984f8d2 / 5638e84 / - / d559244 / (이 커밋) |
 | 36 | brand-3pl-export | **발송 대기 일반 주문 엑셀 다운로드** — 브랜드가 KLOW 로 결제만 받고 발송은 자기 해외 3PL 에 맡기는 용도. 서버 `GET /v1/brand/shipments/pending/export`(1행 = 주문 라인 · 영문 헤더 · 주·영문 주소 포함 · 배송비 첫 행만) + klow_brand 발송 대기 탭 '엑셀 다운로드' 버튼. 스키마 무변경 — **push 안 함 · 배포 순서 server → brand** | 완료 | ✗ | 2026-10-15 | 551bb3d / - / fb5f328 / - / (이 커밋) |
+| 37 | buyer-i18n | **A. klow_server — 바이어 데이터 번역 API + 예약어** — 운영 slug·프로모션 코드 충돌 실측(G1) · 마이그레이션 `add_buyer_translation` · `/v1/buyer/*` `?lang=` + LLM 번역 캐시 · 예약어 `ja zh vi th id ru ar kbl` | 대기 | ✗ | | |
+| 38 | buyer-i18n | **B. klow_web — 라우팅·자동 언어** — `kbl/[lang]` + middleware rewrite · 첫 방문 `/` 307(쿠키 → Accept-Language → IP 국가) · 언어 메뉴 · `kbHref` · `?lang=` 조회 · 비영어 noindex(G7) | 대기 | ✗ | | |
+| 39 | buyer-i18n | **C. klow_web — 용어집 + 문구 Claude 직접 번역 + SEO 켜기** — `kb` 네임스페이스 7개 언어 · buyer-about 7개 언어 · `kbMetadata`·hreflang·sitemap · noindex 해제 · 결정 기록. 2세션 가능 · **운영은 B+C 함께** | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포

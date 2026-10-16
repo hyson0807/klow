@@ -45,6 +45,7 @@ KLOW K-beauty 플랫폼(5개 저장소: klow_server · klow_web · klow_admin ·
 | [plan/buyer-platform/](./plan/buyer-platform/README.md) | 바이어 공간(`klow.kr/`) — 어드민 큐레이션으로 브랜드·제품(인증·도매 구간가·스펙·이미지)·카테고리·홈 선반을 세팅해 해외 바이어에게 노출. 디자인은 `KLOWBUYER/` |
 | [plan/buyer-auth/](./plan/buyer-auth/README.md) | 바이어 계정 — 이메일/비밀번호 로그인·가입 · 가입 OTP · 서류 업로드 · 비번 찾기 · 어드민 검수 배지. 소비자 로그인과 완전 분리 |
 | [plan/buyer-sample-order/](./plan/buyer-sample-order/README.md) | 바이어 샘플 주문·결제 — 엑심베이 실결제 · 브랜드 '샘플 요청'(KLOW 사무실로 발송) · 어드민 입고 확인·부분환불 · 여러 브랜드 합포장 EFS 송장 1장 |
+| [plan/buyer-i18n/](./plan/buyer-i18n/README.md) | 바이어 공간 다국어 — `/ja`·`/zh` 등 언어별 URL(SEO) + 첫 방문 자동 언어 · 문구 직접 번역 · 바이어 데이터 LLM 번역 캐시 |
 | [archive/](./archive/README.md) | 실행이 끝난 런북·마이그레이션 노트, 제거된 기능 문서, 배포 완료된 계획, 외부 제출 원고 — **현행 시스템 설명 아님** |
 | [tools/linkcheck.py](./tools/linkcheck.py) | 문서를 옮긴 뒤 상대 링크·`#앵커` 가 깨지지 않았는지 — `python3 docs/tools/linkcheck.py` (인자 없으면 `docs/` + `CLAUDE.md`) |
 
