@@ -109,7 +109,7 @@
 
 - ⚠️ **번역하지 않는 것**(D7·G6): 제품명(`name` = `nameEn`/원본명), 브랜드명·로고·도시·지역, `ingredients`(INCI), `madeIn`, `spf`, 인증·가격·수치. 호출부가 애초에 보내지 않는다. 보낸 필드도 **원문의 숫자 토큰이 번역문에 그대로 없으면 그 필드는 원문**이다(`keepsNumbers`).
 - 바이어 카테고리 slug(`skincare`·`sun-care`…)는 소비자 `category-presets.ts` 의 키(`cleanser`·`toner`…)와 달라 프리셋을 쓸 수 없다 — 카테고리 이름도 LLM 캐시로 번역한다.
-- **LLM** = OpenAI `OPENAI_MODEL`(기본 `gpt-4o-mini`) · temperature 0 · JSON in/out(`{items:[{k,f}]}`). 프롬프트의 용어 목록은 **임시**이고 buyer-i18n C 단계가 `docs/plan/buyer-i18n/glossary.md` 로 교체한다. 묶음 = 20건 또는 6,000자, 동시 4회. 같은 원문의 동시 번역은 1회로 합친다(in-flight).
+- **LLM** = OpenAI `OPENAI_MODEL`(기본 `gpt-4o-mini`) · temperature 0 · JSON in/out(`{items:[{k,f}]}`). 프롬프트의 용어·어조는 `buyer-glossary.ts` — `docs/plan/buyer-i18n/glossary.md` 의 **미러**(용어집을 고치면 같이 고친다. 원문 해시에 안 들어가 기존 캐시는 다시 번역되지 않는다). 카드 `badge` 중 티어 라벨(`Hidden gem`·`K-Beauty icon`)은 번역하지 않는다 — 웹이 원문으로 스타일을 고르고 표시명은 UI 사전이 번역한다. 묶음 = 20건 또는 6,000자, 동시 4회. 같은 원문의 동시 번역은 1회로 합친다(in-flight).
 - ⚠️ **실패 = 영어**(G5): 키 없음·호출 실패·응답 형식 오류·응답에서 빠진 item 은 원문으로 응답하고 **캐시를 쓰지 않는다**(다음 요청이 재시도). DB 오류도 throw 하지 않는다. 일부 필드만 숫자 검사로 버려진 경우는 **캐시한다**(같은 원문을 매 요청 다시 보내 비용이 새지 않게 — 원문이 바뀌면 해시가 달라져 재번역).
 - **첫 번역은 최대 8초만 기다린다** — 넘으면 끝난 것만 싣고 나머지는 영어로 응답하며, 번역은 뒤에서 끝까지 돌아 캐시에 들어간다(klow_web ISR 60초의 다음 재생성이 받는다). 로그 `[buyer-i18n] <lc> LLM 호출 — N건` 이 호출 1회당 한 줄이라 캐시 적중은 "로그 없음"으로 확인한다.
 - 스테일 = `sourceHash` 불일치(원문이 바뀌었거나 번역 필드 집합이 바뀜). 어드민 수동 번역(override)은 없다(D9).

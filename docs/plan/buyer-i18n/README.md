@@ -30,4 +30,4 @@
    - [`decisions/storefront.md` 2026-10-12](../../decisions/storefront.md#2026-10-12) — SEO. 이 트랙이 hreflang 부분을 대체한다
    - [`decisions/storefront.md` 2026-10-15](../../decisions/storefront.md#2026-10-15) — About 은 확인된 사실만
 
-`glossary.md`(용어집)는 C 단계 첫머리에서 만든다. 서버 LLM 프롬프트(A)는 그 전까지 implementation-plan §2-4 의 임시 용어 목록을 쓰고, C 에서 용어집과 맞춘다.
+[`glossary.md`](./glossary.md) — **용어집 정본**(8개 언어 대응표·원문 유지어·어조). UI 문구(`klow_web/src/i18n/kb/`)와 서버 LLM 프롬프트(`klow_server` `modules/buyer/buyer-glossary.ts` = 미러)가 같은 표를 따른다.

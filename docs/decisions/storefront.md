@@ -250,3 +250,18 @@ klow_web 소비자 장바구니(localStorage `klow-web-cart`)가 모든 브랜�
 - ⚠️ PDP 의 "Goes well with this product" 추천(브랜드관 밖 일반 진입 바텀시트)은 다른 브랜드 상품을 보여 줄 수 있다 — 거기서 담으면 지금 카트가 그 브랜드로 바뀐다(토스트로 알린다).
 
 klow_web 만 변경(`df13433`), 마이그레이션 없음.
+
+<a id="2026-10-16"></a>
+## 바이어 공간 다국어 = 언어별 URL 이 각각 색인된다 (canonical 은 자기 언어 · hreflang 8개 + x-default · UI 문구는 직접 번역 사전 `kb` · 서버로 가는 값은 영어 · 티어 배지는 번역 안 함) (2026-10-16)
+
+`klow.kr/` 바이어 공간을 8개 언어(`/`=en · `/ja` `/zh` `/vi` `/th` `/id` `/ru` `/ar`)로 열었다(buyer-i18n A·B·C, 스펙 `plan/buyer-i18n/`). 2026-10-12 결정의 "뜻 없던 hreflang 제거"는 이 항목이 대체한다 — 이제 hreflang 이 실제 언어판을 가리킨다.
+
+- ⚠️⚠️ **canonical 은 자기 언어 URL 이다**(영어로 모으지 않는다). 모으면 언어판이 색인되지 않아 hreflang 이 무의미해진다. 메타는 `klow_web/src/lib/buyer-seo.ts`(`kbAlternates`·`kbOpenGraph`) 하나로 만든다 — 공개 페이지(홈·목록·제품·브랜드·카테고리·About 4개)만 쓰고 사적 화면(계정·체크아웃·로그인·컨시어지)은 그대로 `robots: { index: false }`. `x-default` = 접두 없는 영어 URL. 중국어 hreflang 은 `zh-Hans`.
+- ⚠️ **언어가 박힌 URL 은 절대 자동 리다이렉트하지 않는다** — 첫 방문 `/` 만 쿠키 → Accept-Language → IP 국가로 307(구글봇은 미국 IP 라 강제하면 영어만 색인된다). B 단계의 비영어 `X-Robots-Tag: noindex` 는 C 에서 지웠다.
+- **UI 문구 = `src/i18n/kb/`** — 소비자 사전(`i18n/locales`, Google MT `i18n:fill`)과 **별개**이고 기계번역을 쓰지 않는다. 영어 원본 `kb/en/<ns>.ts` → 7개 언어 `kb/{lc}.ts` 를 용어집(`plan/buyer-i18n/glossary.md`)을 보고 직접 쓴다. 새 문구를 넣으면 7개 파일에도 같은 키를 넣고 **`npm run kb:check`**(누락·`{자리표시자}`·`<태그>` 불일치) 를 돌린다 — 빠진 키는 화면에서 영어로 폴백되어 조용히 지나간다. 서버 `t = kbT(lang)` · 클라 `useKbT()`, 복수형은 `t.plural`(Intl.PluralRules — ru few·many, ar two·few·many), 인라인 태그는 `t.rich`. About 콘텐츠는 `lib/buyer-about/*` 의 `LocalizedText` 에 8개 언어가 함께 있다(주문 규칙 문장은 `orderPolicy.ts` 한 곳).
+- ⚠️⚠️ **서버로 가는 값은 영어 그대로** — 문의 제목·본문(운영팀이 읽는다), 배송지 국가명(`countryName(code)` 를 lang 없이), 폼 enum 값. 화면에 보이는 라벨만 번역한다. 새 폼을 만들 때 표시 라벨과 전송 값을 섞지 말 것.
+- ⚠️ **티어 배지(`Hidden gem`·`K-Beauty icon`)는 서버가 번역하지 않는다** — 웹이 원문으로 gem 스타일을 고르고 표시명은 `kb` 사전(`common.tier.*`)이 번역한다. 번역해 보내면 비영어 화면에서 스타일 비교가 깨진다(`buyer-public.service.ts` `TIER_BADGES`).
+- DB 데이터(제품·브랜드·홈 구성)는 서버 LLM 번역 + `BuyerTranslation` 캐시(A). 프롬프트 용어는 `modules/buyer/buyer-glossary.ts` = 용어집 미러 — **용어집을 고치면 미러도** 같이(기존 캐시는 원문 해시가 그대로라 다시 번역되지 않는다).
+- 아랍어도 레이아웃은 LTR(D8), 숫자는 서양 숫자. 루트 `<html lang="en">` 은 params 가 닿지 않는 알려진 한계 — `.kb` 래퍼에 `lang` 을 단다. 헤더는 영어 밖 언어에서 1280px 미만이면 햄버거로 넘긴다(문구가 길다).
+
+배포 순서: klow_server(A — `migrate deploy` 후) → klow_web(B+C 함께). 배포 뒤 Search Console sitemap 재제출 · 해외 헤더로 첫 방문 리다이렉트 실측. 번역은 원어민 1회 검수 권고(특히 About 의 사업 조건).

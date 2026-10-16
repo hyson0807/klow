@@ -74,6 +74,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | Admin 시드 스크립트           | `klow_server/prisma/seed/seed-admin.ts` (`npm run seed:admin`, env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`) |
 | klow_web pages                | `klow_web/src/app/` (product, `[brandSlug]`, brand, cart, checkout, orders, track, seed, my, login, signup, legal, faq, customer-center) · **바이어 공간** `kbl/[lang]/`(사용자 URL 은 `/`·`/shop/*` = en, `/{ja|zh|vi|th|id|ru|ar}`·`/{lc}/shop/*` — `middleware.ts` 가 rewrite, 첫 방문 `/` 만 자동 언어 307 · 내부 링크는 `KbLink`/`useKbRouter` · 순수 규칙 `lib/buyer-i18n.ts` · `/` · `shop/brands/[slug]` · `shop/products/[id]` + 목업 `shop/{signin,signup,match,checkout,account}` + About 그룹 `shop/(about)/{about,shipping,ordering-payment,faq}`(콘텐츠 `lib/buyer-about/*`) — `components/buyer-space/` · `lib/buyer-space*.ts` · CSS 는 `.kb` 스코프 · 목업 정본 `docs/plan/buyer-platform/mock-parity.md`) |
 | klow_web UI i18n (앱 전역)    | `klow_web/src/i18n/` (en 단일 원본 → `npm run i18n:fill` 로 ja/zh/vi/th/id/ru/ar 생성) + `useT`/`useLabels` 훅. 가이드: [`klow_web/docs/i18n.md`](./klow_web/docs/i18n.md) |
+| 바이어 공간 UI 문구 (`kb`)    | `klow_web/src/i18n/kb/` — 소비자 사전과 **별개**, 기계번역 없이 직접 번역(`en/<ns>.ts` 원본 → `{lc}.ts`, 용어집 `docs/plan/buyer-i18n/glossary.md`). 서버 `kbT(lang)` · 클라 `useKbT()` · 점검 `npm run kb:check`. About 콘텐츠는 `lib/buyer-about/*` `LocalizedText`, SEO 메타는 `lib/buyer-seo.ts` |
 | klow_brand pages              | `klow_brand/src/app/` (랜딩 `/`, signup, legal, `(authed)/`{studio(제품 관리), promotions, creators, seeding, instagram, crm, settings}) |
 | Instagram 연동 모듈           | `klow_server/src/modules/instagram/` (client, service, connect/resource 컨트롤러, refresh cron, token crypto) + `klow_brand/src/app/(authed)/instagram/`. 가이드: `docs/instagram-integration.md`, 엔드포인트: `docs/server/modules/instagram.md` |
 | klow_brand API client         | `klow_brand/src/lib/api.ts` + `klow_brand/src/lib/upload.ts`                                            |
@@ -191,6 +192,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-15` [바이어 공간 브랜드 마케팅 영상 — 브랜드 단위 · 모달 재생 · 인스타 썸네일은 등록 시 `og:image` 1회 → R2 복사 (원본 CDN URL 저장 금지 · 실패 시 수동 업로드/로고 카드 · url 파싱이 정본 · Railway IP 실측 대기)](docs/decisions/storefront.md#2026-10-15-2)
 - `2026-10-15` [바이어 추천인 링크 — 1단계 연결만 · 보상은 시스템 밖(대량 구매 오프라인) · 추천인에게는 회사·국가·상태만 · 틀린 코드여도 가입 허용 · 추천인 변경은 어드민만 · 마이그레이션은 pooler 말고 직접 주소로](docs/decisions/storefront.md#2026-10-15-3)
 - `2026-10-15` [소비자 장바구니 = 지금 브랜드관 한 곳 — 진입·담기·로그인 병합 때 다른 브랜드 줄을 비운다 (`brandRemainingCapacity` 는 다른 브랜드를 안 본다 · 현장 단일 브랜드는 '담을 때 걷어내기'로 · 서버 무변경)](docs/decisions/storefront.md#2026-10-15-4)
+- `2026-10-16` [바이어 공간 다국어 = 언어별 URL 이 각각 색인된다 (canonical 은 자기 언어 · hreflang 8개 + x-default · UI 문구는 직접 번역 사전 `kb`(`npm run kb:check`) · 서버로 가는 값은 영어 · 티어 배지는 번역 안 함)](docs/decisions/storefront.md#2026-10-16)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

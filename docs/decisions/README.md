@@ -107,4 +107,5 @@
 | `2026-10-05` | [바이어 공간 = 디자인 전면 일치 — 샘플박스·로그인·Concierge·체크아웃·계정·채팅은 목업으로 (상태는 localStorage `kb.*` · 실동작은 문의 API 하나 · 카드 정보 전송 금지)](./storefront.md#2026-10-05-2) | storefront |
 | `2026-10-08` | [바이어 계정 = 소비자 로그인과 별개 계정 + 어드민 검수 배지 (블러 해제 = 로그인 · Verified = 승인 · 서류는 서버 중계만 · OTP 템플릿은 `issueOtp(…, send)` 로 명시 · presign 크기 서명)](./storefront.md#2026-10-08) | storefront |
 | `2026-10-12` | [klow.kr SEO = 바이어 플랫폼 (canonical 은 페이지마다 · 사적 화면은 robots.txt 가 아니라 noindex · JSON-LD 에 Product/가격 없음)](./storefront.md#2026-10-12) | storefront |
+| `2026-10-16` | [바이어 공간 다국어 = 언어별 URL 이 각각 색인된다 (canonical 은 자기 언어 · hreflang 8개 + x-default · UI 문구는 직접 번역 사전 `kb` · 서버로 가는 값은 영어 · 티어 배지는 번역 안 함)](./storefront.md#2026-10-16) | storefront |
 | `2026-10-14` | [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400)](./shipping-seeding.md#2026-10-14) | shipping-seeding |

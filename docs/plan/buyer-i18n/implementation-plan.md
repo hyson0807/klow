@@ -297,3 +297,14 @@
   - 운영 배포 뒤 할 일:
     - 서치 콘솔에 sitemap 을 재제출한다.
     - 해외 VPN 이나 헤더로 첫 방문 리다이렉트를 실측한다.
+
+- **C 착수 시 확정(2026-10-16)**:
+  - UI 문구는 `src/i18n/locales/en/kb.ts` 가 아니라 **별도 폴더 `src/i18n/kb/`**(`en/<ns>.ts` 30개 + `{lc}.ts` 7개)다 — 소비자 `Messages` 타입에 넣으면 `i18n:fill` 생성 파일(`locales/{lc}.ts`)이 kb 까지 떠안고 fill 이 원문 유지 키를 덮는다. 그래서 fill 은 이 폴더를 아예 보지 않는다(제외 옵션 불필요). 번역 파일 타입은 deep-partial(빠진 키는 영어 폴백) + 완결성은 `npm run kb:check`.
+  - 런타임 `kbT(lang)`: `t(path, vars)` · `t.plural`(Intl.PluralRules — `{one, other}` + 언어별 `few`·`many`·`two`·`zero`) · `t.list` · `t.rich`(`<b>…</b>` 태그 → 컴포넌트, 중첩 불가) · `t.date`/`t.dateTime`(ar 은 `ar-u-nu-latn`).
+  - lib 헬퍼(`unitsLabel`·`statusView`·`channelLabel`·`kbTierLabel`·`kbRegion`·`kbCerts`·`matchBrands`·`labelFor`)는 첫 인자로 `t` 를 받는다. 국가명은 `countryName(code, lang)` — **lang 을 생략하면 영어**이고 서버로 보내는 값은 반드시 생략한다.
+  - 서버로 가는 값(문의 제목·본문·market, 배송지 국가명, 폼 enum)은 영어 그대로다. 채팅(KbAskProduct)의 빠른 질문은 보낼 때 영어 라벨로 되돌린다.
+  - 티어 배지(`Hidden gem`·`K-Beauty icon`)는 서버가 번역하지 않는다(`TIER_BADGES`) — 웹이 원문 비교로 스타일을 고르고 표시명은 `common.tier.*`.
+  - buyer-about: `Locale = KbLang`(`es` 제거) · `RTL_LOCALES = []`(D8) · 콘텐츠 `LocalizedText` 에 8개 언어 인라인 · 컴포넌트 문구는 `lib/buyer-about/ui.ts` · `locale` 은 필수 prop(빠뜨리면 타입 오류). 주문 규칙 문장(`firstOrderTerms` 등)은 `orderPolicy.ts` 가 8개 언어 정본이다.
+  - SEO 헬퍼 이름은 `kbMetadata` 가 아니라 `lib/buyer-seo.ts` 의 `kbAlternates`·`kbOpenGraph`(페이지마다 제목·설명 조립이 달라 메타 전체를 감싸지 않았다). hreflang 중국어는 `zh-Hans`, og:locale 8개 + `alternateLocale`.
+  - 헤더: 메뉴 문구 `white-space: nowrap`, 영어 밖 언어는 글자 14px·간격 축소 + **1280px 미만에서 햄버거**(1024px 에서 ja·vi·ru 가 넘쳤다 — 실측).
+  - 검증: 영어 SSR 텍스트를 변경 전 빌드(`0c16934`)와 16개 페이지 diff → 차이는 `og:alternateLocale` 과 `1 units → 1 unit` 복수형 교정뿐.
