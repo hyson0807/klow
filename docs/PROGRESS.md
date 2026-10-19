@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 41·42행(buyer-seo B·C)은 2026-10-19 에 끝났다 — ✅ staging 병합·push 완료**(사용자 지시 · klow_server `8128fe2` → klow_web `35cba98`, staging.klow.kr 에서 `/ja`→`<html lang="ja">` · 브랜드 소개 일본어 확인). **남은 것**: 운영 배포(server → web 순) · Bing/Yandex/Baidu 토큰 발급 후 Vercel env · 40행(A)은 Search Console 실적 뒤. `§9` 41·42행 메모.
+**`§7` 41·42행(buyer-seo B·C)은 2026-10-19 에 끝났다 — ✅ staging 병합·push 완료**(사용자 지시 · klow_server `8128fe2` → klow_web `35cba98`, staging.klow.kr 에서 `/ja`→`<html lang="ja">` · 브랜드 소개 일본어 확인). ✅ **같은 날 운영 배포 완료**(사용자 지시 · main ff → api.klow.kr `intro` 확인 → klow.kr `/ja` `<html lang="ja">` · 소비자 `/airmood`·`/cart`·`/checkout` 정상). **남은 것**: Bing/Yandex/Baidu 토큰 발급 후 Vercel env · 40행(A)은 Search Console 실적 뒤. `§9` 41·42행 메모.
 
 **`§7` 40·41·42행 — buyer-seo 트랙 등록(2026-10-19 계획).** 기술 SEO 기본은 같은 날 트랙 밖에서 끝나 운영 배포됐다(klow_web `35191f3` · 사용자가 sitemap 제출 완료). 40행(A)은 **Search Console 실적 1~2주 뒤** 착수 — 그 전엔 다른 행을 고른다. ⚠️ `§7` 이 **42행으로 예산(40행) 초과** — 다음 세션 시작 전에 완료 행을 `§8`/archive 로 회수할 것. 스펙 [`plan/buyer-seo/`](./plan/buyer-seo/README.md).
 
@@ -1094,8 +1094,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 38 | buyer-i18n | **B. klow_web — 라우팅·자동 언어** — `kbl/[lang]` + middleware rewrite · 첫 방문 `/` 307(쿠키 → Accept-Language → IP 국가) · 언어 메뉴 · `KbLink`/`useKbRouter` · `?lang=` 조회 · 비영어 noindex(G7) — git `feat/buyer-i18n` · **staging 병합·push 완료(2026-10-16) · 운영은 C 와 함께** | 완료 | ✗ | 2026-10-16 | - / - / - / 0c16934 / (이 커밋) |
 | 39 | buyer-i18n | **C. klow_web — 용어집 + 문구 Claude 직접 번역 + SEO 켜기** — 용어집 `plan/buyer-i18n/glossary.md` + 서버 프롬프트 미러 · UI 사전 `src/i18n/kb/`(947키 × 7개 언어, `kb:check` 오류 0) · About 그룹 8개 언어 · `lib/buyer-seo.ts`(canonical 자기 언어 · hreflang 8 + x-default) · sitemap alternates · 비영어 noindex 해제 · 헤더 긴 언어 대응 · 결정 [storefront 2026-10-16](./decisions/storefront.md#2026-10-16) — git `feat/buyer-i18n` · staging 병합·push 완료(2026-10-16) | 완료 | ✗ | 2026-10-16 | decd503·9ce68c8 / - / - / cb3a50a·c15a221·2b6382c·8765471 / (이 커밋) |
 | 40 | buyer-seo | **A. 품목 랜딩 페이지 + 본문** — ⚠️ Search Console 실적 1~2주 뒤 착수 · 품목 묶음(서버 카테고리 vs 웹 전용) 사용자 결정 먼저 · 기존 카테고리 3개에도 본문 | 대기 | — | | |
-| 41 | buyer-seo | **B. 브랜드 페이지 본문** — 바이어 브랜드 응답 `intro`(= `Brand.description` · 번역 캐시 · 한글 잔존 시 비움) + klow_web 브랜드명 아래·meta description · 스키마 무변경 — **staging 병합·push 완료** | 완료 | ✗ | 2026-10-19 | 8128fe2 / - / - / 35cba98 / (이 커밋) |
-| 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging 병합·push 완료** | 완료 | ✗ | 2026-10-19 | - / - / - / 35cba98 / (이 커밋) |
+| 41 | buyer-seo | **B. 브랜드 페이지 본문** — 바이어 브랜드 응답 `intro`(= `Brand.description` · 번역 캐시 · 한글 잔존 시 비움) + klow_web 브랜드명 아래·meta description · 스키마 무변경 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | 8128fe2 / - / - / 35cba98 / b3dca53 |
+| 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | - / - / - / 35cba98 / b3dca53 |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1165,7 +1165,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 문서를 고친 것: 결정 storefront 2026-10-19(후속 단락) · `server/modules/buyer.md`(`intro`) · CLAUDE.md klow_web pages 행(루트 레이아웃 둘) · `plan/buyer-seo/README.md`
 - 확인한 것: 격리 복사본 `next build` 통과(정적 141) · 빌드본 Googlebot curl(언어별 `<html lang>` · 소비자 화면 `en`+소비자 푸터 · `/a/b/c/d` 404) · 브라우저 렌더 · staging.klow.kr 같은 항목 재확인 · 서버 jest buyer 133 통과
 - 확인하지 못한 것: 운영 데이터로 `intro` 렌더(운영 description 은 영어라 그대로 나올 것) · 웹마스터 토큰(미발급)
-- 남은 일 (이 순서로): 운영 배포 klow_server → klow_web · 토큰 발급 시 Vercel env `BING_/YANDEX_/BAIDU_SITE_VERIFICATION` + 재빌드 · 40행(A)
+- 남은 일 (이 순서로): ~~운영 배포~~(2026-10-19 완료) · 토큰 발급 시 Vercel env `BING_/YANDEX_/BAIDU_SITE_VERIFICATION` + 재빌드 · 40행(A)
 - 다음 단계가 알 것: ⚠️ **새 소비자 라우트는 `app/(consumer)/` 아래** — `app/` 바로 아래면 루트 레이아웃이 없다. 로컬 dev 서버는 파일 이동 뒤 `.next` 가 낡아 `tsc` 가 `.next/types` 오류를 낸다 — dev 재시작 또는 `.next` 삭제
 
 ⚠️ `부분 완료 → 완료` 전이 시 메모는 **누적이 아니라 교체**한다.
