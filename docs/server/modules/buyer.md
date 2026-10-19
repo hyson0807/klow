@@ -83,15 +83,16 @@
 |---|---|---|---|
 | GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다 |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
-| GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
+| GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
 - **G12**: 없는 slug/id 와 비공개·미완비·미승인은 **같은 404**(`brand not found` / `product not found`) — 비공개 행의 존재를 새지 않는다. 브랜드는 노출 제품이 1개 이상일 때만 존재한다.
 - 카드 `priceUsdCents` = MOQ 구간 단가, `moq` = 둘째 행 시작 수량.
 - 조회는 throttle 을 조이지 않는다 — klow_web 은 ISR(`revalidate: 60`)로 받는다(Vercel egress IP 공유).
-- 프런트: klow_web `app/(buyer)/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
+- 프런트: klow_web `app/(kb)/kbl/[lang]/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
 - 서버 캐시 없음. 매 요청 노출 후보를 include 1회로 받아 메모리 판정(규모 수백 행).
+- **`intro`**(2026-10-19, buyer-seo B) = `Brand.description`(브랜드관 한 줄 소개) trim — 바이어 전용 입력 칸은 없다. 브랜드 응답에만 싣고 `?lang=` 이면 `brand` 엔티티로 번역한다. ⚠️ **결과에 한글이 남으면 `''`** — 바이어 공간 8개 언어에 한국어가 없어서다(원문이 한국어인데 영어 화면이거나 번역이 실패한 경우). klow_web 은 빈 값이면 렌더하지 않고, 있으면 브랜드명 아래 + meta description 맨 앞에 쓴다.
 
 <a id="lang-번역"></a>
 ### `?lang=` 번역 (buyer-i18n, 2026-10-16)
@@ -106,6 +107,7 @@
 | `shelf` / `shelfItem` / `band` | 선반 · 아이템 · 칩 | `title`·`lede` / `tag` / `label`·`note` | 홈 |
 | `heroSlide` | `BuyerHeroSlide` | `caption` | 홈 |
 | `video` | `BuyerBrandVideo` | `title` | 브랜드 |
+| `brand` | `Brand.description` (브랜드관 한 줄 소개) | `intro` | 브랜드 |
 
 - ⚠️ **번역하지 않는 것**(D7·G6): 제품명(`name` = `nameEn`/원본명), 브랜드명·로고·도시·지역, `ingredients`(INCI), `madeIn`, `spf`, 인증·가격·수치. 호출부가 애초에 보내지 않는다. 보낸 필드도 **원문의 숫자 토큰이 번역문에 그대로 없으면 그 필드는 원문**이다(`keepsNumbers`).
 - 바이어 카테고리 slug(`skincare`·`sun-care`…)는 소비자 `category-presets.ts` 의 키(`cleanser`·`toner`…)와 달라 프리셋을 쓸 수 없다 — 카테고리 이름도 LLM 캐시로 번역한다.

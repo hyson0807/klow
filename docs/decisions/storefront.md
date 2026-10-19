@@ -280,4 +280,11 @@ klow_web 만 변경(`df13433`), 마이그레이션 없음.
 - 푸터에 지금 화면의 8개 언어판 `<a href hreflang>`(`KbFooterLangs`) — 헤더 언어 메뉴는 콤보박스라 크롤러가 따라갈 링크가 없었다. 누르면 메뉴와 같이 `kb_lang` 쿠키를 쓴다(안 쓰면 `/` 리다이렉트가 영어 선택을 되돌린다).
 - sitemap 은 `lastModified` 를 싣지 않는다(진짜 수정 시각이 없어 매번 '지금' 이면 구글이 무시한다). 런타임 재생성에서 카탈로그가 비면 던져서 직전 캐시를 유지한다(빌드 땐 그대로).
 
-후속(이번 범위 밖): ① 루트 `<html lang="en">` 을 언어별로 — route group 으로 루트 레이아웃 분리(Bing·Yandex·Baidu 신호) ② 브랜드 소개 텍스트를 바이어 브랜드 응답에 싣기(브랜드 페이지가 얇다) + 품목 랜딩 확대 ③ Bing·Yandex·Baidu 웹마스터 인증. 배포 뒤 할 일(수동): Search Console sitemap 재제출 · URL 검사 라이브 테스트에서 모달 없는 렌더 확인. 서버 변경·마이그레이션 없음.
+**같은 날 후속(buyer-seo 41·42행 — klow_server `8128fe2` · klow_web `35cba98`, staging 배포)**
+
+- ⚠️⚠️ **루트 레이아웃이 둘이다** — 소비자 라우트는 전부 `app/(consumer)/`(`layout.tsx` = `<html lang="en">` + 소비자 장치), 바이어 공간은 `app/(kb)/kbl/[lang]/layout.tsx` 가 루트(`<html lang={lang}>`). URL 은 그대로다(그룹은 URL 에 안 보인다). 2026-10-16 의 "루트 `<html lang="en">` 은 알려진 한계" 는 이걸로 끝났다. ⚠️ **새 소비자 라우트는 `app/(consumer)/` 아래에** 만든다 — `app/` 바로 아래 두면 루트 레이아웃이 없어 빌드가 깨진다. ⚠️ 두 루트 사이 이동은 전체 새로고침이다(원래 서로 링크하지 않는다 — G9). 공통 메타는 `lib/seo.ts` `rootMetadata`/`rootViewport`. 소비자 `HtmlLang`(국가 store 로 `<html lang>` 을 덮어쓰는 클라이언트 컴포넌트)은 `Providers` 에서 소비자 루트로 옮겼다 — 바이어 공간에서 서버 `lang` 을 덮지 않게. `body:has(.kb) [data-site-footer]` 숨김 규칙은 지웠다(바이어 루트엔 소비자 푸터가 없다). 맞지 않는 깊은 경로(`/a/b/c/d`)는 레이아웃 없는 Next 기본 404 다.
+- **브랜드 소개 `intro`** = `Brand.description`(브랜드관 한 줄 소개)을 바이어 브랜드 응답에 싣고 `brand` 엔티티로 번역한다. 바이어 전용 입력 칸은 만들지 않았다(운영 실측: 바이어 브랜드 5곳 모두 description 이 있고 22~76자 영어 슬로건 · `tagline` 은 태그 인코딩 값이라 못 쓴다 · 브랜드 스토리 본문은 2곳뿐이고 1곳은 한국어라 이번엔 싣지 않았다). ⚠️ **결과에 한글이 남으면 비운다** — 바이어 공간 8개 언어에 한국어가 없다. klow_web 은 브랜드명 아래 + meta description 맨 앞에 쓴다.
+- 홈 `WebSite` 에 `inLanguage` 8개, 갤러리 썸네일·브랜드 목록·영상 썸네일에 `alt`. About Organization `availableLanguage` 는 **영어 그대로** — 다국어 응대는 확인된 사실이 아니다(2026-10-15). `sameAs` 는 공식 SNS 주소가 없어 넣지 않았다.
+- Bing·Yandex·Baidu 인증 메타 = Vercel env `BING_SITE_VERIFICATION`·`YANDEX_SITE_VERIFICATION`·`BAIDU_SITE_VERIFICATION`(비면 태그 없음 · 넣은 뒤 재빌드).
+
+남은 후속: 품목 랜딩 페이지 + 본문(진행표 40행 — Search Console 실적 뒤) · 웹마스터 토큰 발급(사용자).

@@ -22,6 +22,10 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 41·42행(buyer-seo B·C)은 2026-10-19 에 끝났다 — ✅ staging 병합·push 완료**(사용자 지시 · klow_server `8128fe2` → klow_web `35cba98`, staging.klow.kr 에서 `/ja`→`<html lang="ja">` · 브랜드 소개 일본어 확인). **남은 것**: 운영 배포(server → web 순) · Bing/Yandex/Baidu 토큰 발급 후 Vercel env · 40행(A)은 Search Console 실적 뒤. `§9` 41·42행 메모.
+
+**`§7` 40·41·42행 — buyer-seo 트랙 등록(2026-10-19 계획).** 기술 SEO 기본은 같은 날 트랙 밖에서 끝나 운영 배포됐다(klow_web `35191f3` · 사용자가 sitemap 제출 완료). 40행(A)은 **Search Console 실적 1~2주 뒤** 착수 — 그 전엔 다른 행을 고른다. ⚠️ `§7` 이 **42행으로 예산(40행) 초과** — 다음 세션 시작 전에 완료 행을 `§8`/archive 로 회수할 것. 스펙 [`plan/buyer-seo/`](./plan/buyer-seo/README.md).
+
 **`§7` 37·38·39행 — buyer-i18n 트랙은 2026-10-16 에 코드 완료 + ✅ staging 병합·push 완료**(사용자 지시): staging DB(`ep-icy-flower`)에 `20261016045800_add_buyer_translation` `migrate deploy`(대기 1건뿐 · CREATE 1) → klow_server ff·push(`cf7bd9a`) → `api-staging` 에서 `?lang=ja` 번역 응답 확인 → klow_web ff·push(`a63b27d`) · klow_brand `6bcba18`(UZ·KG 미러)도 push. 같은 날 /simplify 정리 포함(클라 번들 한 언어 · About UI 문구 kb 이관). **남은 것**: staging 실화면 확인(`/ja`·`/ru/shop/about`·언어 메뉴) → 운영 배포(운영 DB `migrate deploy` → klow_server → klow_web, 뒤에 Search Console sitemap 재제출 + 첫 방문 리다이렉트 실측) · 번역 원어민 검수. `§9` 39행 메모 · 결정 [storefront 2026-10-16](./decisions/storefront.md#2026-10-16).
 
 **`§7` 35행 — 바이어 추천인 링크(2026-10-15)는 `staging` 커밋까지 끝났다**(klow_server `984f8d2` · klow_admin `5638e84` · klow_web `d559244`, **push 안 함**). staging DB 에 `20261015050755_add_buyer_referral` 적용됨. push 순서 **klow_server → klow_admin·klow_web**. 같은 날 klow_web `c2bf1cd`(PDP 브랜드명을 제목 위로)도 push 대기. `§9` 35행 메모.
@@ -994,6 +998,23 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 37 A·38 B·39 C 모두 완료(`§9` 37·38·39행 메모). 남은 건 staging 병합·운영 배포(사용자 결정)뿐 — 운영은 A → B+C 함께. 확정분은 트랙 문서 §3 B·C 끝.
 
+### buyer-seo — klow.kr 바이어 공간 검색 노출 보강
+
+스펙: [`plan/buyer-seo/`](./plan/buyer-seo/README.md). 기술 SEO 기본은 트랙 밖에서 끝났다(2026-10-19 · klow_web `35191f3` · 운영 배포 · 결정 [storefront 2026-10-19](./decisions/storefront.md#2026-10-19)). 남은 건 **검색어에 답하는 페이지와 본문**이다.
+
+#### 40. A. 품목 랜딩 페이지 + 본문
+
+- **읽을 것**: 트랙 문서 §A · 결정 storefront 2026-10-15(확인된 사실만) · products 2026-07-30(태그 자유 텍스트)
+- **착수 전제**: ⚠️ Search Console 실적 1~2주치(2026-10-19 배포 기준) — 노출 생긴 품목·언어로 범위를 고른다
+- **건드리는 레포 · 배포 순서**: klow_web (품목 묶음을 서버 카테고리로 하면 klow_server·klow_admin 먼저)
+- **스키마·데이터 위험**: (b) 웹 전용이면 없음 / (a) 서버 카테고리면 데이터 작업 — ⚠️ **어느 쪽인지 착수 시 사용자에게 묻는다**(정책 공백)
+- **할 일**: 품목 랜딩 + 본문 2~4문단·FAQ(8개 언어 직접 번역) · 기존 카테고리 3개에도 본문 · sitemap 포함
+- **완료 기준**: Googlebot curl 로 새 URL 8개 언어판 title·H1·본문·hreflang 확인 · `kb:check` 오류 0 · sitemap 포함
+
+#### 41. B. 브랜드 페이지 본문 · 42. C. `<html lang>` 언어별 + 자잘한 것
+
+제목과 순서만 — 트랙 문서 §B·§C. B 는 klow_server → klow_web, C 는 klow_web(루트 레이아웃 route group 분리 + JSON-LD·alt·인증 메타).
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -1072,6 +1093,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 37 | buyer-i18n | **A. klow_server — 바이어 데이터 번역 API + 예약어** — 운영 slug·프로모션 코드 충돌 실측(G1, **0건**) · 마이그레이션 `20261016045800_add_buyer_translation`(DB 브랜치 `ep-old-sound` 에 적용) · `/v1/buyer/*` `?lang=` + LLM 번역 캐시 · 예약어 `ja zh vi th id ru ar kbl` — git `feat/buyer-i18n` · staging 병합·push 완료(2026-10-16) | 완료 | ✗ | 2026-10-16 | afa841d / - / - / - / (이 커밋) |
 | 38 | buyer-i18n | **B. klow_web — 라우팅·자동 언어** — `kbl/[lang]` + middleware rewrite · 첫 방문 `/` 307(쿠키 → Accept-Language → IP 국가) · 언어 메뉴 · `KbLink`/`useKbRouter` · `?lang=` 조회 · 비영어 noindex(G7) — git `feat/buyer-i18n` · **staging 병합·push 완료(2026-10-16) · 운영은 C 와 함께** | 완료 | ✗ | 2026-10-16 | - / - / - / 0c16934 / (이 커밋) |
 | 39 | buyer-i18n | **C. klow_web — 용어집 + 문구 Claude 직접 번역 + SEO 켜기** — 용어집 `plan/buyer-i18n/glossary.md` + 서버 프롬프트 미러 · UI 사전 `src/i18n/kb/`(947키 × 7개 언어, `kb:check` 오류 0) · About 그룹 8개 언어 · `lib/buyer-seo.ts`(canonical 자기 언어 · hreflang 8 + x-default) · sitemap alternates · 비영어 noindex 해제 · 헤더 긴 언어 대응 · 결정 [storefront 2026-10-16](./decisions/storefront.md#2026-10-16) — git `feat/buyer-i18n` · staging 병합·push 완료(2026-10-16) | 완료 | ✗ | 2026-10-16 | decd503·9ce68c8 / - / - / cb3a50a·c15a221·2b6382c·8765471 / (이 커밋) |
+| 40 | buyer-seo | **A. 품목 랜딩 페이지 + 본문** — ⚠️ Search Console 실적 1~2주 뒤 착수 · 품목 묶음(서버 카테고리 vs 웹 전용) 사용자 결정 먼저 · 기존 카테고리 3개에도 본문 | 대기 | — | | |
+| 41 | buyer-seo | **B. 브랜드 페이지 본문** — 바이어 브랜드 응답 `intro`(= `Brand.description` · 번역 캐시 · 한글 잔존 시 비움) + klow_web 브랜드명 아래·meta description · 스키마 무변경 — **staging 병합·push 완료** | 완료 | ✗ | 2026-10-19 | 8128fe2 / - / - / 35cba98 / (이 커밋) |
+| 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging 병합·push 완료** | 완료 | ✗ | 2026-10-19 | - / - / - / 35cba98 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1088,6 +1112,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 > **27·28·29행(buyer-auth)은 2026-10-08 계획 세션이 더했다** — 사용자 결정으로 **대기 행 중 가장 먼저**이고 24행(바이어 주문·결제)의 전제다.
 >
 > **31·32·33행(buyer-sample-order)은 2026-10-14 계획 세션이 24행을 대체해 더했다** — 25행(바이어 리뷰)의 전제다.
+>
+> **40·41·42행(buyer-seo)은 2026-10-19 계획 세션이 더했다** — 40행은 Search Console 실적이 쌓이는 1~2주 뒤가 착수 시점이라 그 전엔 건너뛴다.
 >
 > custom-domain · mcf 는 **일부러 빠져 있다** — `§6 일정에 없는 트랙` 참고.
 >
@@ -1133,6 +1159,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-seo — 41·42행 (완료 · klow_server `8128fe2` · klow_web `35cba98`, staging push 완료)
+
+- 문서를 고친 것: 결정 storefront 2026-10-19(후속 단락) · `server/modules/buyer.md`(`intro`) · CLAUDE.md klow_web pages 행(루트 레이아웃 둘) · `plan/buyer-seo/README.md`
+- 확인한 것: 격리 복사본 `next build` 통과(정적 141) · 빌드본 Googlebot curl(언어별 `<html lang>` · 소비자 화면 `en`+소비자 푸터 · `/a/b/c/d` 404) · 브라우저 렌더 · staging.klow.kr 같은 항목 재확인 · 서버 jest buyer 133 통과
+- 확인하지 못한 것: 운영 데이터로 `intro` 렌더(운영 description 은 영어라 그대로 나올 것) · 웹마스터 토큰(미발급)
+- 남은 일 (이 순서로): 운영 배포 klow_server → klow_web · 토큰 발급 시 Vercel env `BING_/YANDEX_/BAIDU_SITE_VERIFICATION` + 재빌드 · 40행(A)
+- 다음 단계가 알 것: ⚠️ **새 소비자 라우트는 `app/(consumer)/` 아래** — `app/` 바로 아래면 루트 레이아웃이 없다. 로컬 dev 서버는 파일 이동 뒤 `.next` 가 낡아 `tsc` 가 `.next/types` 오류를 낸다 — dev 재시작 또는 `.next` 삭제
 
 ⚠️ `부분 완료 → 완료` 전이 시 메모는 **누적이 아니라 교체**한다.
 
