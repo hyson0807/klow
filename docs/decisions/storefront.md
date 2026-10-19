@@ -265,3 +265,19 @@ klow_web 만 변경(`df13433`), 마이그레이션 없음.
 - 아랍어도 레이아웃은 LTR(D8), 숫자는 서양 숫자. 루트 `<html lang="en">` 은 params 가 닿지 않는 알려진 한계 — `.kb` 래퍼에 `lang` 을 단다. 헤더는 영어 밖 언어에서 1280px 미만이면 햄버거로 넘긴다(문구가 길다).
 
 배포 순서: klow_server(A — `migrate deploy` 후) → klow_web(B+C 함께). 배포 뒤 Search Console sitemap 재제출 · 해외 헤더로 첫 방문 리다이렉트 실측. 번역은 원어민 1회 검수 권고(특히 About 의 사업 조건).
+
+
+<a id="2026-10-19"></a>
+## 바이어 공간 SEO 보강 — 제목·H1 에 현지 검색어 · 첫 방문 모달은 봇에게 안 연다 · 소비자 `/product/*` 는 noindex (2026-10-19)
+
+"wholesale k-beauty skincare" 류를 각 언어로 검색했을 때 klow.kr 이 걸리게 하려고 코드 + 운영 klow.kr(Googlebot UA 실측)을 점검했다. URL·canonical·hreflang·sitemap·SSR 은 2026-10-12·10-16 결정대로 잘 되어 있었고, 빈 곳은 **문구**와 몇 가지 신호였다.
+
+- ⚠️ **제목·H1 에 현지 검색어를 넣는다** — 홈 제목이 전 언어 "K-beauty samples … from 1 unit", H1 은 "Samples at wholesale price." 라 타깃 검색어(skincare, 韓国コスメ 卸, 韩国化妆品 批发, mỹ phẩm Hàn Quốc bán sỉ, เครื่องสำอางเกาหลี ขายส่ง, kosmetik Korea grosir, корейская косметика оптом, مستحضرات التجميل الكورية بالجملة)가 없었다. 홈·목록·브랜드·카테고리 제목/설명과 목록 H1 을 고쳤다(`src/i18n/kb/*`, 검색어 표는 `plan/buyer-i18n/glossary.md §2-1`). 홈 히어로 디자인 카피(README 결정 8)는 그대로 두고 **H1 맨 윗줄에 eyebrow 모양 검색어 줄 `heroKicker`** 를 더했다.
+- 브랜드 meta description 은 대표 제품명 최대 3개(`{products}`)를 넣어 브랜드마다 달라지게 했다(전엔 전 브랜드 동일 템플릿).
+- ⚠️ **첫 방문 모달 `KbWelcome` 은 봇 UA 에게 열지 않는다** — 검색엔진 렌더러는 localStorage 가 늘 비어 매번 모달이 덮인 화면을 본다(구글 '침입형 전면 광고' 감점). 봇 정규식(`lib/buyer-i18n.ts` `BOT_UA`)에 `google`(Search Console 라이브 테스트 `Google-InspectionTool`)·`yeti`(네이버)를 더했다 — middleware 의 첫 방문 리다이렉트 제외에도 같이 적용된다.
+- ⚠️ **2026-10-12 ① 을 뒤집는다: 소비자 `/product/[id]` 는 `noindex, follow`.** `'use client'` 라 제목이 없어 루트 기본값(도매 문구)을 물려받은 채 같은 제품 ID 의 바이어 PDP 와 경쟁하고 있었다. 소비자 브랜드관 `/{brandSlug}` 는 그대로 색인한다.
+- 레이아웃의 `twitter` 는 카드 종류만 둔다 — 제목·설명을 두면 하위 페이지가 홈 제목을 물려받는다. 비워 두면 Next 가 각 페이지 openGraph 에서 채운다(실측). Breadcrumb JSON-LD URL 은 `kbBreadcrumbLd(lang, …)` 로 그 언어판 URL 이다.
+- 푸터에 지금 화면의 8개 언어판 `<a href hreflang>`(`KbFooterLangs`) — 헤더 언어 메뉴는 콤보박스라 크롤러가 따라갈 링크가 없었다. 누르면 메뉴와 같이 `kb_lang` 쿠키를 쓴다(안 쓰면 `/` 리다이렉트가 영어 선택을 되돌린다).
+- sitemap 은 `lastModified` 를 싣지 않는다(진짜 수정 시각이 없어 매번 '지금' 이면 구글이 무시한다). 런타임 재생성에서 카탈로그가 비면 던져서 직전 캐시를 유지한다(빌드 땐 그대로).
+
+후속(이번 범위 밖): ① 루트 `<html lang="en">` 을 언어별로 — route group 으로 루트 레이아웃 분리(Bing·Yandex·Baidu 신호) ② 브랜드 소개 텍스트를 바이어 브랜드 응답에 싣기(브랜드 페이지가 얇다) + 품목 랜딩 확대 ③ Bing·Yandex·Baidu 웹마스터 인증. 배포 뒤 할 일(수동): Search Console sitemap 재제출 · URL 검사 라이브 테스트에서 모달 없는 렌더 확인. 서버 변경·마이그레이션 없음.

@@ -53,6 +53,15 @@
 
 카테고리 표시명은 소비자 화면 쇼핑 바(`labels.category.*`)·서버 `category-presets.ts` 의 기존 번역을 따른다.
 
+### 2-1. 검색어 (SEO — 2026-10-19)
+
+제목(`pages.*.metaTitle`·`pages.layout.title`)·H1(`pages.home.heroKicker`·목록 `title`)에는 **그 나라 바이어가 실제로 치는 말**을 쓴다. 본문은 위 표 그대로 두되, 아래 칸에 "K-beauty" 외래어나 `韩国美妆`·`ความงามเกาหลี`·`kecantikan Korea` 를 넣지 않는다 — 검색량이 작다.
+
+| en | ja | zh | vi | th | id | ru | ar |
+|---|---|---|---|---|---|---|---|
+| Korean cosmetics wholesale | 韓国コスメ 卸・仕入れ | 韩国化妆品批发 | mỹ phẩm Hàn Quốc bán sỉ | ขายส่งเครื่องสำอางเกาหลี | grosir kosmetik Korea | корейская косметика оптом | مستحضرات التجميل الكورية بالجملة |
+| Korean skincare | 韓国スキンケア | 韩国护肤品 | chăm sóc da Hàn Quốc | สกินแคร์เกาหลี | skincare Korea | средства по уходу за кожей | منتجات العناية بالبشرة |
+
 ## 3. 어조
 
 | 언어 | 규칙 |
