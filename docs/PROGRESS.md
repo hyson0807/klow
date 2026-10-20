@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 43행 — 고객 결제 시딩 물품가 달러 입력(2026-10-20, 트랙 밖 요청)은 ✅ staging 적용 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261020033949_add_seeding_link_product_price_usd` 직접 `migrate dev` → klow_server `23a4706` → klow_brand `eaba53c` → klow_web `5551a22` push). **남은 것**: staging 실화면 확인 → 운영 배포(운영 DB `migrate deploy` → server → brand → web). `§9` 43행 메모.
+
 **`§7` 41·42행(buyer-seo B·C)은 2026-10-19 에 끝났다 — ✅ staging 병합·push 완료**(사용자 지시 · klow_server `8128fe2` → klow_web `35cba98`, staging.klow.kr 에서 `/ja`→`<html lang="ja">` · 브랜드 소개 일본어 확인). ✅ **같은 날 운영 배포 완료**(사용자 지시 · main ff → api.klow.kr `intro` 확인 → klow.kr `/ja` `<html lang="ja">` · 소비자 `/airmood`·`/cart`·`/checkout` 정상). **남은 것**: Bing/Yandex/Baidu 토큰 발급 후 Vercel env · 40행(A)은 Search Console 실적 뒤. `§9` 41·42행 메모.
 
 **`§7` 40·41·42행 — buyer-seo 트랙 등록(2026-10-19 계획).** 기술 SEO 기본은 같은 날 트랙 밖에서 끝나 운영 배포됐다(klow_web `35191f3` · 사용자가 sitemap 제출 완료). 40행(A)은 **Search Console 실적 1~2주 뒤** 착수 — 그 전엔 다른 행을 고른다. ⚠️ `§7` 이 **42행으로 예산(40행) 초과** — 다음 세션 시작 전에 완료 행을 `§8`/archive 로 회수할 것. 스펙 [`plan/buyer-seo/`](./plan/buyer-seo/README.md).
@@ -1096,6 +1098,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 40 | buyer-seo | **A. 품목 랜딩 페이지 + 본문** — ⚠️ Search Console 실적 1~2주 뒤 착수 · 품목 묶음(서버 카테고리 vs 웹 전용) 사용자 결정 먼저 · 기존 카테고리 3개에도 본문 | 대기 | — | | |
 | 41 | buyer-seo | **B. 브랜드 페이지 본문** — 바이어 브랜드 응답 `intro`(= `Brand.description` · 번역 캐시 · 한글 잔존 시 비움) + klow_web 브랜드명 아래·meta description · 스키마 무변경 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | 8128fe2 / - / - / 35cba98 / b3dca53 |
 | 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | - / - / - / 35cba98 / b3dca53 |
+| 43 | seeding-price-usd | **고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력** — `SeedingLink.productPriceUsdCents` 신설 · 예상 정산 원화 + 5%·환율 고지 · 재진입 정산가 재동결. 트랙 밖 요청(2026-10-20) — 마이그레이션이라 행. 결정 [2026-10-20](./decisions/shipping-seeding.md#2026-10-20) — **staging 적용 완료** | 완료 | | 2026-10-20 | 23a4706 / - / eaba53c / 5551a22 / - |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1159,6 +1162,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### seeding-price-usd — 43행 (완료 · staging push 완료 · 운영 미배포)
+
+- 문서를 고친 것: `server/modules/seeding.md`(유료 checkout · 요율 · 교차검증) · 결정 `shipping-seeding.md#2026-10-20` · CLAUDE.md 색인.
+- 확인하지 못한 것: 실화면(로컬·staging) 수동 확인 안 함. api-staging 은 버전 엔드포인트가 없어 push 5분 대기 후 brand·web 을 올렸다.
+- 남은 일 (이 순서로): ① staging 에서 발급 → `/seed/:token` 확인(무게 비움+$20 · 무게만 차단 · 둘 다 0 차단 · 옛 원화 링크) ② 운영: DB `migrate deploy` → klow_server → klow_brand → klow_web. ⚠️ klow_server `.env` 의 `DIRECT_URL` 이 아직 buyer-i18n DB 브랜치 `ep-old-sound` 다(`DATABASE_URL` 은 staging) — 이번 migrate 는 `DIRECT_URL` 을 덮어써서 staging 으로 돌렸다. 정리 필요.
+- 다음 단계가 알 것: 배포 순서가 바뀌면 구 서버 zod 가 `productPriceUsdCents` 를 버려 물품가 없는 링크가 나간다. klow_web 히어로 "배송비만 결제" 문구는 미수정(8개 언어 사전).
 
 ### buyer-seo — 41·42행 (완료 · klow_server `8128fe2` · klow_web `35cba98`, staging push 완료)
 

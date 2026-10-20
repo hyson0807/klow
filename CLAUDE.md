@@ -222,6 +222,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-02` [한셀 명단이 빈 시트로 읽혔다 + 올린 명단을 업로드 직후 자동 정리한다 (주소 나누기만 AI 가 값을 옮겨 적는 예외 — 부분문자열 되짚기)](docs/decisions/shipping-seeding.md#2026-10-02)
 - `2026-10-05` [EMS-DTP 캐리어 추가 — EFS 토큰 `EMSDTP` (정산표 실측값 · 발급 경로 실검증은 staging 1건 대기)](docs/decisions/shipping-seeding.md#2026-10-05)
 - `2026-10-14` [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400 · EFS 실발급 staging 1건 대기)](docs/decisions/shipping-seeding.md#2026-10-14)
+- `2026-10-20` [고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력 (`productPriceUsdCents` 정본 · `productPriceKrw` 는 옛 링크 폴백 · 청구액 $0 은 400)](docs/decisions/shipping-seeding.md#2026-10-20)
 
 ### 정산 — `settlement.md`
 

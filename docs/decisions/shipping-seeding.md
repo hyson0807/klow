@@ -271,3 +271,24 @@ klow_brand 단독 변경(서버·마이그레이션 없음, 배포 순서 제약
 
 ⚠️ **EFS 실발급은 아직 0건이다**(로컬 EFS 가 실계정이라 이 세션은 보내지 않았다). payload 형태는 `shipments/__tests__/consolidated-shipment.spec.ts` 가 잠그고 있다.
 첫 발급은 staging 에서 운영팀 확인을 받은 뒤 1건만 한다. 여러 브랜드 · 서로 다른 통관값이 섞인 24번 블록을 EFS 가 받아 주는지가 미검증이다.
+
+<a id="2026-10-20"></a>
+## 고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력 (2026-10-20)
+
+klow_brand 시딩 발급의 **고객이 결제** 링크에서
+
+- **실무게·부피는 선택이다.** 넷 다 비우면 무게를 안 보내고 서버는 `shippingFeeKrw = 0` 으로 저장한다 — 고객 배송비 무료, 실제 EFS 배송비는
+  기존 후청구로 브랜드가 낸다(efs-billing `buyerPaidKrw = 0`). 하나라도 적었으면 부피무게 계산을 위해 둘 다 요구한다(클라 규칙).
+- ⚠️ **배송비도 물품가도 없는 고객 결제 링크는 400** — 청구액 $0 은 PG 결제가 성립하지 않는다. 그 경우는 '브랜드가 결제'가 맞다.
+- ⚠️⚠️ **물품가 정본 = `SeedingLink.productPriceUsdCents`(USD 센트).** 원화로 받던 시절엔 바이어 청구액이 `KRW ÷ 환율` 이라 환율에 흔들렸다 —
+  [2026-09-30 배송비 원 → USD 센트](#2026-09-30-2) 와 같은 이유로 바꿨다. 바이어는 입력한 달러를 그대로 내고, 브랜드 정산은 결제 시점 환율 ×
+  0.95(`settlementKrwFromCustomerUsd`)다. 발급 화면은 이 값을 **'예상 정산 금액'** 으로 보여 주고 "결제수수료 5% 제외 · 환율에 따라 변동"을 고지한다
+  (klow_brand `settlementKrwFromUsdCents` 미러 — floor 까지 같다). 배송비는 여전히 원 요율표 값이다.
+- `productPriceKrw` 는 **dormant 폴백** — 옛 링크만 읽고(그 시점 환율로 환산) 새 링크는 비운다. 구버전 klow_brand 탭이 원화를 보내면 받아 준다.
+  둘 다 있으면 USD 가 앞선다. 읽는 곳은 `seeding/seeding-price.ts` `linkProductPriceUsdCents` 한 곳(공개 뷰·checkout 공용).
+- 같이 고친 기존 누락: checkout **본인 예약 재진입**이 `totalUsd`·`fxRateSnapshot` 은 새 환율로 다시 동결하면서 `OrderItem.settlementPriceKrw` 는
+  첫 예약 환율로 남겼다. 달러 고정 물품가에선 환율이 곧 정산 원화를 바꾸므로 함께 다시 쓴다.
+
+**마이그레이션 `add_seeding_link_product_price_usd`**(nullable ADD COLUMN — 롤링 안전, 백필 없음). 배포 순서 **klow_server → klow_brand → klow_web**
+(반대면 새 klow_brand 가 보낸 `productPriceUsdCents` 를 구 서버 zod 가 버려 물품가 없는 링크가 발급된다).
+남은 것: klow_web `/seed/:token` 히어로 문구가 고객 결제를 "배송비만 내면 된다"로 안내한다(물품가 도입 때부터 어긋나 있던 것) — 8개 언어 사전 수정이라 별도.
