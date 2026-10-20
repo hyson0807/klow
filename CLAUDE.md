@@ -194,6 +194,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-15` [소비자 장바구니 = 지금 브랜드관 한 곳 — 진입·담기·로그인 병합 때 다른 브랜드 줄을 비운다 (`brandRemainingCapacity` 는 다른 브랜드를 안 본다 · 현장 단일 브랜드는 '담을 때 걷어내기'로 · 서버 무변경)](docs/decisions/storefront.md#2026-10-15-4)
 - `2026-10-16` [바이어 공간 다국어 = 언어별 URL 이 각각 색인된다 (canonical 은 자기 언어 · hreflang 8개 + x-default · UI 문구는 직접 번역 사전 `kb`(`npm run kb:check`) · 서버로 가는 값은 영어 · 티어 배지는 번역 안 함)](docs/decisions/storefront.md#2026-10-16)
 - `2026-10-19` [바이어 공간 SEO 보강 — 제목·H1 에 현지 검색어 · 첫 방문 모달은 봇에게 안 연다 · 소비자 `/product/*` 는 noindex (2026-10-12 ① 변경) · 후속: 루트 레이아웃 둘로 = 언어별 `<html lang>` · 브랜드 소개 `intro`](docs/decisions/storefront.md#2026-10-19)
+- `2026-10-20` [브랜드관 방문 국가 — 모달 미선택이면 접속 IP 국가(Vercel 쿠키 `klow_geo`) · 첫-쓰기-승 유지라 같은 날 뒤늦은 모달 선택은 미반영 · IP 미저장 · 가격·배송엔 쓰지 않음](docs/decisions/storefront.md#2026-10-20)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 
