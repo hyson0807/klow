@@ -282,8 +282,8 @@ klow_brand 시딩 발급의 **고객이 결제** 링크에서
 - ⚠️ **배송비도 물품가도 없는 고객 결제 링크는 400** — 청구액 $0 은 PG 결제가 성립하지 않는다. 그 경우는 '브랜드가 결제'가 맞다.
 - ⚠️⚠️ **물품가 정본 = `SeedingLink.productPriceUsdCents`(USD 센트).** 원화로 받던 시절엔 바이어 청구액이 `KRW ÷ 환율` 이라 환율에 흔들렸다 —
   [2026-09-30 배송비 원 → USD 센트](#2026-09-30-2) 와 같은 이유로 바꿨다. 바이어는 입력한 달러를 그대로 내고, 브랜드 정산은 결제 시점 환율 ×
-  0.95(`settlementKrwFromCustomerUsd`)다. 발급 화면은 이 값을 **'예상 정산 금액'** 으로 보여 주고 "결제수수료 5% 제외 · 환율에 따라 변동"을 고지한다
-  (klow_brand `settlementKrwFromUsdCents` 미러 — floor 까지 같다). 배송비는 여전히 원 요율표 값이다.
+  0.95(`settlementKrwFromCustomerUsd`)다. 발급 화면은 이 값을 **'예상 정산 금액'** 으로만 보여 준다
+  (klow_brand `settlementKrwFromUsdCents` 미러 — floor 까지 같다). 처음엔 "결제수수료 5% 제외 · 환율에 따라 변동" 안내를 붙였다가 같은 날 사용자 요청으로 뺐다. 배송비는 여전히 원 요율표 값이다.
 - `productPriceKrw` 는 **dormant 폴백** — 옛 링크만 읽고(그 시점 환율로 환산) 새 링크는 비운다. 구버전 klow_brand 탭이 원화를 보내면 받아 준다.
   둘 다 있으면 USD 가 앞선다. 읽는 곳은 `seeding/seeding-price.ts` `linkProductPriceUsdCents` 한 곳(공개 뷰·checkout 공용).
 - 같이 고친 기존 누락: checkout **본인 예약 재진입**이 `totalUsd`·`fxRateSnapshot` 은 새 환율로 다시 동결하면서 `OrderItem.settlementPriceKrw` 는
