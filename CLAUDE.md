@@ -146,9 +146,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 93건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 94건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 93건 중 65건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 94건 중 65건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -248,6 +248,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-08-17` [결제 확정 3중 방어선](docs/decisions/payment.md#2026-08-17)
 - `2026-09-04` [`trust proxy` 오설정으로 `req.ip` 가 Railway 엣지 IP 였다 — 웹훅 상시 403 · rate limit 전역 뭉침](docs/decisions/payment.md#2026-09-04)
 - `2026-09-10` [⚠️⚠️ PG 실패 콜백이 결제완료로 확정된 사고 — `rescode` 게이트는 `parseAndMarkPaid` 안에](docs/decisions/payment.md#2026-09-10)
+- `2026-10-21` [PayPal X049 — Eximbay `ship_to` 필수 · 현장 주문은 KLOW 사업장 주소 (fgkey echo 라 klow_web 먼저 배포)](docs/decisions/payment.md#2026-10-21)
 
 ### 브랜드 계정 · 온보딩 · 스튜디오 · CRM — `brand-account.md`
 

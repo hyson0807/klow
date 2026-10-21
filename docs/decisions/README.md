@@ -76,6 +76,7 @@
 | `2026-09-10` | [시딩의 '고객 결제' 달러 = `Order.totalUsd`(제품가 + 배송비) (정정)](./settlement.md#2026-09-10-2) | settlement |
 | `2026-09-10` | [제품 가리기(`hidden`)는 온라인 전용 — 현장은 안 가려진다](./products.md#2026-09-10) | products |
 | `2026-09-10` | [⚠️⚠️ PG 실패 콜백이 결제완료로 확정된 사고 — `rescode` 게이트는 `parseAndMarkPaid` 안에](./payment.md#2026-09-10) | payment |
+| `2026-10-21` | [PayPal X049 — Eximbay `ship_to` 필수 · 현장 주문은 KLOW 사업장 주소 (fgkey echo 라 klow_web 먼저 배포)](./payment.md#2026-10-21) | payment |
 | `2026-09-11` | [klow_server 컨테이너 + AWS 이전 준비](./platform.md#2026-09-11) | platform |
 | `2026-09-11` | [아랍어(`ar`) 로케일 신설 — UAE 등 아랍권 13개국](./platform.md#2026-09-11-2) | platform |
 | `2026-09-11` | [현지 통화 표시 — `enabled` 게이트 제거 + 사우디 새 기호](./platform.md#2026-09-11-3) | platform |

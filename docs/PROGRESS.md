@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 44행 — PayPal X049(Eximbay `ship_to` 누락, 2026-10-21 트랙 밖 요청)은 `staging` 커밋까지 끝났다**(klow_server `ee8a221` · klow_web `00d2d44`, **push 안 함**). 남은 것: **klow_web 먼저** push → klow_server push(⚠️ 반대 순서면 구 클라가 `ship_to` 를 빼먹어 fgkey 검증이 깨진다) → staging Eximbay 에서 PayPal 결제창 확인(US 주 이름 입력 · 비US 빈 `state` · 현장 주문) → 운영. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21).
+
 **`§7` 43행 — 고객 결제 시딩 물품가 달러 입력(2026-10-20, 트랙 밖 요청)은 ✅ staging 적용 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261020033949_add_seeding_link_product_price_usd` 직접 `migrate dev` → klow_server `23a4706` → klow_brand `eaba53c` → klow_web `5551a22` push). **남은 것**: staging 실화면 확인 → 운영 배포(운영 DB `migrate deploy` → server → brand → web). `§9` 43행 메모.
 
 **`§7` 41·42행(buyer-seo B·C)은 2026-10-19 에 끝났다 — ✅ staging 병합·push 완료**(사용자 지시 · klow_server `8128fe2` → klow_web `35cba98`, staging.klow.kr 에서 `/ja`→`<html lang="ja">` · 브랜드 소개 일본어 확인). ✅ **같은 날 운영 배포 완료**(사용자 지시 · main ff → api.klow.kr `intro` 확인 → klow.kr `/ja` `<html lang="ja">` · 소비자 `/airmood`·`/cart`·`/checkout` 정상). **남은 것**: Bing/Yandex/Baidu 토큰 발급 후 Vercel env · 40행(A)은 Search Console 실적 뒤. `§9` 41·42행 메모.
@@ -1099,6 +1101,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 41 | buyer-seo | **B. 브랜드 페이지 본문** — 바이어 브랜드 응답 `intro`(= `Brand.description` · 번역 캐시 · 한글 잔존 시 비움) + klow_web 브랜드명 아래·meta description · 스키마 무변경 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | 8128fe2 / - / - / 35cba98 / b3dca53 |
 | 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | - / - / - / 35cba98 / b3dca53 |
 | 43 | seeding-price-usd | **고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력** — `SeedingLink.productPriceUsdCents` 신설 · 예상 정산 원화 + 5%·환율 고지 · 재진입 정산가 재동결. 트랙 밖 요청(2026-10-20) — 마이그레이션이라 행. 결정 [2026-10-20](./decisions/shipping-seeding.md#2026-10-20) — **staging 적용 완료** | 완료 | | 2026-10-20 | 23a4706 / - / eaba53c / 5551a22 / - |
+| 44 | eximbay-paypal | **PayPal X049 — Eximbay `ship_to` 전송** — `payment/eximbay-ship-to.ts`(이름 분할 · US/CA 주 코드 · 현장 주문은 KLOW 사업장 주소) + klow_web `requestEximbayPay()` echo. 트랙 밖 요청(2026-10-21) — 2레포 순서 배포라 행. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21) — **staging 커밋 완료(push 안 함)** · 배포 순서 **klow_web → klow_server** · staging 에서 PayPal(US·JP·현장) 결제창 진행 확인 대기 | 진행 중(부분 완료) | ✗ | 2026-10-21 | ee8a221 / - / - / 00d2d44 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
