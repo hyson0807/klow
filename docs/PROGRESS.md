@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 45행 — buyer-major(2026-10-22, 트랙 밖 요청)는 세 레포 `feat/buyer-major` 커밋까지 끝났다**(klow_server `153bf5f` · klow_admin `e36fa46` · klow_web `a802166`(design 병합)·`c464066`, **staging 미병합·push 안 함**). staging DB 에는 마이그레이션이 이미 적용돼 있다. 남은 것: 각 레포 `staging` 병합 → push 순서 **klow_server → klow_admin → klow_web**(web 이 먼저면 메이저 허브·메뉴가 빈다) → staging 에서 로그인 바이어로 MOQ 가격·주문 요청 확인 → 운영팀 데이터(인디 1행 $7 · 베네핏 · 메이저 등록). `§9` 45행 메모.
+
 **`§7` 44행 — PayPal X049(Eximbay `ship_to` 누락, 2026-10-21 트랙 밖 요청)은 `staging` 커밋까지 끝났다**(klow_server `ee8a221` · klow_web `00d2d44`, **push 안 함**). 남은 것: **klow_web 먼저** push → klow_server push(⚠️ 반대 순서면 구 클라가 `ship_to` 를 빼먹어 fgkey 검증이 깨진다) → staging Eximbay 에서 PayPal 결제창 확인(US 주 이름 입력 · 비US 빈 `state` · 현장 주문) → 운영. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21).
 
 **`§7` 43행 — 고객 결제 시딩 물품가 달러 입력(2026-10-20, 트랙 밖 요청)은 ✅ staging 적용 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261020033949_add_seeding_link_product_price_usd` 직접 `migrate dev` → klow_server `23a4706` → klow_brand `eaba53c` → klow_web `5551a22` push). **남은 것**: staging 실화면 확인 → 운영 배포(운영 DB `migrate deploy` → server → brand → web). `§9` 43행 메모.
@@ -1102,6 +1104,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 42 | buyer-seo | **C. `<html lang>` 언어별 + 자잘한 것** — 루트 레이아웃 둘로(`app/(consumer)/` · `app/(kb)/kbl/[lang]/`) · `inLanguage` · `alt` · 웹마스터 인증 env(토큰 미발급) · `sameAs` 는 SNS 주소 없어 보류 — **staging·운영 배포 완료** | 완료 | ✓ | 2026-10-19 | - / - / - / 35cba98 / b3dca53 |
 | 43 | seeding-price-usd | **고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력** — `SeedingLink.productPriceUsdCents` 신설 · 예상 정산 원화 + 5%·환율 고지 · 재진입 정산가 재동결. 트랙 밖 요청(2026-10-20) — 마이그레이션이라 행. 결정 [2026-10-20](./decisions/shipping-seeding.md#2026-10-20) — **staging 적용 완료** | 완료 | | 2026-10-20 | 23a4706 / - / eaba53c / 5551a22 / - |
 | 44 | eximbay-paypal | **PayPal X049 — Eximbay `ship_to` 전송** — `payment/eximbay-ship-to.ts`(이름 분할 · US/CA 주 코드 · 현장 주문은 KLOW 사업장 주소) + klow_web `requestEximbayPay()` echo. 트랙 밖 요청(2026-10-21) — 2레포 순서 배포라 행. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21) — **staging 커밋 완료(push 안 함)** · 배포 순서 **klow_web → klow_server** · staging 에서 PayPal(US·JP·현장) 결제창 진행 확인 대기 | 진행 중(부분 완료) | ✗ | 2026-10-21 | ee8a221 / - / - / 00d2d44 / (이 커밋) |
+| 45 | buyer-major | **바이어 공간 두 갈래 — design 브랜치 이식 + 메이저 브랜드 서버·어드민** — 메이저 3테이블(어드민 직접 생성) · 인디와 주소 공유(슬러그 양방향 검사) · 메이저 가격 BuyerGuard 전용 · 구조화 주문 요청(`major_order`) · 인디 베네핏 · 선반 종류 · 샘플 10개 상한 · klow_web 정적 데이터·$7 덮어쓰기 제거. 트랙 밖 요청(2026-10-22) — 마이그레이션 + 3레포 순서 배포라 행. 결정 [storefront 2026-10-22](./decisions/storefront.md#2026-10-22) — 세 레포 git **`feat/buyer-major`** 커밋 완료(staging 미병합·push 안 함) · staging DB 에 `20261022080453_add_buyer_major` **적용됨**(사용자 지시 — DB 브랜치 없이) | 진행 중(부분 완료) | ✗ | 2026-10-22 | 153bf5f / e36fa46 / - / a802166 · c464066 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1165,6 +1168,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-major — 45행 (부분 완료 · feat/buyer-major 커밋 · staging 미병합)
+
+- 문서를 고친 것: `server/modules/buyer.md`(메이저 절 · 선반 kind · 베네핏 · 문의 kind · 샘플 10개) · 결정 `storefront.md#2026-10-22` · CLAUDE.md 색인 + Where Things Live 한 줄. ⚠️ `server/modules/buyer-orders.md` 의 상한(50→10) 표기는 사용자 미커밋 수정이 걸려 있어 손대지 않았다.
+- 확인하지 못한 것: 로그인 바이어 화면(MOQ 가격 표시 · Units 입력 → 주문 요청 → 어드민 문의함)은 OTP 때문에 실화면 미확인 — 서버 단위 스펙만. 어드민 새 화면은 build 만 통과(실화면 미확인). 비로그인 화면·공개 API·슬러그 양방향 검사는 staging DB 에 임시 메이저 브랜드를 만들어 확인 후 지웠다.
+- 남은 일 (이 순서로): ① 각 레포 `feat/buyer-major` → `staging` 병합 · push(klow_server → klow_admin → klow_web) ② staging 실사용 확인(위 미확인 항목) ③ 운영팀 데이터: 인디 구간표 1행 $7(staging 은 0/31 이라 `/shop/samples` 가 빈다) · 베네핏 지정 · 메이저 4곳 등록 ④ 운영: DB `migrate deploy` → server → admin → web.
+- 다음 단계가 알 것: klow_server `.env` 의 `DIRECT_URL` 이 아직 `ep-old-sound`(옛 buyer-i18n DB 브랜치) — 이번 migrate 도 실행 때 덮어썼다. 허브 SEO 제목 `pages.major.metaTitle`(8개 언어)에 브랜드 4곳 이름이 박혀 있다. 메이저 제품 편집기엔 미리보기가 없다. klow_web 은 prettier 설정이 없다 — `npx prettier` 기본값(큰따옴표)으로 돌리지 말 것.
 
 ### seeding-price-usd — 43행 (완료 · staging push 완료 · 운영 미배포)
 
