@@ -146,9 +146,9 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 94건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 95건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
-⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 94건 중 65건이
+⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 95건 중 66건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
 줄에 붙으면 신호가 아니라 잡음이다. **제목만 보고 넘기지 말 것.**
 
@@ -237,6 +237,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-09-14` [브랜드 화면에서 원화 정산액 제거 — `고객 결제(USD)` 만 노출](docs/decisions/settlement.md#2026-09-14)
 - `2026-09-14` [엑심베이 정산서 업로드 → 브랜드 정산 원화 보정](docs/decisions/settlement.md#2026-09-14-2)
 - `2026-09-14` [어드민 브랜드 상세에 '정산' 탭 — 브랜드 정산탭의 읽기 전용 미러](docs/decisions/settlement.md#2026-09-14-3)
+- `2026-10-22` [고객 결제 시딩 정산액이 박스 수량배로 부풀었다 — `settlementPriceKrw` 는 단가 (쓰기 쪽 `seedingSettlementUnitKrw` · 기정산 과지급 없음)](docs/decisions/settlement.md#2026-10-22)
 
 ### EFS 배송비 후청구 — `efs-billing.md`
 
