@@ -1175,7 +1175,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 확인하지 못한 것: 로그인 바이어 화면(MOQ 가격 표시 · Units 입력 → 주문 요청 → 어드민 문의함)은 OTP 때문에 실화면 미확인 — 서버 단위 스펙만. 어드민 새 화면은 build 만 통과(실화면 미확인). 비로그인 화면·공개 API·슬러그 양방향 검사는 staging DB 에 임시 메이저 브랜드를 만들어 확인 후 지웠다.
 - 2026-10-23 최종 점검 후 staging 배포: klow_web `/simplify` 정리 + 번역 2건(`offerNote` 의 `{price}` 미전달 · 메이저 카드 영어 하드코딩 → `card.major`) `7063b8b` · 저장된 샘플박스 앞 10개만(예전 무제한 박스가 체크아웃에서 400 → "배송 불가" 문구) `5fa9ddc` · 서버 스키마 주석 정정 `acfb3b5`. 점검: 서버 typecheck·단위 1741·e2e·실부팅(502 라우트) · admin/web build · kb:check 0. ⚠️ 운영 배포 때도 **메이저 선반·메이저 주문은 세 레포 배포가 다 끝난 뒤에** 만든다 — 옛 어드민 선반 목록(`buyerProduct` 필수 include)·문의함(`major_order` enum)이 그 데이터에서 깨진다.
 - 남은 일 (이 순서로): ① ~~각 레포 staging 병합 · push~~ **완료 2026-10-23** ② staging 실사용 확인(위 미확인 항목) ③ 운영팀 데이터: 인디 구간표 1행 $7(staging 은 0/31 — `/shop/samples` 는 폐지하고 `/shop/products` 로 통일했다) · 베네핏 지정 · 메이저 4곳 등록 ④ 운영: DB `migrate deploy` → server → admin → web.
-- 다음 단계가 알 것: klow_server `.env` 의 `DIRECT_URL` 이 아직 `ep-old-sound`(옛 buyer-i18n DB 브랜치) — 이번 migrate 도 실행 때 덮어썼다. 허브 SEO 제목 `pages.major.metaTitle`(8개 언어)에 브랜드 4곳 이름이 박혀 있다. 메이저 제품 편집기엔 미리보기가 없다. klow_web 은 prettier 설정이 없다 — `npx prettier` 기본값(큰따옴표)으로 돌리지 말 것.
+- 다음 단계가 알 것: klow_server `.env` 의 `DIRECT_URL` 은 2026-10-23 에 `ep-icy-flower`(staging, pooler 없는 주소)로 맞췄다 — 그 전엔 옛 buyer-i18n DB 브랜치 `ep-old-sound` 를 가리켜 `migrate status` 가 엉뚱한 DB 를 봤다. 허브 SEO 제목 `pages.major.metaTitle`(8개 언어)에 브랜드 4곳 이름이 박혀 있다. 메이저 제품 편집기엔 미리보기가 없다. klow_web 은 prettier 설정이 없다 — `npx prettier` 기본값(큰따옴표)으로 돌리지 말 것.
 
 ### seeding-price-usd — 43행 (완료 · staging push 완료 · 운영 미배포)
 
