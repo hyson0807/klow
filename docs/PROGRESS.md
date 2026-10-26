@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 46행 — EFS 이벤트 시각 KST(2026-10-26, 트랙 밖 요청)는 ✅ staging·운영 배포 완료**(사용자 지시 · klow_server `0e5bd8c` → api-staging 재기동 확인 → staging DB 백필 25건(재실행 0건) → klow_admin `0c49d3d` → server·admin main ff·push · api.klow.kr 재기동 확인). **남은 것: 운영 DB 백필** — `cd klow_server && DATABASE_URL=<PRODUCTION_DB_URL> npm run backfill:efs-event-kst -- --apply`(dry-run 실측 `latestStatusAt` 719 · `brandConfirmedShippedAt` 141 — 배포 후라 조금 늘 수 있다) → 같은 명령 dry-run 으로 0건 확인. 에이전트 실행은 권한 검사(운영 쓰기)에서 막혔다. `§9` 46행 메모.
+**`§7` 46행 — EFS 이벤트 시각 KST(2026-10-26, 트랙 밖 요청)는 ✅ staging·운영 배포 + 백필 완료**(사용자 지시 · klow_server `0e5bd8c` → api-staging 재기동 확인 → staging DB 백필 25건 → klow_admin `0c49d3d` → server·admin main ff·push · api.klow.kr 재기동 확인 → 사용자가 운영 DB 백필 `--apply` 719건(발송처리 시각 141건 포함) → 운영 SELECT 로 `latestStatusAt > trackedAt` **29 → 0건** 확인). 남은 것: 어드민 `/tracking` 실화면 확인. `§9` 46행 메모.
 
 **`§7` 45행 — buyer-major(2026-10-22, 트랙 밖 요청)는 ✅ 2026-10-23 staging 병합·push 완료**(사용자 지시 — ff 병합, klow_server `acfb3b5` → api-staging 새 라우트 200 확인 → klow_admin `e36fa46` → klow_web `5fa9ddc`). staging DB 마이그레이션은 이전에 적용돼 있었다. ✅ **같은 날 운영 배포 완료**(사용자 지시 · 사용자가 운영 DB `ep-restless-hill` 에 `migrate deploy`(대기 1건뿐) → klow_server main ff·push → api.klow.kr `/v1/buyer/major-brands` 200·가격 401 확인 → klow_admin·klow_web main ff·push). 남은 것: 로그인 바이어로 MOQ 가격·주문 요청 실화면 확인 → 운영팀 데이터(인디 1행 $7 · 베네핏 · 메이저 등록). `§9` 45행 메모.
 
@@ -1107,7 +1107,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 43 | seeding-price-usd | **고객 결제 시딩 — 무게·부피 선택(비우면 배송비 0원) + 물품가 달러 입력** — `SeedingLink.productPriceUsdCents` 신설 · 예상 정산 원화 + 5%·환율 고지 · 재진입 정산가 재동결. 트랙 밖 요청(2026-10-20) — 마이그레이션이라 행. 결정 [2026-10-20](./decisions/shipping-seeding.md#2026-10-20) — **staging 적용 완료** | 완료 | | 2026-10-20 | 23a4706 / - / eaba53c / 5551a22 / - |
 | 44 | eximbay-paypal | **PayPal X049 — Eximbay `ship_to` 전송** — `payment/eximbay-ship-to.ts`(이름 분할 · US/CA 주 코드 · 현장 주문은 KLOW 사업장 주소) + klow_web `requestEximbayPay()` echo. 트랙 밖 요청(2026-10-21) — 2레포 순서 배포라 행. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21) — **staging 커밋 완료(push 안 함)** · 배포 순서 **klow_web → klow_server** · staging 에서 PayPal(US·JP·현장) 결제창 진행 확인 대기 | 진행 중(부분 완료) | ✗ | 2026-10-21 | ee8a221 / - / - / 00d2d44 / (이 커밋) |
 | 45 | buyer-major | **바이어 공간 두 갈래 — design 브랜치 이식 + 메이저 브랜드 서버·어드민** — 메이저 3테이블(어드민 직접 생성) · 인디와 주소 공유(슬러그 양방향 검사) · 메이저 가격 BuyerGuard 전용 · 구조화 주문 요청(`major_order`) · 인디 베네핏 · 선반 종류 · 샘플 10개 상한 · klow_web 정적 데이터·$7 덮어쓰기 제거. 트랙 밖 요청(2026-10-22) — 마이그레이션 + 3레포 순서 배포라 행. 결정 [storefront 2026-10-22](./decisions/storefront.md#2026-10-22) — 세 레포 git **`feat/buyer-major`** → **staging 병합·push 완료(2026-10-23)** · staging DB 에 `20261022080453_add_buyer_major` **적용됨**(사용자 지시 — DB 브랜치 없이) | 완료(staging·운영 배포) | ✓ | 2026-10-23 | 153bf5f · acfb3b5 / e36fa46 / - / a802166 · c464066 · 2698c98 · 7063b8b · 5fa9ddc / 814de74 · (이 커밋) |
-| 46 | efs-time-kst | **EFS 이벤트 시각 KST 해석 + 송장 추적 목록 개편** — 서버 `shipments/efs-datetime.ts`(+09:00 고정 · 운영 UTC 서버에서 `latestStatusAt`·자동 발송처리 시각이 9시간 늦게 저장되던 문제) + 백필 `backfill:efs-event-kst` · 어드민 `/tracking` 송장 칸(서비스 타입·로컬 캐리어 · 목록에서 EFS 회신 수정 · EFS 추적 링크 · 배송지 모달 · KST 표시) + `row-activation` 키보드 수정. 트랙 밖 요청(2026-10-26) — 운영 백필 대기라 행. 결정 [shipping-seeding 2026-10-26](./decisions/shipping-seeding.md#2026-10-26) — **staging·운영 배포 완료 · staging DB 백필 완료 · 운영 DB 백필 대기(사용자 실행)** | 진행 중(부분 완료) | ✓ | 2026-10-26 | 0e5bd8c / 0c49d3d / - / - / (이 커밋) |
+| 46 | efs-time-kst | **EFS 이벤트 시각 KST 해석 + 송장 추적 목록 개편** — 서버 `shipments/efs-datetime.ts`(+09:00 고정 · 운영 UTC 서버에서 `latestStatusAt`·자동 발송처리 시각이 9시간 늦게 저장되던 문제) + 백필 `backfill:efs-event-kst` · 어드민 `/tracking` 송장 칸(서비스 타입·로컬 캐리어 · 목록에서 EFS 회신 수정 · EFS 추적 링크 · 배송지 모달 · KST 표시) + `row-activation` 키보드 수정. 트랙 밖 요청(2026-10-26) — 운영 백필 대기라 행. 결정 [shipping-seeding 2026-10-26](./decisions/shipping-seeding.md#2026-10-26) — **staging·운영 배포 + 양쪽 DB 백필 완료** | 완료(staging·운영 배포) | ✓ | 2026-10-26 | 0e5bd8c / 0c49d3d / - / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1172,11 +1172,11 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 다음 단계가 알 것:
 ```
 
-### efs-time-kst — 46행 (staging·운영 배포 완료 · 운영 DB 백필 대기)
+### efs-time-kst — 46행 (staging·운영 배포 + 백필 완료)
 
 - 문서를 고친 것: 결정 `shipping-seeding.md#2026-10-26` · CLAUDE.md 색인.
-- 확인하지 못한 것: 어드민 `/tracking` 실화면(로그인 2FA) — build·tsc·lint 만. 새 서버 코드가 실제 EFS 갱신에서 KST 로 저장하는지는 단위 스펙(TZ 두 개)만 — 운영 백필 뒤 `latestStatusAt > trackedAt` 건수가 0 인지 SELECT 로 볼 것.
-- 남은 일: 운영 DB 백필(`§0` 46행 명령). 멱등이라 다시 돌려도 안전하고, 옛 해석값과 **정확히 같은 값만** 고친다(브랜드가 누른 발송처리 시각은 안 건드린다).
+- 확인하지 못한 것: 어드민 `/tracking` 실화면(로그인 2FA) — build·tsc·lint 만. 새 서버 코드가 실제 EFS 갱신에서 KST 로 저장하는지는 단위 스펙(TZ 두 개)만 — 운영 백필 뒤 `latestStatusAt > trackedAt` 0건은 확인했다(새 갱신분은 이후 같은 SELECT 로 볼 것).
+- 남은 일: 어드민 `/tracking` 실화면 확인뿐. 백필은 양쪽 DB 완료(staging 25 · 운영 719) — 멱등이라 다시 돌려도 0건이다.
 - 다음 단계가 알 것: 서버 `TZ` 환경변수로 풀지 말 것(다른 Date 계산이 같이 움직인다). 어드민 `tracking/page.tsx` 는 `max-lines`(400) 경고가 원래부터 있다 — 더 키우면 `_components/` 로 행을 뺄 것.
 
 ### buyer-major — 45행 (staging·운영 배포 완료)
