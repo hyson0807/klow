@@ -292,3 +292,18 @@ klow_brand 시딩 발급의 **고객이 결제** 링크에서
 **마이그레이션 `add_seeding_link_product_price_usd`**(nullable ADD COLUMN — 롤링 안전, 백필 없음). 배포 순서 **klow_server → klow_brand → klow_web**
 (반대면 새 klow_brand 가 보낸 `productPriceUsdCents` 를 구 서버 zod 가 버려 물품가 없는 링크가 발급된다).
 남은 것: klow_web `/seed/:token` 히어로 문구가 고객 결제를 "배송비만 내면 된다"로 안내한다(물품가 도입 때부터 어긋나 있던 것) — 8개 언어 사전 수정이라 별도.
+
+## EFS 이벤트 시각은 KST — 서버 TZ 로 읽어 9시간 늦게 저장되던 것을 고친다 (2026-10-26)
+
+EFS 추적 회신의 시각(`YYYY.MM.DD HH:MM`)은 **시간대 표기 없는 한국시간**이다. 예전 `parseEfsDateTime` 은 이걸 서버 로컬 시간대로
+읽었고 운영 서버는 UTC 라서, `Shipment.latestStatusAt` 과 그 값에서 파생되는 자동 발송처리 시각(`brandConfirmedShippedAt` — 첫 픽업
+이벤트 · `backfill:brand-confirmed-shipped` 의 `latestStatusAt` 복사)이 전부 **9시간 늦게** 저장됐다.
+
+- **근거(운영 실측)**: 이벤트 시각이 있는 719건 중 29건이 "우리가 EFS 를 조회한 시각(`trackedAt`)보다 미래"였고, 앞선 폭이 20분~8시간 58분으로
+  전부 9시간 이내였다. KST 로 읽으면 0건. 예: `EFS1005241315` 'Shipping Scheduled' 저장 17:59 · 조회 UTC 09:00(= KST 18:00).
+- **고친 것**: `shipments/efs-datetime.ts` 가 `+09:00` 을 문자열에 박아 읽는다(서버 TZ 에 기대지 않는다 · 한국은 서머타임 없음).
+  ⚠️ 서버 `TZ` 환경변수로 풀지 말 것 — 다른 Date 계산까지 같이 움직인다.
+- **기존 데이터**: `npm run backfill:efs-event-kst`(기본 dry-run · `-- --apply`). 원본 문자열(`trackingEvents[].at`)로 다시 계산해
+  **옛 해석값과 정확히 같은 값만** 고친다 — 브랜드가 버튼으로 누른 발송처리 시각(ms 정밀도)은 이벤트 분 단위 값과 겹치지 않아 그대로 남는다.
+  멱등(이미 KST 값이면 건너뛴다). 운영 dry-run: `latestStatusAt` 719 · `brandConfirmedShippedAt` 141.
+- 영향 없는 곳: 고객 `/track` 등 `trackingEvents[].at` 원문을 그대로 보여 주는 화면.
