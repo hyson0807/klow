@@ -316,3 +316,17 @@ klow_web `design` 브랜치(서버를 못 보는 팀원이 프론트만으로 �
 - 베네핏 = `BuyerProduct.benefits`(고정 8키, 어드민 지정). 샘플 주문 상한 50 → 10(서버 zod).
 - 메이저 주문 요청 = `BuyerInquiry(kind=major_order)` 에 라인·배송 방식·Incoterms 를 구조화 저장 → 어드민 문의함에서 처리(별도 주문 테이블은 만들지 않았다 — 결제 없이 PI 로 답하는 영업 흐름이라).
 - 메이저 본문은 영어만 — 비영어판 noindex + canonical 영어(design 규칙 유지). 허브 SEO 제목(`pages.major.metaTitle`, 8개 언어)에 브랜드 4곳 이름이 박혀 있어 메이저 구성이 바뀌면 손으로 고친다.
+
+<a id="2026-10-27"></a>
+## 바이어 공간 목록을 하나로 — 메이저·인디는 `?type=` 필터로 · 헤더는 Brands 탭 하나 · 허브 `/shop/major-brands` 는 308 (2026-10-27 · 2026-10-22 "목록 화면만 갈린다" 변경)
+
+사는 방식이 다르다는 이유로 목록을 나눴는데(2026-10-22), 바이어 입장에서는 들어가기 전에 고르는 갈림길이 하나 더 생겼을 뿐이었다(사용자 판단). 그래서 목록 페이지는 하나로 합치고, 그 안에서 종류로 거르게 했다.
+
+- **제품 목록 `/shop/products` 에 메이저 제품을 함께 싣는다.** 위쪽 종류 탭은 All · Major brands · Indie brands 이고, 고른 값은 주소 `?type=major|indie` 에 남는다(`hooks/useKbTypeParam.tsx`). 순서는 메이저가 먼저, 인디가 다음이다. 메이저 카드는 지금처럼 `KbMajorCard`(로그인한 뒤에야 가격 표시)이고 인디 카드는 `KbProductCard` 다. 큐레이션 선반은 인디·메이저 두 종류를 모두 받는다. 제품 id 공간이 서로 달라서 섞여도 겹치지 않는다. 베네핏·카테고리는 인디에만 있는 속성이라, 고르면 메이저는 자연히 빠진다.
+- **브랜드 목록 `/shop/brands` 도 합쳤다.** 메이저 브랜드 카드는 "Major brand · MOQ wholesale" 와 "MOQ price after sign-in" 을 달고, 같은 종류 탭을 쓴다.
+- **카테고리 페이지 `/shop/categories/[slug]` 는 인디만 보여 준다.** 기준이 인디 `BuyerCategory` 이고, 메이저 `category` 는 자유 텍스트라 둘을 대응시킬 방법이 없다. 메이저 제품을 넘기지 않으니 종류 탭도 숨는다(한쪽이 0개면 탭 줄을 그리지 않는다).
+- **허브 `/shop/major-brands` 는 `/shop/products?type=major` 로 308 리다이렉트한다**(`next.config.js`, 언어판 포함, `?shelf=&band=` 는 그대로 붙어 간다). 페이지·`KbMajorShelfView`·사이트맵 항목은 지웠다. 홈 선반의 View all 은 종류와 상관없이 `/shop/products?shelf=` 로 간다(2026-10-22 의 "목적지가 다르다" 는 더 이상 맞지 않는다. 선반이 종류를 가지는 것, 즉 한 선반 안에서 섞지 않는 것은 그대로다).
+- **헤더는 Brands ▾ 하나**(`KbBrandsMenu`)이고, 누르면 `/shop/products` 로 간다. 호버 패널 왼쪽은 Best-selling K-beauty(메이저 브랜드관 링크 + Shop major brands → `?type=major` + All brands), 오른쪽은 Pick your samples(인디 $7 오퍼 → `?type=indie`)다. 카테고리 열은 뺐다(목록 사이드바와 모바일 메뉴에 있다). 탭이 하나라서 "이 주소가 메이저 화면인가" 를 판정할 필요가 없어졌고, 그 판정에만 쓰던 `KbMajorNav.productIds` 도 뺐다. 상단 공지 바의 Major/Indie 두 줄은 사는 방식을 안내하는 문구라 남겼다.
+- ⚠️ `?type=` 은 **같은 페이지 안에서 쿼리만 바뀌는 이동**(헤더의 `?type=indie` 링크)을 따라가야 한다. 첫 진입 때 한 번만 읽는 방식(`useKbShelfParam`)으로는 이걸 못 한다. 그래서 `useSearchParams` 를 쓰는 빈 컴포넌트 `KbTypeParamSync` 를 **자기 Suspense 로 감싸** 붙였다. 감싸지 않으면 목록 본문이 정적 렌더(SSR)에서 클라이언트 렌더로 빠진다. 빌드 결과에서 `/kbl/[lang]/shop/products` 가 ● 정적인지 확인할 것.
+- **스키마는 그대로 둔다.** 메이저를 `Brand`/`Product` 로 합치지 않은 이유(구독 게이트 면제 브랜드가 소비자 카탈로그·정산으로 새어 나감, 메이저 가격은 BuyerGuard 로만 공개)는 화면을 합쳤다고 사라지지 않는다. 합치는 일은 페이지가 데이터 두 개(`getKbCatalog` + `getKbMajorHub`)를 받아서 하고, 서버는 바꾸지 않았다.
+- 허브 SEO 제목(`pages.major.*`, 브랜드 4곳 이름이 박혀 있던 것)은 페이지와 함께 지웠다. 메이저 키워드 색인은 이제 각 메이저 브랜드관·제품 상세가 맡는다.

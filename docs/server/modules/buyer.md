@@ -162,7 +162,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/admin/buyer/major-products` | 전 브랜드 제품 요약 — 홈 메이저 선반 제품 선택기 |
 | GET/PATCH/DELETE | `/admin/buyer/major-products/:id` | 제품 편집 / 필드 + `tiers` 통째 교체(한 트랜잭션) / 삭제 |
 
-- 프런트: klow_admin `/buyer/major` · `/buyer/major/[id]` · `/buyer/major/products/[id]` · klow_web `KbMajorBrandPage`·`KbMajorProductPage`·허브 `shop/major-brands/page.tsx`(브랜드별 섹션 + `?shelf=` 면 `KbMajorShelfView`)·`KbMajorCard`(`useKbMajorPrices`)·`KbMajorOrder`.
+- 프런트: klow_admin `/buyer/major` · `/buyer/major/[id]` · `/buyer/major/products/[id]` · klow_web `KbMajorBrandPage`·`KbMajorProductPage`·`KbMajorCard`(`useKbMajorPrices`)·`KbMajorOrder`. 목록은 인디와 하나다 — `/shop/products`·`/shop/brands` 가 `GET /v1/buyer/major-brands` 를 함께 받아 종류 탭(`?type=major|indie`)으로 거른다. 구 허브 `/shop/major-brands` 는 308([결정 2026-10-27](../../decisions/storefront.md#2026-10-27)).
 
 ## 환경변수
 
