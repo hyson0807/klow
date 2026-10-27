@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 47행 — $100 샘플 박스(2026-10-27, 트랙 밖 요청)는 ✅ staging 배포 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261027030321_add_buyer_packages` 직접 `migrate dev` → klow_server `957b162` → api-staging `/v1/buyer/packages` 200 확인 → klow_admin `ef77592` · klow_web `b7b3f9c` push). 남은 것: staging 실결제 1건 → 운영 배포(운영 DB `migrate deploy` → server → web 연달아 → admin). `§9` 47행 메모.
+**`§7` 47행 — $100 샘플 박스(2026-10-27, 트랙 밖 요청)는 ✅ staging 배포 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261027030321_add_buyer_packages` 직접 `migrate dev` → klow_server `957b162` → api-staging `/v1/buyer/packages` 200 확인 → klow_admin `ef77592` · klow_web `b7b3f9c` push). ✅ **운영 배포됨**(세 레포 `origin/main` 에 메이저 박스 커밋까지 포함 · api.klow.kr `/v1/buyer/packages` 200). 2026-10-27 사용자 지시로 운영 DB(`ep-restless-hill`)에 큐레이션 박스 3개를 직접 생성·공개(인디 단품만 — 운영 메이저 제품 0개, 세트·선물박스·쇼핑백 제외): Hydration Essentials · Repair & Glow · Cleanse-to-Sun Routine, 각 $100·10칸. staging DB 메이저 25개는 `sampleable` 전부 on. 남은 것: 운영 실결제 1건 확인 · 운영 메이저 등록 시 `sampleable` 켜기. `§9` 47행 메모.
 
 **`§7` 46행 — EFS 이벤트 시각 KST(2026-10-26, 트랙 밖 요청)는 ✅ staging·운영 배포 + 백필 완료**(사용자 지시 · klow_server `0e5bd8c` → api-staging 재기동 확인 → staging DB 백필 25건 → klow_admin `0c49d3d` → server·admin main ff·push · api.klow.kr 재기동 확인 → 사용자가 운영 DB 백필 `--apply` 719건(발송처리 시각 141건 포함) → 운영 SELECT 로 `latestStatusAt > trackedAt` **29 → 0건** 확인). 남은 것: 어드민 `/tracking` 실화면 확인. `§9` 46행 메모.
 
