@@ -147,7 +147,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 97건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 98건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
 ⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 95건 중 66건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
@@ -200,6 +200,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-27` [바이어 공간 목록 하나 — 메이저·인디는 `/shop/products`·`/shop/brands` 안의 `?type=` 필터 · 헤더 Brands 탭 하나 · `/shop/major-brands` 는 308 · 스키마 유지 · 카테고리 페이지는 인디만](docs/decisions/storefront.md#2026-10-27)
 - `2026-10-27` [인디 샘플 = $100 샘플 박스 — 장바구니 한 줄 = 박스 하나(큐레이션 `BuyerPackage` 또는 직접 고른 10개) · 주문당 5박스 · 박스가 10줄 균등 배분(부분환불 = 1/10) · 늘 무료배송 · 낱개 `productIds` 주문 제거 · server → web 연달아 배포](docs/decisions/storefront.md#2026-10-27-2)
 - `2026-10-27` [메이저 제품도 $100 샘플 박스에 — KLOW 직접 조달(`OrderMajorIntake` 주문당 1행) · 칸 가격 인디와 동일 · 어드민 제품별 `sampleable` · 주문 줄 `majorProductId`(productId null) · MOQ 가격은 계속 BuyerGuard 만](docs/decisions/storefront.md#2026-10-27-3)
+- `2026-10-27` [메이저 제품 카테고리 = 인디와 같은 홈 카테고리(`categoryId`) — 기존 자유 입력은 카테고리로 만들어 유지 · `/shop/products` 카테고리 줄은 이 자리 필터(종류·브랜드와 AND) · 카테고리 페이지는 그 카테고리 전용(인디+메이저)](docs/decisions/storefront.md#2026-10-27-4)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

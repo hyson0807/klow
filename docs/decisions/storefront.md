@@ -358,3 +358,16 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - 주문 라인: 메이저 줄은 `OrderItem.productId = null`·`brandId = null`·`majorProductId = <BuyerMajorProduct.id>`(FK 없음, 스냅샷 관례), `productName` = 영문 메이저 제품명 = **EFS 통관 상품명**. 통관 분류는 화장품 기본값(`BRAND_CATEGORY_CUSTOMS.cosmetics`), 상품 URL `/shop/products/<majorId>`. `productId` 만 보는 인디 경로(브랜드 입고·브랜드 메일·klow_brand 샘플 요청·정산)는 메이저 줄을 자연히 건너뛴다.
 - API 입력은 그대로 `{productIds}` — 서버가 인디(`Product.id`) → 메이저(`BuyerMajorProduct.id`) 순으로 해석한다(두 cuid 공간은 겹치지 않는다). 그래서 server 를 먼저 배포해도 구 klow_web 이 깨지지 않는다. 큐레이션 박스 칸 `BuyerPackageItem` 은 `buyerProductId`/`majorProductId` 중 정확히 하나(서비스가 강제 — `BuyerShelfItem` 과 같은 방식, DB CHECK 없음).
 - 배포: migrate `major_sample_box`(전부 additive — 롤링 안전) → klow_server → klow_admin → klow_web. 어드민이 `sampleable` 을 켜기 전엔 바이어 화면 변화 없음.
+
+<a id="2026-10-27-4"></a>
+## 메이저 제품 카테고리 = 인디와 같은 홈 카테고리 · 목록에서 종류·브랜드와 겹쳐 고른다 (2026-10-27 · 2026-10-27 "카테고리 페이지는 인디만" 변경)
+
+메이저 카테고리는 어드민 자유 입력이라 목록 사이드바·카테고리 페이지에 걸리지 않았고(어드민에 "Ampoule" 을 넣어도 안 보임), 사이드바 카테고리 줄은 카테고리 페이지로 가는 링크라 종류·브랜드를 고른 채 카테고리를 겹쳐 고를 수 없었다.
+
+- **메이저도 `BuyerCategory` 를 쓴다**(사용자 결정 — 홈 구성 › 카테고리 탭에서 만든 것을 메이저 등록 때 고른다). `BuyerMajorProduct.categoryId`(nullable, SetNull). 자유 텍스트를 이름 대조로 붙이는 안은 버렸다 — 표기가 갈려(Ampoule/ampoule/Ampoules) 제품이 늘수록 사이드바가 지저분해지고, 인디 분류와 두 겹이 된다.
+- **기존 입력값은 유지**(사용자 결정): 마이그레이션 `major_product_category` 가 자유 텍스트 값마다 같은 이름(대소문자 무시)·slug 의 카테고리를 쓰거나 **맨 뒤에 새로 만들어** 연결한다. staging 실측: 53개 전부 연결, 새 카테고리 6개(Ampoule·Cream·Mask·Mist·Serum·Toner). ⚠️ 기존 `Masks` 와 새 `Mask` 가 따로 생겼다 — 합칠지는 운영 판단(어드민에서 제품을 옮기고 빈 쪽을 지운다). 옛 `category` 칸은 dormant(드롭 예약).
+- 공개 카드·상세 `category` = 카테고리 이름(영어 원본), `categorySlug` 추가. 홈 `categories` 집계·카테고리 삭제 409·어드민 카테고리 제품 수가 메이저도 센다 — 메이저만 있는 카테고리도 사이드바·카테고리 페이지·사이트맵에 나온다.
+- **`/shop/products` 의 카테고리 줄은 이 자리 필터다** — 크롤러용 `<Link href>` 는 남기고 클릭만 가로챈다. 종류·브랜드·큐레이션과 AND, 고른 종류(·브랜드)에 제품이 0개인 카테고리는 숨고, 종류를 바꿔 0개가 되면 풀린다. 고른 카테고리는 주소에 남기지 않는다.
+- **카테고리 페이지 `/shop/categories/[slug]` 는 그 카테고리 전용**(인디 + 그 카테고리 메이저) — 제목이 카테고리 이름이라 이 자리에서 다른 카테고리로 바꾸면 제목과 목록이 어긋난다. 다른 카테고리 줄은 그대로 페이지 이동이고 `?type=` 은 들고 간다(브랜드는 풀린다).
+- 올리브영 가져오기 스크립트(`scripts/import-buyer-majors.ts`)도 같은 규칙으로 카테고리를 찾거나 만든다(dry-run 은 `categoriesCreated` 에 적기만).
+- 배포: migrate `major_product_category`(ADD COLUMN + 데이터 — 롤링 안전) → klow_server → klow_admin · klow_web. 구 웹은 `categorySlug` 를 모르니 무해, 구 어드민은 `category` 를 보내 zod 가 버린다(저장 시 카테고리만 안 바뀐다).

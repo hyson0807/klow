@@ -61,7 +61,7 @@
 | DELETE | `/admin/buyer/products/:productId` | 바이어 행 삭제(입력값 소멸) |
 | GET/POST | `/admin/buyer/categories` | 목록(소속 제품 수) / 추가 `{name, slug}` |
 | PUT | `/admin/buyer/categories/order` | 순서 |
-| PATCH/DELETE | `/admin/buyer/categories/:id` | 수정 / 삭제 — ⚠️ **소속 제품이 있으면 409 `category_in_use`**(SetNull 이면 그 제품들이 조용히 사라진다) |
+| PATCH/DELETE | `/admin/buyer/categories/:id` | 수정 / 삭제 — ⚠️ **소속 제품(인디 + 메이저)이 있으면 409 `category_in_use`**(SetNull 이면 인디 제품들이 조용히 사라진다). 목록 `productCount` 도 인디 + 메이저 |
 | GET/POST | `/admin/buyer/hero` | 목록 / 추가 `{imageUrl, productId?, caption?}` |
 | PUT | `/admin/buyer/hero/order` | 순서 |
 | PATCH/DELETE | `/admin/buyer/hero/:id` | 수정 / 삭제 |
@@ -138,6 +138,8 @@ Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디
 <a id="메이저-브랜드"></a>
 ## 메이저 브랜드 (buyer-major, 2026-10-22)
 
+> 2026-10-27: 메이저 제품 카테고리 = 인디와 공용 `BuyerCategory`(`BuyerMajorProduct.categoryId`, SetNull) — 어드민 PATCH 는 `categoryId`(없는 id 400 `category_not_found`), 공개 카드·상세는 `category`(이름)·`categorySlug`. 옛 자유 텍스트 `category` 칸은 dormant(마이그레이션 `major_product_category` 가 그 값으로 카테고리를 만들어 연결). 홈 `categories` 집계·카테고리 삭제 409 가 메이저도 센다. 결정 [`storefront.md#2026-10-27-4`](../../decisions/storefront.md#2026-10-27-4).
+>
 > 2026-10-27: 메이저 제품 `sampleable`(어드민 PATCH, 기본 false)이 켜지면 $100 샘플 박스에 담긴다 — 공개 카드·상세에 `sampleable` 불린(가격은 여전히 BuyerGuard 전용). 판정 `isBoxableMajor`(`buyer-major.mapper.ts`). 결정 [`storefront.md#2026-10-27-3`](../../decisions/storefront.md#2026-10-27-3).
 
 Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본 `Brand`/`Product` 가 없다 — 바이어 전용 3테이블을 **어드민이 직접 만든다**. 1차 벤더 공급이라 샘플이 없고 MOQ 로만 판다(로그인 → MOQ 가격 → 주문 요청 → 운영팀 PI). 본문은 **영어만**(번역 없음 — klow_web 비영어판은 noindex + canonical en). 결정 [storefront 2026-10-22](../../decisions/storefront.md#2026-10-22).
@@ -157,7 +159,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/v1/buyer/major-brands/:slug/prices` | **BuyerGuard** | `{ products: [{id, tiers: [{minQty, unitUsdCents}]}] }` — 브랜드 전 제품, 브랜드관·상세 공용 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |
 
-`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(자유 텍스트), heroIngredient, msrpUsdCents}`.
+`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient, msrpUsdCents, sampleable}`.
 
 **어드민** (`admin-buyer-major.controller.ts`, AdminGuard — 이 테이블의 id 로 가리킨다)
 
