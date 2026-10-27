@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 47행 — $100 샘플 박스(2026-10-27, 트랙 밖 요청)는 ✅ staging 배포 완료**(사용자 지시 · staging DB `ep-icy-flower` 에 `20261027030321_add_buyer_packages` 직접 `migrate dev` → klow_server `957b162` → api-staging `/v1/buyer/packages` 200 확인 → klow_admin `ef77592` · klow_web `b7b3f9c` push). 남은 것: staging 실결제 1건 → 운영 배포(운영 DB `migrate deploy` → server → web 연달아 → admin). `§9` 47행 메모.
+
 **`§7` 46행 — EFS 이벤트 시각 KST(2026-10-26, 트랙 밖 요청)는 ✅ staging·운영 배포 + 백필 완료**(사용자 지시 · klow_server `0e5bd8c` → api-staging 재기동 확인 → staging DB 백필 25건 → klow_admin `0c49d3d` → server·admin main ff·push · api.klow.kr 재기동 확인 → 사용자가 운영 DB 백필 `--apply` 719건(발송처리 시각 141건 포함) → 운영 SELECT 로 `latestStatusAt > trackedAt` **29 → 0건** 확인). 남은 것: 어드민 `/tracking` 실화면 확인. `§9` 46행 메모.
 
 **`§7` 45행 — buyer-major(2026-10-22, 트랙 밖 요청)는 ✅ 2026-10-23 staging 병합·push 완료**(사용자 지시 — ff 병합, klow_server `acfb3b5` → api-staging 새 라우트 200 확인 → klow_admin `e36fa46` → klow_web `5fa9ddc`). staging DB 마이그레이션은 이전에 적용돼 있었다. ✅ **같은 날 운영 배포 완료**(사용자 지시 · 사용자가 운영 DB `ep-restless-hill` 에 `migrate deploy`(대기 1건뿐) → klow_server main ff·push → api.klow.kr `/v1/buyer/major-brands` 200·가격 401 확인 → klow_admin·klow_web main ff·push). 남은 것: 로그인 바이어로 MOQ 가격·주문 요청 실화면 확인 → 운영팀 데이터(인디 1행 $7 · 베네핏 · 메이저 등록). `§9` 45행 메모.
@@ -1108,6 +1110,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 44 | eximbay-paypal | **PayPal X049 — Eximbay `ship_to` 전송** — `payment/eximbay-ship-to.ts`(이름 분할 · US/CA 주 코드 · 현장 주문은 KLOW 사업장 주소) + klow_web `requestEximbayPay()` echo. 트랙 밖 요청(2026-10-21) — 2레포 순서 배포라 행. 결정 [payment 2026-10-21](./decisions/payment.md#2026-10-21) — **staging 커밋 완료(push 안 함)** · 배포 순서 **klow_web → klow_server** · staging 에서 PayPal(US·JP·현장) 결제창 진행 확인 대기 | 진행 중(부분 완료) | ✗ | 2026-10-21 | ee8a221 / - / - / 00d2d44 / (이 커밋) |
 | 45 | buyer-major | **바이어 공간 두 갈래 — design 브랜치 이식 + 메이저 브랜드 서버·어드민** — 메이저 3테이블(어드민 직접 생성) · 인디와 주소 공유(슬러그 양방향 검사) · 메이저 가격 BuyerGuard 전용 · 구조화 주문 요청(`major_order`) · 인디 베네핏 · 선반 종류 · 샘플 10개 상한 · klow_web 정적 데이터·$7 덮어쓰기 제거. 트랙 밖 요청(2026-10-22) — 마이그레이션 + 3레포 순서 배포라 행. 결정 [storefront 2026-10-22](./decisions/storefront.md#2026-10-22) — 세 레포 git **`feat/buyer-major`** → **staging 병합·push 완료(2026-10-23)** · staging DB 에 `20261022080453_add_buyer_major` **적용됨**(사용자 지시 — DB 브랜치 없이) | 완료(staging·운영 배포) | ✓ | 2026-10-23 | 153bf5f · acfb3b5 / e36fa46 / - / a802166 · c464066 · 2698c98 · 7063b8b · 5fa9ddc / 814de74 · (이 커밋) |
 | 46 | efs-time-kst | **EFS 이벤트 시각 KST 해석 + 송장 추적 목록 개편** — 서버 `shipments/efs-datetime.ts`(+09:00 고정 · 운영 UTC 서버에서 `latestStatusAt`·자동 발송처리 시각이 9시간 늦게 저장되던 문제) + 백필 `backfill:efs-event-kst` · 어드민 `/tracking` 송장 칸(서비스 타입·로컬 캐리어 · 목록에서 EFS 회신 수정 · EFS 추적 링크 · 배송지 모달 · KST 표시) + `row-activation` 키보드 수정. 트랙 밖 요청(2026-10-26) — 운영 백필 대기라 행. 결정 [shipping-seeding 2026-10-26](./decisions/shipping-seeding.md#2026-10-26) — **staging·운영 배포 + 양쪽 DB 백필 완료** | 완료(staging·운영 배포) | ✓ | 2026-10-26 | 0e5bd8c / 0c49d3d / - / - / (이 커밋) |
+| 47 | buyer-sample-package | **$100 샘플 박스 — 시안 확정(바 B·홈 B·목록 A·상세 A) + 박스 단위 주문 + 어드민 큐레이션 박스** — `BuyerPackage`(인디 10개, 어드민 '샘플 박스' 탭) · 장바구니 한 줄 = 박스(큐레이션 또는 직접 고른 10개) · 주문당 5박스 · 박스가 10줄 균등 배분 · 낱개 `productIds` 주문 제거 · kb 8개 언어 + About 문구. 트랙 밖 요청(2026-10-27) — 마이그레이션 + 3레포 순서 배포라 행. 결정 [storefront 2026-10-27-2](./decisions/storefront.md#2026-10-27-2) — **staging DB 직접 migrate(사용자 지시) + staging push 완료** | 완료(staging) | ✗ | 2026-10-27 | 957b162 / ef77592 / - / af3b119 · b7b3f9c / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1171,6 +1174,13 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-sample-package — 47행 (staging 배포 완료)
+
+- 문서를 고친 것: 결정 `storefront.md#2026-10-27-2` · CLAUDE.md 색인·Where Things Live · `server/modules/buyer.md`·`buyer-orders.md` · `plan/buyer-platform/mock-parity.md`.
+- 확인하지 못한 것: **엑심베이 테스트 결제 왕복**(박스 주문 → paid → intake · 완료 화면 박스 제거 · 어드민 박스 묶음 · 1칸 부분환불 $10) — 단위 스펙·build·api-staging `/v1/buyer/packages` 200 만 봤다. 어드민 '샘플 박스' 탭 실화면(2FA).
+- 남은 일: ① staging 실결제 1건 ② 운영 배포 = 운영 DB `migrate deploy`(대기 1건 `20261027030321_add_buyer_packages`, ADD/CREATE 만) → klow_server → **klow_web 바로 뒤이어**(사이에 구 웹 결제는 400) · klow_admin ③ 운영 어드민에서 큐레이션 박스 구성(staging 의 3개 — KLOW Best 10 · High-margin starter · Discovery Mix — 는 테스트용으로 Claude 가 만든 것).
+- 다음 단계가 알 것: 박스 판정은 서버 `buyer.mapper#isBoxableRow` 한 곳(+ 커스텀만 `BUYER_NON_BOX_CATEGORIES`). 상품 메타 설명(`pages.product.metaDescription*`)에 `$100`·`10` 이 8개 언어 리터럴로 박혀 있다 — 박스가·칸 수를 바꾸면 손으로 고칠 것.
 
 ### efs-time-kst — 46행 (staging·운영 배포 + 백필 완료)
 

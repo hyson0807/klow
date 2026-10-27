@@ -93,7 +93,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 | klow_web 로그인/가입 화면     | `klow_web/src/app/login/`, `klow_web/src/app/signup/`, `klow_web/src/components/auth/`                  |
 | 서버 인증 모듈                | `klow_server/src/modules/web-auth/` (service, controller, password/session, email/phone OTP, Solapi SMS, google strategy) |
 | UserGuard + CurrentUser       | `klow_server/src/modules/web-auth/user.guard.ts`, `klow_server/src/modules/web-auth/current-user.decorator.ts` |
-| 바이어 샘플 주문 (buyer-orders) | 서버 `klow_server/src/modules/buyer-orders/`(견적·주문·결제 후속효과 · 브랜드 입고 · 어드민 입고/부분환불/전체 취소 · **KLOW 합포장 EFS 송장** — 발급은 `shipments.createConsolidatedForBuyerOrder`, `Shipment.brandId = null`) · klow_web `components/buyer-space/{KbCheckout,KbPayment,KbComplete,KbAccount,KbRequestDetail}.tsx` · klow_brand `(authed)/samples/` · klow_admin `(authed)/buyer/orders/` + 라벨 `components/ShippingLabel.tsx`. ⚠️ 소비자 `Order` 재사용(`kind = buyer_sample`) — 소비자 집계는 `kind: consumer` 로 거른다. 엔드포인트: `docs/server/modules/buyer-orders.md` |
+| 바이어 샘플 주문 (buyer-orders) | **2026-10-27 부터 박스 단위**(`boxes: [{packageId}|{productIds×10}]`, 박스가 균등 배분 `splitBoxPrice` · 묶음 `order-boxes.ts` · 큐레이션 박스 = 서버 `buyer/` 의 `BuyerPackage` + 어드민 `buyer/home` '샘플 박스' 탭 + klow_web `KbPackages.tsx`·`lib/buyer-space-packages.ts`·장바구니 `KbSampleBox.tsx`(`kb.box.v2`)) · 서버 `klow_server/src/modules/buyer-orders/`(견적·주문·결제 후속효과 · 브랜드 입고 · 어드민 입고/부분환불/전체 취소 · **KLOW 합포장 EFS 송장** — 발급은 `shipments.createConsolidatedForBuyerOrder`, `Shipment.brandId = null`) · klow_web `components/buyer-space/{KbCheckout,KbPayment,KbComplete,KbAccount,KbRequestDetail}.tsx` · klow_brand `(authed)/samples/` · klow_admin `(authed)/buyer/orders/` + 라벨 `components/ShippingLabel.tsx`. ⚠️ 소비자 `Order` 재사용(`kind = buyer_sample`) — 소비자 집계는 `kind: consumer` 로 거른다. 엔드포인트: `docs/server/modules/buyer-orders.md` |
 | 바이어 메이저 브랜드 (buyer-major) | 서버 `klow_server/src/modules/buyer/buyer-major*.ts` + `major-slug.ts`(⚠️ 인디 `Brand.slug` 와 주소 공유 — 브랜드 가입·입점 신청·어드민 브랜드 저장이 메이저 슬러그도 본다) · klow_admin `(authed)/buyer/major/` · klow_web `components/buyer-space/KbMajor*.tsx` + `lib/buyer-space-major.ts`(인디 공용 상수·판정은 `lib/buyer-space-partner.ts`). 목록은 인디와 하나(`/shop/products`·`/shop/brands` + `?type=`, 2026-10-27). 가격은 `/v1/buyer/major-brands/:slug/prices`(BuyerGuard)만. 엔드포인트: `docs/server/modules/buyer.md#메이저-브랜드` |
 | 바이어 계정 (buyer-auth)       | 서버 `klow_server/src/modules/buyer-auth/`(소비자 `web-auth` 와 **별개** — `BuyerUser`·쿠키 `klow_buyer_sid`·`/v1/buyer/auth/*` + 어드민 `/admin/buyer/accounts/*` 서류 중계) · klow_web `components/buyer-space/{KbBuyer,KbSignup,KbAccount}.tsx` · klow_admin `(authed)/buyer/accounts/`. 엔드포인트: `docs/server/modules/buyer-auth.md` |
 | 고객 직접 리뷰                | 서버 `klow_server/src/modules/reviews/`(`customer-review.service.ts` 토큰 게이트 · `review-request.{service,cron}.ts` 메일 큐 — cron **기본 off**) · 손님 작성 페이지 `klow_web/src/app/review/[orderId]/` + `src/lib/upload.ts` · klow_brand `studio/_components/product-reviews/ReviewListItem.tsx`(고객 작성은 읽기 전용). 엔드포인트: `docs/server/modules/reviews.md` |
@@ -147,7 +147,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 
 ## 결정 기록
 
-과거 결정 96건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
+과거 결정 97건의 본문은 [`docs/decisions/`](docs/decisions/) 에 주제별로 있다. 아래는 그 색인이다.
 
 ⚠️ **어떤 코드를 건드리기 전에 그 주제의 `docs/decisions/*.md` 를 읽는다.** 본문 95건 중 66건이
 `⚠️⚠️`(돈·장애 직결) 경고를 담고 있어서 색인에 등급 마커를 따로 두지 않았다 — 마커가 거의 모든
@@ -198,6 +198,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-20` [브랜드관 방문 국가 — 모달 미선택이면 접속 IP 국가(Vercel 쿠키 `klow_geo`) · 첫-쓰기-승 유지라 같은 날 뒤늦은 모달 선택은 미반영 · IP 미저장 · 가격·배송엔 쓰지 않음](docs/decisions/storefront.md#2026-10-20)
 - `2026-10-22` [바이어 공간 두 갈래 — 메이저 브랜드는 별도 테이블(어드민이 직접 생성) · 인디와 주소 공유(`/shop/brands/<slug>`·`/shop/products/<id>`, 슬러그 양방향 검사) · 메이저 가격은 BuyerGuard 엔드포인트만 · $7 은 어드민 구간표 1행 실가격 · 선반 종류 인디/메이저](docs/decisions/storefront.md#2026-10-22)
 - `2026-10-27` [바이어 공간 목록 하나 — 메이저·인디는 `/shop/products`·`/shop/brands` 안의 `?type=` 필터 · 헤더 Brands 탭 하나 · `/shop/major-brands` 는 308 · 스키마 유지 · 카테고리 페이지는 인디만](docs/decisions/storefront.md#2026-10-27)
+- `2026-10-27` [인디 샘플 = $100 샘플 박스 — 장바구니 한 줄 = 박스 하나(큐레이션 `BuyerPackage` 또는 직접 고른 10개) · 주문당 5박스 · 박스가 10줄 균등 배분(부분환불 = 1/10) · 늘 무료배송 · 낱개 `productIds` 주문 제거 · server → web 연달아 배포](docs/decisions/storefront.md#2026-10-27-2)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

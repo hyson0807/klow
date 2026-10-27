@@ -1,10 +1,10 @@
 # buyer-orders — 바이어 샘플 주문 · 결제 (klow.kr/ 바이어 공간)
 
 - **모듈 경로**: `src/modules/buyer-orders/`
-- **목적**: 바이어 공간([buyer](./buyer.md))의 샘플박스를 **실주문 + 엑심베이 실결제**로 만든다. 결제가 끝나면 브랜드별 입고 행이 생기고 브랜드·바이어·운영팀에 메일이 간다.
+- **목적**: 바이어 공간([buyer](./buyer.md))의 샘플박스를 **실주문 + 엑심베이 실결제**로 만든다. **2026-10-27 부터 박스 단위로만 산다** — 장바구니 한 줄 = $100 샘플 박스 하나(큐레이션 `BuyerPackage` 또는 바이어가 고른 10개), 주문당 최대 5박스, 개별 $7 샘플 구매 경로 없음([결정](../../decisions/storefront.md#2026-10-27-2)). 결제가 끝나면 브랜드별 입고 행이 생기고 브랜드·바이어·운영팀에 메일이 간다.
 - **설계 정본**: [`docs/plan/buyer-sample-order/`](../../plan/buyer-sample-order/README.md) — 결정 D1~D8 은 `README.md`, 불변식 G1~G10 은 `implementation-plan.md §1`.
 - **관련 파일**: `buyer-orders.service.ts`(견적·생성·목록·상세 + 상태 판정 `buyerSampleStatus`) · `public-buyer-orders.controller.ts` · 입고 흐름(진행표 32행) `brand-sample-requests.controller.ts` + `sample-requests.service.ts`(브랜드) · `admin-buyer-orders.controller.ts`(바이어 주문 + KLOW 발송인 컨트롤러 2개) + `buyer-orders-admin.service.ts`(입고 확인·부분환불·전체 취소·발송인 + 라인→브랜드 `productBrandIds`) · `buyer-sample-pricing.ts`(배송비 규칙 — 순수) · `buyer-sample-paid.ts`(결제 완료 후속효과 — **함수 파일**, `payment.service#markPaid` 가 부른다) · `buyer-sample-email.ts`(메일 3종 — 순수) · 검증 `common/validation/buyer-order.ts`(+ `order.ts#checkRecipientCountryFields` 공용) · 결제 `payment/payment.service.ts#prepareForBuyer`·`resultRedirectUrl`
-- **마이그레이션**: `20261014063926_add_buyer_sample_order` — enum 2(`OrderKind`·`OrderBrandIntakeStatus`) + 테이블 2(`OrderBrandIntake`·`OrderPartialRefund`) + `Order.kind`(기본 `consumer`)·`buyerUserId`·`buyerNote` · `OrderItem.cancelledAt` · `ShopSettings.klowSender*` 4칸. 전부 ADD/CREATE 라 **롤링 안전 · 백필 없음**(기존 주문은 기본값 `consumer`).
+- **마이그레이션**: `20261014063926_add_buyer_sample_order` — enum 2(`OrderKind`·`OrderBrandIntakeStatus`) + 테이블 2(`OrderBrandIntake`·`OrderPartialRefund`) + `Order.kind`(기본 `consumer`)·`buyerUserId`·`buyerNote` · `OrderItem.cancelledAt` · `ShopSettings.klowSender*` 4칸. 전부 ADD/CREATE 라 **롤링 안전 · 백필 없음**(기존 주문은 기본값 `consumer`). · `20261027030321_add_buyer_packages` — `BuyerPackage`·`BuyerPackageItem` + `OrderItem.boxNo`·`boxPackageId`·`boxTitle`(전부 nullable ADD/CREATE, 롤링 안전 · 백필 없음 — 박스 이전 주문은 NULL). **staging DB 적용 2026-10-27**(사용자 지시 — DB 브랜치 없이 직접).
 - **env**: 새 env 없음. 운영팀 수신함은 바이어 문의와 같은 `BUYER_INQUIRY_EMAIL` → `CONTACT_INBOX_EMAIL` → `team@klow.kr`. 브랜드 메일 링크는 `BRAND_FRONTEND_URL`. cron 없음.
 
 ⚠️⚠️ **소비자 `Order` 를 재사용한다**(`kind = buyer_sample`, G1). 송장·트래킹·엑심베이 return/webhook/재확인 크론·환불이 전부 `Order.id` 기준이기 때문이다. 대가로 **소비자 집계는 `kind: consumer` 로 걸러야 한다**(G4) — 걸러 둔 곳은 `implementation-plan.md §5`. 새 소비자 집계를 만들면 거기에 추가할 것.
@@ -17,8 +17,8 @@
 
 | 메서드 · 경로 | 동작 |
 |---|---|
-| `POST orders/quote` `{productIds, countryCode}` | 견적. 공개 화면과 **같은 노출 판정**(`BuyerPublicService.visibleByProductIds`)을 통과하고 샘플가(구간표 1행)가 있는 제품만 계산. 내려간 제품은 거절하지 않고 `unavailableProductIds` 로 알린다(금액은 남은 것 기준). 응답 `{lines, subtotalUsdCents, shippingUsdCents, totalUsdCents, freeShipping, freeShippingSkus, unavailableProductIds}`. 국가 게이트(배송지원 제외·요율 미설정·EFS 제외구역)는 소비자와 같은 `shipping.resolveProductShipping` 이 400 |
-| `POST orders` | 주문 생성(pending). 본문 = 소비자 주문의 수화인 칸(`recipientAddressFields` — 국가별 필수 규칙 공용) + `country`·`countryCode`·`productIds`·`note?`(≤500, **운영팀만 본다**)·`email?`(생략 시 계정 이메일)·동의 3종 `literal(true)`. **내려간 제품이 하나라도 있으면 400 `samples_unavailable` + `productIds`** — 바이어가 담은 것과 다른 걸 결제시키지 않는다. 가격·배송비는 서버가 재계산(G5). → `{orderId, totalUsdCents}` |
+| `POST orders/quote` `{boxes, countryCode}` | 견적. `boxes` = 1~5개, 각각 `{packageId}`(큐레이션 — **서버 DB 의 지금 구성·가격**) 또는 `{productIds: 정확히 10개·중복 없음}`(커스텀 — `CUSTOM_BOX_CENTS` $100, 공개 화면과 같은 노출 판정 + 샘플가 있음 + 세트·부자재 카테고리 아님 `BUYER_NON_BOX_CATEGORIES`). 박스끼리 같은 제품은 허용. 살 수 없게 된 박스는 거절하지 않고 `unavailable`(커스텀이면 `unavailableProductIds`)로 알린다(금액은 남은 박스 기준). 응답 `{boxes:[{boxNo, packageId, title, priceUsdCents, unavailable, unavailableProductIds, lines}], subtotalUsdCents, shippingUsdCents, totalUsdCents, freeShipping, freeShippingSkus}`. 배송비 규칙은 SKU 수 기준 그대로라 **박스는 늘 무료**. 국가 게이트(배송지원 제외·요율 미설정·EFS 제외구역)는 소비자와 같은 `shipping.resolveProductShipping` 이 400 |
+| `POST orders` | 주문 생성(pending). 본문 = 소비자 주문의 수화인 칸(`recipientAddressFields` — 국가별 필수 규칙 공용) + `country`·`countryCode`·`boxes`·`note?`(≤500, **운영팀만 본다**)·`email?`(생략 시 계정 이메일)·동의 3종 `literal(true)`. **살 수 없는 박스가 하나라도 있으면 400 `box_unavailable` + `boxNos`·`productIds`** — 바이어가 담은 것과 다른 걸 결제시키지 않는다. 박스는 제품별 `OrderItem` 10줄로 풀리고(`boxNo`·`boxPackageId`·`boxTitle` 스냅샷), **박스 가격은 10줄에 균등 배분**(`splitBoxPrice` — 남는 센트는 앞 줄부터, 합 = 박스가). 부분환불·통관 신고가가 이 단가($10)를 쓴다. 상세 응답은 평면 `items`(+ `boxNo`)와 `boxes[{boxNo, packageId, title, priceUsdCents, itemIds}]`(`order-boxes.ts`)를 함께 싣는다 — 박스 이전 주문은 `boxes: []`. 가격·배송비는 서버가 재계산(G5). → `{orderId, totalUsdCents}` |
 | `GET orders` | 내 요청 목록(최근 50) — **결제창을 연 적 없는 pending 은 뺀다**(실패·환불은 남긴다) |
 | `GET orders/:id` | 상세. 남의 주문·소비자 주문은 404. 응답의 `status` 는 서버가 계산한다(아래). `tracking` = 합포장 송장 추적(`buyerTracking` — EFS·현지 송장번호, 현지 조회 URL, 최근 상태, 이벤트, 발송 시각). 발급(submitted) 전엔 null |
 | `POST payment/prepare` `{orderId}` | 엑심베이 결제창 준비 — 소비자 `v1/payment/prepare` 와 **같은 payload**. 해외 카드(USD)만(국내 MID 없음). 상품 링크는 `/shop/products/:id` |
@@ -83,7 +83,7 @@ SKU(= 품목 — 샘플은 제품당 1개) **5개 이상이면 0**, 그 미만�
 ## 결제 완료 후속효과 (`onBuyerSamplePaidSafe` — 절대 throw 안 함)
 
 1. 브랜드별 `OrderBrandIntake` 행(`createMany skipDuplicates`). 실패하면 Sentry(어드민 입고 화면이 비므로)
-2. 브랜드 메일 — 그 브랜드의 이메일 있는 `BrandUser` 전원. 보냈으면 `brandEmailedAt`, 받을 사람이 없으면 운영팀 메일에 "이메일 없음" 경고. ⚠️ **바이어 신원·메모를 싣지 않는다**(국가만 — G7). 보낼 곳 = `ShopSettings.klowSender*`, 비었으면 `efs-billing/klow-company.ts` 회사 주소. replyTo = 운영팀
+2. 브랜드 메일 — 그 브랜드의 이메일 있는 `BrandUser` 전원. 보냈으면 `brandEmailedAt`, 받을 사람이 없으면 운영팀 메일에 "이메일 없음" 경고. ⚠️ **바이어 신원·메모를 싣지 않는다** — 국가도, '바이어' 라는 말도 없이 'KLOW 에서 샘플을 요청했어요' 로만 쓴다(G7 · 2026-10-16). 보낼 곳 = `ShopSettings.klowSender*`, 비었으면 `efs-billing/klow-company.ts` 회사 주소. replyTo = 운영팀
 3. 바이어 결제 확인 메일(영어) · 운영팀 알림 메일(바이어 신원·메모 포함, replyTo = 바이어)
 
 ## 소비자 쪽에서 바뀐 것

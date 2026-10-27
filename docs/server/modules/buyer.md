@@ -15,6 +15,7 @@
 | `BuyerPriceTier` | 도매 구간가(USD 센트). **MOQ 의 정본**(아래) |
 | `BuyerCategory` | 홈 카테고리 탭 |
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
+| `BuyerPackage` · `BuyerPackageItem` | **$100 샘플 박스**(2026-10-27) — 어드민이 인디 제품(`buyerProductId`) **정확히 10개**로 구성하는 큐레이션 박스. `priceUsdCents`(기본 10000) · `published` · `sort`. 공개 = `published` + 10칸 전부 노출 가능·샘플가 있음(하나라도 빠지면 공개 화면·주문에서 자동으로 숨는다 — `buyer-public.service#packageRows`). 주문은 [buyer-orders](./buyer-orders.md) 의 `boxes` |
 | `BuyerShelf` · `BuyerShelfItem` · `BuyerShelfBand` | 홈 큐레이션 선반(수동으로 고른 제품 — **`kind` 인디/메이저, 섞지 않는다**: 항목은 `buyerProductId`·`majorProductId` 중 종류에 맞는 하나만, 서비스가 보장 · DB CHECK 없음) + 선반 안 필터 칩(band — 제품 속성이 아니라 그 선반 한정 분류, `BuyerShelfItem.bandId` 로 제품당 0~1개, 칩 삭제 시 `SetNull`) |
 | `BuyerBrandVideo` | 브랜드 마케팅 영상(유튜브·인스타, 브랜드당 최대 12, `sort`). `provider`·`externalId`·`vertical` 은 **서버가 url 을 파싱한 값이 정본**(`video-url.ts`). `thumbnailUrl` = R2(인스타 자동 복사 또는 수동 업로드), null 이면 유튜브는 `i.ytimg.com` 파생 · 인스타는 로고 카드 |
 | `BuyerTranslation` | `?lang=` 번역 캐시 — `(entityType, entityId, locale)` 유니크, `fields` Json(번역된 필드만), 스테일 판정은 `sourceHash`(원문 필드 해시). 다형이라 FK 없음(원본이 지워진 행은 남지만 읽히지 않는다). 아래 [`?lang=` 번역](#lang-번역) |
@@ -68,6 +69,10 @@
 | PUT | `/admin/buyer/shelves/order` | 순서 |
 | PATCH/DELETE | `/admin/buyer/shelves/:id` | 수정 / 삭제 — 항목이 있는 선반의 `kind` 변경은 400 `shelf_kind_locked` |
 | PUT | `/admin/buyer/shelves/:id/items` `{items: [{productId, tag?, bandId?}]}` | 선반 제품 통째 교체(최대 48). `productId` = 인디 선반은 `Product.id`, 메이저 선반은 `BuyerMajorProduct.id` — 종류가 다르거나 바이어 공간에 없는 제품은 400 `product_not_added`. `bandId` 는 이 선반의 필터만(400 `band_not_found`), 생략·null = 필터 없음 |
+| GET/POST | `/admin/buyer/packages` | 샘플 박스 목록(칸 순서 제품 + 각 `visible`·`sampleable`, 박스 `ready`=공개 조건 충족 · `hidden`=공개인데 지금 숨음) / 추가 `{title, tagline?, priceUsdCents?}` — **만들 때는 항상 비공개** |
+| PUT | `/admin/buyer/packages/order` | 순서 |
+| PATCH/DELETE | `/admin/buyer/packages/:id` | 수정 `{title?, tagline?, priceUsdCents? ($1~$10,000 센트), published?}` — `published: true` 는 10/10 + 전부 sampleable 이어야(400 `package_incomplete` / `package_unavailable_items` + `productIds`) / 삭제(결제된 주문은 `OrderItem.boxPackageId` 스냅샷이라 남는다) |
+| PUT | `/admin/buyer/packages/:id/items` `{productIds: Product.id[]}` | 박스 구성 통째 교체(0~10, 순서 = 칸 순서, 중복 400). 바이어 공간에 없는 제품 400 `product_not_added`. **공개 중인 박스는 바꾼 뒤에도 공개 조건을 만족해야 저장된다** |
 | PUT | `/admin/buyer/shelves/:id/bands` `{bands: [{id?, label, note?}]}` | 선반 필터 칩 통째 교체(최대 12, 라벨 중복 400). 배열 순서 = 칩 순서. `id` 있는 칩은 유지(제품 배정 보존), 빠진 칩은 삭제되고 그 제품은 필터 없음으로. 남의 선반 칩 id 는 400 `band_not_found` |
 | GET | `/admin/buyer/inquiries?status=new\|handled&kind=quote\|brand_request\|major_order` | 문의 목록(최신순 500) + 연결 브랜드·제품·메이저 브랜드·바이어 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
@@ -82,7 +87,8 @@
 
 | Method | Path | Throttle | 기능 |
 |---|---|---|---|
-| GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
+| GET | `/v1/buyer/packages?lang=` | 전역 | 공개 샘플 박스 전부 `[{id, title, tagline, priceUsdCents, products: 카드 10개}]` — klow_web `/shop/packages` 목록·상세(상세는 여기서 id 로 고른다) |
+| GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands, packages }`(packages = 위와 같은 공개 샘플 박스) — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
@@ -108,6 +114,7 @@
 | `product` | `BuyerProduct` | `about` · `forText` · `keyActives[]` | PDP 만(홈·목록이 상세 문구까지 번역하면 첫 방문 비용이 커진다) |
 | `category` | `BuyerCategory` | `name` | 홈(노출 카테고리만) · PDP |
 | `shelf` / `shelfItem` / `band` | 선반 · 아이템 · 칩 | `title`·`lede` / `tag` / `label`·`note` | 홈 |
+| `package` | 샘플 박스 | `title`·`tagline` | 홈 · `/packages` |
 | `heroSlide` | `BuyerHeroSlide` | `caption` | 홈 |
 | `video` | `BuyerBrandVideo` | `title` | 브랜드 |
 | `brand` | `Brand.description` (브랜드관 한 줄 소개) | `intro` | 브랜드 |
