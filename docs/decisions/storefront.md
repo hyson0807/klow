@@ -307,7 +307,7 @@ klow_web 만 변경(`df13433`), 마이그레이션 없음.
 
 klow_web `design` 브랜치(서버를 못 보는 팀원이 프론트만으로 만든 것)가 바이어 공간을 **사는 방식으로 두 갈래**로 나눴다 — 메이저(유명) 브랜드는 로그인 → MOQ 가격 → 주문 요청, 인디 브랜드는 $7 샘플. 화면은 그대로 받고 데이터만 서버로 옮겼다. 그대로 합치면 안 됐던 이유: 메이저 4곳이 정적 하드코딩(가격 없음), $7 이 화면만 덮어써 **결제 금액과 달랐고**, 베네핏 필터가 제품 id 하드코딩, 주문당 10개가 클라만, 메이저 주문이 문의 자유 텍스트였다.
 
-- **메이저 = 별도 테이블**(`BuyerMajorBrand`·`BuyerMajorProduct`·`BuyerMajorPriceTier`), 어드민이 직접 만든다. 기존 `Brand`/`Product` 로 만드는 안은 기각 — 어드민 생성 브랜드는 구독 게이트 면제라 소비자 카탈로그·정산에 새어 나온다.
+- **메이저 = 별도 테이블**(`BuyerMajorBrand`·`BuyerMajorProduct`·`BuyerMajorPriceTier`), 어드민이 직접 만든다. (2026-10-27 부터 `sampleable` 메이저는 $100 샘플 박스에도 담긴다 — [아래](#2026-10-27-3)) 기존 `Brand`/`Product` 로 만드는 안은 기각 — 어드민 생성 브랜드는 구독 게이트 면제라 소비자 카탈로그·정산에 새어 나온다.
 - ⚠️⚠️ **메이저 가격은 공개(ISR) 응답에 없다** — `/v1/buyer/major-brands/:slug/prices`(BuyerGuard)로만, klow_web 은 로그인 뒤 클라이언트에서 받는다. 인디 구간가(블러만, 공개 응답엔 있음 — 2026-10-08)와 다르다: 메이저는 벤더 공급가라 새면 안 된다.
 - ⚠️⚠️ **주소는 인디와 공유한다**(사용자 결정 — `/shop/major-brands/<slug>` 분리안을 버렸다): 브랜드관 `/shop/brands/<slug>`, 제품 `/shop/products/<id>`, 페이지는 인디 먼저 → 404 면 메이저. 대가로 **슬러그 양방향 검사**(`buyer/major-slug.ts`) — 메이저 생성은 `Brand.slug`·예약어를, 브랜드 가입·입점 신청·어드민 브랜드 저장은 메이저 슬러그를 본다. 두 테이블을 걸친 DB 제약은 없다. 같은 이름 실브랜드가 나중에 입점하면 운영이 메이저 슬러그를 바꿔야 한다. 목록 화면만 갈린다 — 메이저 허브 `/shop/major-brands`, 인디 `/shop/brands`(브랜드)·`/shop/products`(제품).
 - **$7 은 어드민이 인디 구간표 1행에 넣는 실가격**이다(사용자 결정 — 서버 정액 설정안을 버렸다). 화면·견적·결제가 같은 값을 쓴다. klow_web 은 1행이 700센트면 "$7 샘플 대상"으로 본다(세트·부자재는 운영팀이 다른 1개 가격을 두면 자연히 빠진다). ⚠️ 배포 시점 staging 에 1행 $7 제품이 0개다 — 카드 라벨이 전부 실제 1개 가격으로 나온다. 운영 데이터 작업이 먼저다.
@@ -345,3 +345,16 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - 박스 이름·소개는 셸프처럼 LLM 번역 캐시(`BuyerTranslation.entityType = 'package'`). 주문 줄의 `boxTitle` 은 영어 스냅샷이고, 커스텀 박스는 화면이 자기 언어 문구로 그린다.
 - 시안 전환 독(`KbDesignSwitch`)과 고르지 않은 시안(바 A 미터 · 홈 A 분할 · 목록 B 밴드/C 비교표 · 상세 B 펼침)은 지웠다. 사이트 전역의 "$7 a sample · 5개 무료배송" 문구(공지 바·헤더 메뉴·히어로·목록 오퍼 카드·첫 방문 모달·About/FAQ)를 박스 문구로 바꿨다.
 - ⚠️ **배포 순서: klow_server → klow_web 바로 뒤이어**(klow_admin 은 그 사이 아무 때나). 서버만 먼저 나간 틈에 구 웹의 `productIds` 결제는 400 이 난다. 웹을 먼저 내면 반대로 새 `boxes` 견적이 400 이다.
+
+<a id="2026-10-27-3"></a>
+## 메이저 제품도 $100 샘플 박스에 — KLOW 직접 조달 · 칸 가격 인디와 동일 · 어드민이 제품별 `sampleable` · 입고는 `OrderMajorIntake` 한 행 (2026-10-27 · 2026-10-22 "메이저 = 샘플 없음" 변경)
+
+바이어가 유명 브랜드를 인디와 섞어 샘플로 받아 볼 수 있게, 메이저 제품도 커스텀 박스·큐레이션 박스에 담는다. 스키마 분리(2026-10-22 · 10-27)는 그대로다 — 메이저는 여전히 `Brand`/`Product` 가 아니다.
+
+- **조달 = KLOW 직접**(사용자 결정). 메이저는 입점 브랜드가 아니라 klow_brand 계정·브랜드 메일·브랜드 입고가 없다. 대신 **주문당 `OrderMajorIntake` 1행**(메이저 라인이 있을 때만, 결제 후속효과가 만들고 어드민 상세가 빠졌으면 메운다)을 운영팀이 사 와서 '입고 확인'한다. 상태값은 `OrderBrandIntakeStatus` 재사용(`brand_shipped` 는 안 씀). 요청 상태·합포장 게이트는 이 행을 브랜드 입고 하나처럼 센다. 운영팀 결제 메일에 "KLOW 직접 조달 필요" 목록이 붙는다.
+- **가격 = 인디와 동일**(사용자 결정) — 박스 $100 고정, 칸당 균등 배분, 부분환불 1/10. 메이저 칸에 추가금 없음.
+- **대상 = 어드민이 제품별로 `BuyerMajorProduct.sampleable` 을 켠 것만**(기본 off — 조달 가능한 것만 켠다). 판정 `isBoxableMajor` = 노출 중 + sampleable, 카드·패키지·주문이 같은 함수.
+- ⚠️⚠️ **MOQ 가격은 계속 BuyerGuard 전용**이다. 공개 카드에는 `sampleable` 불린만 더했다(박스 $100 은 원래 공개). 박스 담기에 로그인 불필요(인디와 같음).
+- 주문 라인: 메이저 줄은 `OrderItem.productId = null`·`brandId = null`·`majorProductId = <BuyerMajorProduct.id>`(FK 없음, 스냅샷 관례), `productName` = 영문 메이저 제품명 = **EFS 통관 상품명**. 통관 분류는 화장품 기본값(`BRAND_CATEGORY_CUSTOMS.cosmetics`), 상품 URL `/shop/products/<majorId>`. `productId` 만 보는 인디 경로(브랜드 입고·브랜드 메일·klow_brand 샘플 요청·정산)는 메이저 줄을 자연히 건너뛴다.
+- API 입력은 그대로 `{productIds}` — 서버가 인디(`Product.id`) → 메이저(`BuyerMajorProduct.id`) 순으로 해석한다(두 cuid 공간은 겹치지 않는다). 그래서 server 를 먼저 배포해도 구 klow_web 이 깨지지 않는다. 큐레이션 박스 칸 `BuyerPackageItem` 은 `buyerProductId`/`majorProductId` 중 정확히 하나(서비스가 강제 — `BuyerShelfItem` 과 같은 방식, DB CHECK 없음).
+- 배포: migrate `major_sample_box`(전부 additive — 롤링 안전) → klow_server → klow_admin → klow_web. 어드민이 `sampleable` 을 켜기 전엔 바이어 화면 변화 없음.

@@ -72,7 +72,7 @@
 | GET/POST | `/admin/buyer/packages` | 샘플 박스 목록(칸 순서 제품 + 각 `visible`·`sampleable`, 박스 `ready`=공개 조건 충족 · `hidden`=공개인데 지금 숨음) / 추가 `{title, tagline?, priceUsdCents?}` — **만들 때는 항상 비공개** |
 | PUT | `/admin/buyer/packages/order` | 순서 |
 | PATCH/DELETE | `/admin/buyer/packages/:id` | 수정 `{title?, tagline?, priceUsdCents? ($1~$10,000 센트), published?}` — `published: true` 는 10/10 + 전부 sampleable 이어야(400 `package_incomplete` / `package_unavailable_items` + `productIds`) / 삭제(결제된 주문은 `OrderItem.boxPackageId` 스냅샷이라 남는다) |
-| PUT | `/admin/buyer/packages/:id/items` `{productIds: Product.id[]}` | 박스 구성 통째 교체(0~10, 순서 = 칸 순서, 중복 400). 바이어 공간에 없는 제품 400 `product_not_added`. **공개 중인 박스는 바꾼 뒤에도 공개 조건을 만족해야 저장된다** |
+| PUT | `/admin/buyer/packages/:id/items` `{productIds}` | 박스 구성 통째 교체(0~10, 순서 = 칸 순서, 중복 400). id 는 인디 `Product.id` · 메이저 `BuyerMajorProduct.id` 섞어서(2026-10-27). 어느 쪽에도 없으면 400 `product_not_added`, `sampleable` 꺼진 메이저 400 `major_not_sampleable`. 목록 칸에 `kind: 'indie'|'major'`. **공개 중인 박스는 바꾼 뒤에도 공개 조건을 만족해야 저장된다** |
 | PUT | `/admin/buyer/shelves/:id/bands` `{bands: [{id?, label, note?}]}` | 선반 필터 칩 통째 교체(최대 12, 라벨 중복 400). 배열 순서 = 칩 순서. `id` 있는 칩은 유지(제품 배정 보존), 빠진 칩은 삭제되고 그 제품은 필터 없음으로. 남의 선반 칩 id 는 400 `band_not_found` |
 | GET | `/admin/buyer/inquiries?status=new\|handled&kind=quote\|brand_request\|major_order` | 문의 목록(최신순 500) + 연결 브랜드·제품·메이저 브랜드·바이어 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
@@ -87,7 +87,7 @@
 
 | Method | Path | Throttle | 기능 |
 |---|---|---|---|
-| GET | `/v1/buyer/packages?lang=` | 전역 | 공개 샘플 박스 전부 `[{id, title, tagline, priceUsdCents, products: 카드 10개}]` — klow_web `/shop/packages` 목록·상세(상세는 여기서 id 로 고른다) |
+| GET | `/v1/buyer/packages?lang=` | 전역 | 공개 샘플 박스 전부 `[{id, title, tagline, priceUsdCents, products: 카드 10개(각 `kind: 'indie'|'major'` — 메이저는 가격 없는 메이저 카드)}]` — klow_web `/shop/packages` 목록·상세(상세는 여기서 id 로 고른다) |
 | GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands, packages }`(packages = 위와 같은 공개 샘플 박스) — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
@@ -137,6 +137,8 @@ Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디
 
 <a id="메이저-브랜드"></a>
 ## 메이저 브랜드 (buyer-major, 2026-10-22)
+
+> 2026-10-27: 메이저 제품 `sampleable`(어드민 PATCH, 기본 false)이 켜지면 $100 샘플 박스에 담긴다 — 공개 카드·상세에 `sampleable` 불린(가격은 여전히 BuyerGuard 전용). 판정 `isBoxableMajor`(`buyer-major.mapper.ts`). 결정 [`storefront.md#2026-10-27-3`](../../decisions/storefront.md#2026-10-27-3).
 
 Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본 `Brand`/`Product` 가 없다 — 바이어 전용 3테이블을 **어드민이 직접 만든다**. 1차 벤더 공급이라 샘플이 없고 MOQ 로만 판다(로그인 → MOQ 가격 → 주문 요청 → 운영팀 PI). 본문은 **영어만**(번역 없음 — klow_web 비영어판은 noindex + canonical en). 결정 [storefront 2026-10-22](../../decisions/storefront.md#2026-10-22).
 
