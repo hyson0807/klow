@@ -31,6 +31,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 ├── klow_admin/    ← Admin dashboard          (Next.js 14, port 3000, internal CRUD, pure UI client)
 ├── klow_brand/    ← Brand self-onboarding    (Next.js 14, port 3002, posts /v1/brand/*)
 ├── klow_server/   ← Backend API              (NestJS 10, port 4000, owns Prisma + Neon + R2)
+├── klow_dampenerlab/ ← 댐프너랩 커스텀 댐프너 해외 판매 사이트 (Next.js, port 3003, dampenerlab.klow.kr — 서버 `v1/dampenerlab/*` + 기존 주문·결제. 진행표 50~52행, 스펙 docs/plan/dampenerlab/)
 ├── klow_search_server/ ← 인플루언서 검색 백엔드 (NestJS :4100, 자체 Neon DB + R2 bucket `search`; 프론트는 klow_admin 인플루언서 탭 — 자세히는 klow_search_server/CLAUDE.md)
 ├── docs/          ← Workspace docs (PROGRESS.md 진행표 ← 작업 시작점 · README.md 인덱스 · decisions/ = 과거 결정 본문 · reference/ = 현행 시스템 · server/ = API 엔드포인트 문서 · plan/ = 만드는 중 · archive/ = 완료 노트)
 ├── CLAUDE.md      ← This file
