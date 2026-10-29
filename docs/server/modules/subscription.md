@@ -30,6 +30,7 @@
 | Method | Path                                                       | 기능                                                                    |
 |--------|------------------------------------------------------------|-------------------------------------------------------------------------|
 | GET    | `/admin/brand-subscriptions/:id`                           | brand 구독 상세 (+ 빌링키·invoice 전체·제품·`submittedBy`, `monthlyPriceKrw` 포함) |
+| PATCH  | `/admin/brand-subscriptions/:id/profile`                   | 송화인(EFS) 4 · 정산 계좌 3 필드 수정 — 보낸 필드만 갱신, 검증은 브랜드 셀프 입력과 동일 → 상세 반환 |
 | PATCH  | `/admin/brand-subscriptions/:id/reject`                    | 정책위반 차단 — brand reject + 활성 구독 강제 해지(환불 없음)           |
 | PATCH  | `/admin/brand-subscriptions/:id/grant`                     | 무료 구독권 부여 — 결제 없이 N개월 active + brand 승인 + 제품 승인       |
 | PATCH  | `/admin/brand-subscriptions/:id/grant-cash`                | 현금결제 구독 발급 — 받은 금액 paid invoice 기록 + N개월 active          |
