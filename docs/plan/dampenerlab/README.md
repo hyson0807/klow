@@ -49,7 +49,9 @@
 - 손님 사진은 브라우저에서 2000px 로 줄인 data URL 로 편집하고 **결제 직전에만** R2 로 올린다(편집 중 캔버스 오염(CORS)·고아 파일 방지). design JSON 에는 `r2:<key>` 로 남는다.
 - 초안은 localStorage(`dl.design.*`, `dl.options.v1`) — 결제 성공 시 지운다. 상품 페이지 → 체크아웃은 모듈 변수 + sessionStorage.
 - 가격·배송비는 전부 서버 견적(`/v1/orders/quote`) — 클라 계산 없음. 브랜드당 5개 한도라 댐프너+케이스 합 ≤ 5.
-- 헤더의 검색·찜·장바구니·계정은 두지 않았다(상품 1개) — 주문 조회는 klow.kr/track. 리뷰·상품문의 탭은 빈 상태 + team@klow.kr 안내.
+- 헤더의 검색·찜·장바구니·계정은 두지 않았다(상품 1개). 리뷰·상품문의 탭은 빈 상태 + team@klow.kr 안내.
+- **랜딩 `/` = dampenerlab.com 메인 복제(영문, 2026-10-29)**, 상품 페이지(편집기)는 **`/custom`** — 랜딩 CTA·체크아웃의 "디자인으로 돌아가기" 링크가 모두 `/custom`. 섹션은 `src/components/landing/*`, 이미지는 `public/assets/landing/`(원본 cafe24 이미지 복사). 원본의 'Trending designs'(여기서 안 파는 상품)·업스트림스포츠 푸터는 뺐고, 제목 폰트 Gilroy(상용)는 Google **Outfit** 으로 대체. ⚠️ 가운데 Vimeo 영상(`1195337966`)은 원본 것을 그대로 임베드해 **한국어 "커스텀 댐프너 20,000 KRW" 자막이 영상에 박혀 있다** — 영문판 영상을 받으면 교체.
+- 헤더(전 페이지 공용)는 **중앙 로고(→ `/`)만** — 원본의 좌측 "Dampener"·우측 아이콘 3개는 뺐다. 주문 조회는 결제 완료 화면의 "Track my order"(klow.kr/track)뿐.
 
 ## 단계
 
