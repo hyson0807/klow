@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 50~52행 — dampenerlab 트랙 등록(2026-10-29, 사용자 지시).** 아이템샵 대표님의 커스텀 댐프너를 `dampenerlab.klow.kr` 에서 해외 판매(원본 페이지 영어 클론 + Konva 편집기 + KLOW Eximbay·EFS). **50행(A, 서버)은 끝났다** — klow_server `e80766a` on `feat/dampenerlab`, DB 브랜치 `ep-restless-sky` 에 마이그레이션 적용, **staging 미병합·push 안 함**. 다음: **51행(B) `klow_dampenerlab` 레포 + 편집기.** ⚠️ C 전에 통관 품목·HS 코드와 해외 판매가를 사용자에게 받아야 한다(트랙 문서 "열린 질문"). `§9` 50행 메모.
+**`§7` 50~52행 — dampenerlab(2026-10-29, 사용자 지시로 A~C 한 세션).** 아이템샵 대표님의 커스텀 댐프너를 `dampenerlab.klow.kr` 에서 해외 판매(원본 페이지 영어 클론 + Konva 편집기 + KLOW Eximbay·EFS). **코드 완료** — 네 레포 모두 git `feat/dampenerlab`(klow_server `e80766a`·`31182d3` · klow_admin `a65fb37` · klow_brand `e26cdc4` · 신규 klow_dampenerlab `0f74493`, **원격 없음·push 안 함**), DB 브랜치 `ep-restless-sky`. 로컬 왕복 확인: 편집 → 체크아웃 → R2 업로드 → 주문 → Eximbay **테스트 결제창 열림**(fgkey 통과) · 실패 return 303 → 사이트 실패 화면. 다음: ⚠️ **통관 품목·HS 코드 + 판매가(사용자)** → staging(DB migrate → server → admin·brand) → Vercel 프로젝트 + `dampenerlab.klow.kr` DNS → 어드민에서 브랜드·제품 생성 + Railway env 3개 → 테스트 결제 1건 → 운영. `§9` 50행 메모.
 
 **`§7` 49행 — 어드민 송화인·정산 계좌 수정(2026-10-29, 트랙 밖 요청)은 staging 배포 완료**(사용자 지시 · klow_server `35bdcec` → api-staging 라우트 확인 → klow_admin `21a921e` push). 다음: admin-staging 브랜드 상세 > 구독 관리에서 실저장 확인 → 운영 배포(server → admin, 스키마 무변경). ⚠️ 송화인명은 영문만 통과한다 — 한글 송화인명 브랜드는 송화인 카드 저장 때 영문으로 바꿔야 한다.
 
@@ -1120,8 +1120,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 48 | buyer-major-category | **메이저 제품 카테고리 = 인디와 같은 `BuyerCategory` + 목록 카테고리 겹쳐 고르기** — `BuyerMajorProduct.categoryId`(옛 자유 텍스트는 dormant · 마이그레이션이 기존 값으로 카테고리를 만들어 연결) · 어드민 메이저 Category 고르기 · `/shop/products` 카테고리 줄 = 이 자리 필터 · 카테고리 페이지에 메이저 포함 · 목록 개수 문구 키 복구. 트랙 밖 요청(2026-10-27) — 마이그레이션 + 3레포 순서 배포라 행. 결정 [storefront 2026-10-27-4](./decisions/storefront.md#2026-10-27-4) — **staging DB 직접 migrate(사용자 지시) · 세 레포 staging push 완료(2026-10-28, api-staging `categorySlug` 확인)** | 완료(staging) | ✗ | 2026-10-27 | 71de361 / 2f854dc / - / 472f79d / (이 커밋) |
 | 49 | admin-brand-profile-edit | **어드민 브랜드 상세 — 송화인(EFS)·정산 계좌 수정** — 서버 `PATCH /admin/brand-subscriptions/:id/profile`(보낸 필드만 갱신 · 검증은 브랜드 셀프 입력과 동일 `patchOf(BrandOperationalProfileInput)`) + 어드민 구독 관리 탭 카드 편집(`OperationalProfileCard`) · 브랜드 정보 탭 편집 폼은 송화인 필드를 더 안 보낸다(두 탭 동시 마운트라 옛 값 덮어쓰기 방지). 트랙 밖 요청(2026-10-29) — 2레포 순서 배포 + 운영 대기라 행. 스키마 무변경 — **staging push 완료(api-staging `/profile` 401 확인)** | 완료(staging) | ✗ | 2026-10-29 | 35bdcec / 21a921e / - / - / (이 커밋) |
 | 50 | dampenerlab A | **댐프너랩 커스텀 댐프너 사이트 — 서버** — `Order.shopSite` + `OrderItem.customization` 마이그레이션 `20261029050441_add_shop_site_and_item_customization`(nullable ADD) · `v1/dampenerlab/{products,uploads/presign,orders}` · `orders.create` 선택 인자 · 결제 return 303/Eximbay 상품 링크를 `shop-sites.ts` env 고정 맵으로. git `feat/dampenerlab` + Neon DB 브랜치 `ep-restless-sky`(사용자 생성). 스펙 [plan/dampenerlab](./plan/dampenerlab/README.md) | 완료(feat 브랜치) | ✗ | 2026-10-29 | e80766a / - / - / - / (이 커밋) |
-| 51 | dampenerlab B | **`klow_dampenerlab` 레포 + 상품 페이지 클론 + Konva 편집기 전 기능** — 원본 자산 R2 복사 · 사진/텍스트/디자인 소스/배경색/레이어/undo-redo/앞뒤 면 · 모양별 클립 · 케이스 편집 모달 · 인쇄 PNG 출력. 원본과 크롬 나란히 비교 | 대기 | ✗ | | |
-| 52 | dampenerlab C | **체크아웃·결제·제작 파일 화면 + 배포** — 배송지·견적·동의 → 업로드 → 주문 → Eximbay → `/checkout/redirect` · 어드민/브랜드 주문 상세 디자인 미리보기·인쇄 PNG 다운로드 · ⚠️ 통관 품목(HS) 추가(사용자 확인 후) · Vercel + DNS(`dampenerlab.klow.kr`) · staging → 운영(server → dampenerlab·admin·brand) | 대기 | ✗ | | |
+| 51 | dampenerlab B | **`klow_dampenerlab` 레포 + 상품 페이지 클론 + Konva 편집기 전 기능** — 원본 템플릿(인쇄 영역·목업·출력 배율) 실측 이식 · 사진/텍스트(폰트 11·색 15)/디자인 소스 6폴더 76개/배경색/레이어/undo-redo/앞뒤 면 · 모양별 클립 · 케이스 편집 모달 · 인쇄 PNG(댐프너 1865px · 케이스 3900×2600). 자산은 `public/assets/`(대표님 허락). 사용자 지시로 A~C 를 한 세션에 | 완료(로컬) | ✗ | 2026-10-29 | - / - / - / - / (이 커밋) · klow_dampenerlab `0f74493` |
+| 52 | dampenerlab C | **체크아웃·결제·제작 파일 화면 + 배포** — 체크아웃(배송지·국가 규칙·동의 3+1) → 디자인 업로드 → 주문 → Eximbay → `/checkout/redirect`·`complete` ✅ · 어드민 주문 상세 + 브랜드 발송대기 상세에 디자인 미리보기·인쇄 파일 ✅ · 서버 `printUrl`/`previewUrl` 저장 ✅. **남은 것: 통관 품목(HS)·판매가(사용자) → staging 병합·DB migrate → Vercel 프로젝트 + DNS → 운영** | 진행 중(코드 완료) | ✗ | 2026-10-29 | 31182d3 / a65fb37 / e26cdc4 / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1186,12 +1186,12 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 다음 단계가 알 것:
 ```
 
-### dampenerlab — 50행 (A 서버 완료 · feat 브랜치)
+### dampenerlab — 50~52행 (코드 완료 · feat 브랜치 · 배포 전)
 
-- 문서를 고친 것: `server/modules/dampenerlab.md`(신규) + `server/README.md` 색인 · `plan/dampenerlab/README.md`(원본 실측·결정·열린 질문) · CLAUDE.md 레이아웃.
-- 확인하지 못한 것: Eximbay 실결제 왕복(프론트가 C 단계) — `resultRedirectUrl` 분기는 단위 스펙만. 로컬 실호출은 presign → R2 PUT 200 → `POST /v1/dampenerlab/orders` 201 + 게스트 쿠키 → DB 에 `shopSite`·`customization` 저장 확인.
-- 남은 일: B(51행) → C(52행). staging 병합 전 `klow_server/.env` 를 staging DB 로 되돌릴 것(`STAGING_DB_URL` 줄 참고 — 지금 `DATABASE_URL`/`DIRECT_URL` 이 `ep-restless-sky`, `DAMPENERLAB_*` 2줄 추가됨).
-- 다음 단계가 알 것: 피처 DB 에 개발용 Brand `DampenerLab`(`cmvt37r0n0000umlegmygzwvo`, 임시 category `cosmetics`) + 제품 3개(Square `cmvt37rod0002umlekep502si` · Round `cmvt37rv20004umlecaa0cv0u` · Case `cmvt37rz80006umle5598cg1q`, 임시가 $15/$15/$4). 케이스도 커스텀(실버 뚜껑 한 면) — `customization.kind='case'`. 한 주문 = 제품당 디자인 1개(줄 병합 때문). 로컬 CORS 는 `localhost:*` 허용이라 :3003 바로 된다.
+- 문서를 고친 것: `server/modules/dampenerlab.md` + 색인 · `plan/dampenerlab/README.md`(원본 실측·프론트 설계·열린 질문) · CLAUDE.md 레이아웃 · `klow_dampenerlab/README.md`.
+- 확인하지 못한 것: Eximbay **결제 완료** 왕복(테스트 결제창의 카드 입력은 사람 몫 — 창이 뜨는 것까지 확인) · 어드민/브랜드 주문 상세 실화면(2FA·브랜드 로그인) — tsc·eslint 만. 상세 이미지 속 문구는 한국어 그대로다.
+- 남은 일 (이 순서로): ① 사용자에게 통관 품목·HS 코드(→ `BrandCategory` enum + `common/constants.ts` + klow_admin 미러, 마이그레이션 1개 추가)·판매가·무게 ② staging DB `migrate deploy` → klow_server staging 병합·push → klow_admin·klow_brand ③ klow_dampenerlab GitHub 레포 + Vercel(`NEXT_PUBLIC_API_BASE`) + Cloudflare CNAME `dampenerlab`(사용자) ④ 어드민에서 Brand `DampenerLab`(송화인 정보 포함) + 제품 3개(이름에 Square/Round/Case 포함 — 프론트가 이름으로 짚는다) ⑤ Railway env `DAMPENERLAB_BRAND_ID`·`DAMPENERLAB_FRONTEND_URL`·`CORS_ORIGIN` 추가 ⑥ 테스트 결제 → EFS 송장 1건 → 운영.
+- 다음 단계가 알 것: `klow_server/.env` 가 지금 `ep-restless-sky` + `DAMPENERLAB_*` 2줄 — staging 작업 전 `STAGING_DB_URL` 로 되돌릴 것. 피처 DB 개발 데이터: Brand `cmvt37r0n0000umlegmygzwvo`(임시 category `cosmetics`) · 제품 3개(임시가 $15/$15/$4) · pending 테스트 주문 2건. 한 주문 = 제품당 디자인 1개(서버 줄 병합). 브랜드당 5개 한도가 그대로라 댐프너+케이스 ≤ 5.
 
 ### buyer-sample-package — 47행 (staging 배포 완료)
 

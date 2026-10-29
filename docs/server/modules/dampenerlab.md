@@ -23,7 +23,7 @@
 
 - `dampener` — `shape: square|round` · `color: white|yellow|pink|orange|red|skyblue|green|darkgreen|navy|black`(원본 목업 이미지 파일명 slug) · `sides: same|different` · `front` · `back`(different 일 때만, 필수)
 - `case` — `color: silver` · `front`(뚜껑 한 면)
-- 면(`front`/`back`) = `{printKey, previewKey, design?}` — 키는 `dampenerlab/designs/` 접두만 통과, `design`(편집기 노드 트리)은 해석하지 않고 200,000자 상한만.
+- 면(`front`/`back`) = `{printKey, previewKey, design?}` — 저장 때 서버가 `printUrl`·`previewUrl`(공개 R2 URL)을 덧붙인다(어드민 `orders/[id]`·브랜드 발송대기 상세가 그대로 연다) — 키는 `dampenerlab/designs/` 접두만 통과, `design`(편집기 노드 트리)은 해석하지 않고 200,000자 상한만.
 
 케이스처럼 디자인 없이 사는 제품은 `order.items` 에만 넣는다(디자인 줄은 최소 1개).
 
