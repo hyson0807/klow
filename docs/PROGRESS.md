@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 54행 — 바이어 공간 리뉴얼(2026-10-30, 트랙 밖 요청)은 staging 배포 완료**(klow_server `9be7883` → klow_web `816922b`). 다음: staging 실화면 확인 → 운영 배포(server → web). `§9` 54행 메모.
+
 **`§7` 50~52행 — dampenerlab(2026-10-29, 사용자 지시로 A~C 한 세션).** 아이템샵 대표님의 커스텀 댐프너를 `dampenerlab.klow.kr` 에서 해외 판매(원본 페이지 영어 클론 + Konva 편집기 + KLOW Eximbay·EFS). **코드 완료** — 네 레포 모두 git `feat/dampenerlab`(klow_server `e80766a`·`31182d3` · klow_admin `a65fb37` · klow_brand `e26cdc4` · 신규 klow_dampenerlab `0f74493`, **원격 없음·push 안 함**), DB 브랜치 `ep-restless-sky`. 로컬 왕복 확인: 편집 → 체크아웃 → R2 업로드 → 주문 → Eximbay **테스트 결제창 열림**(fgkey 통과) · 실패 return 303 → 사이트 실패 화면. 다음: ⚠️ **통관 품목·HS 코드 + 판매가(사용자)** → staging(DB migrate → server → admin·brand) → Vercel 프로젝트 + `dampenerlab.klow.kr` DNS → 어드민에서 브랜드·제품 생성 + Railway env 3개 → 테스트 결제 1건 → 운영. `§9` 50행 메모.
 
 **`§7` 49행 — 어드민 송화인·정산 계좌 수정(2026-10-29, 트랙 밖 요청)은 staging 배포 완료**(사용자 지시 · klow_server `35bdcec` → api-staging 라우트 확인 → klow_admin `21a921e` push). 다음: admin-staging 브랜드 상세 > 구독 관리에서 실저장 확인 → 운영 배포(server → admin, 스키마 무변경). ⚠️ 송화인명은 영문만 통과한다 — 한글 송화인명 브랜드는 송화인 카드 저장 때 영문으로 바꿔야 한다.
@@ -1123,6 +1125,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 51 | dampenerlab B | **`klow_dampenerlab` 레포 + 상품 페이지 클론 + Konva 편집기 전 기능** — 원본 템플릿(인쇄 영역·목업·출력 배율) 실측 이식 · 사진/텍스트(폰트 11·색 15)/디자인 소스 6폴더 76개/배경색/레이어/undo-redo/앞뒤 면 · 모양별 클립 · 케이스 편집 모달 · 인쇄 PNG(댐프너 1865px · 케이스 3900×2600). 자산은 `public/assets/`(대표님 허락). 사용자 지시로 A~C 를 한 세션에 | 완료(로컬) | ✗ | 2026-10-29 | - / - / - / - / (이 커밋) · klow_dampenerlab `0f74493` |
 | 52 | dampenerlab C | **체크아웃·결제·제작 파일 화면 + 배포** — 체크아웃(배송지·국가 규칙·동의 3+1) → 디자인 업로드 → 주문 → Eximbay → `/checkout/redirect`·`complete` ✅ · 어드민 주문 상세 + 브랜드 발송대기 상세에 디자인 미리보기·인쇄 파일 ✅ · 서버 `printUrl`/`previewUrl` 저장 ✅. **남은 것: 통관 품목(HS)·판매가(사용자) → staging 병합·DB migrate → Vercel 프로젝트 + DNS → 운영** | 진행 중(코드 완료) | ✗ | 2026-10-29 | 31182d3 / a65fb37 / e26cdc4 / - / (이 커밋) |
 | 53 | remove-buyer-sample | **바이어 공간 샘플 박스·샘플 결제·장바구니 전면 제거(스키마까지)** — 4레포 git `feat/remove-buyer-sample`(server·admin·brand 는 `feat/dampenerlab` 위, web 은 `staging` 위) + DB 브랜치 `ep-billowing-breeze`(사용자 생성). 서버 `buyer-orders` 모듈·`BuyerPackage`·`sampleable`·합포장 송장·`kind` 필터 제거, KLOW 발송인 편집은 shipments 로 이사. 결정 [storefront 2026-10-29](./decisions/storefront.md#2026-10-29). 트랙 밖 요청 — 4레포 순서 배포 + DROP 마이그레이션이라 행. **staging 배포 완료**(2026-10-30 — web·admin·brand → server push, Railway 배포가 마이그레이션 자동 적용) | 완료(staging) | ✗ | 2026-10-30 | 9f6e1c2 / 3950cd7 / 5f5ec5a / 2e34686 / (이 커밋) |
+| 54 | buyer-renewal | **바이어 공간 리뉴얼(update 브랜치) → staging — 문의 중심** — 검색형 홈 · Shop 좌측 필터 · Discuss wholesale/요청 채팅 병합, 샘플박스 제거, 메이저는 서버 데이터로 연결, 제품 상세 MOQ 가격은 로그인 무관 블러, 요청 채팅 상단 바·K 아바타 제거(사이트 헤더 유지), WhatsApp 문의 서버 수신(스키마 무변경). 트랙 밖 요청(2026-10-30) — 2레포 순서 배포라 행. **staging 배포 완료**(server → web) | 완료(staging) | ✗ | 2026-10-30 | c135afe · 9be7883 / - / - / a33a38a · 816922b / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1186,6 +1189,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-renewal — 54행 (staging 배포 완료 · 운영 배포 전)
+
+- 한 것: klow_web `update`(디자인 리뉴얼) → `feat/buyer-renewal` 병합(a33a38a) + /simplify(816922b) → staging ff·push. klow_server `feat/buyer-inquiry-whatsapp`(c135afe·9be7883) → staging push(Railway 배포 사용자 확인).
+- 결정: 제품 상세 MOQ 표는 **로그인해도 금액·(메이저는 수량까지) 흐린 자리표시만** — 메이저 가격 API(`/v1/buyer/major-prices`)를 웹이 더 부르지 않는다. ⚠️ 인디 구간가는 공개 API·RSC 페이로드엔 그대로 있다(화면 가림뿐 — 서버측 은닉은 별도 결정).
+- 바이어 문의 `email` 은 `''` 허용 + `whatsapp` 칸(둘 중 하나 필수). 번호는 `needs` 첫 줄 — 어드민 문의 목록 이메일 칸이 비어 보이면 상세를 볼 것. 컬럼화(`BuyerInquiry.whatsapp`)는 후속 후보.
+- 유지한 staging 결정: 데스크톱 80% 배율(`--z`) — update 의 새 vw/vh 에도 보정을 걸었다. update 디자이너가 100% 기준으로 봤을 수 있어 화면 밀도 확인 필요.
+- 지운 것: `/shop/sample-boxes` · `/shop/discuss/box/*`(staging 에 배포된 적 없음 — 리다이렉트 안 둠) · 데모 제품 · 메이저 주문/가격 카드 컴포넌트 · KbShop/KbBrandsMenu 등.
+- 남은 일: ① staging 실화면(홈 · Shop 필터 · 브랜드관 · 인디/메이저 상세 블러 · /shop/request WhatsApp 실제 전송 → 어드민 문의함) ② 운영 배포 순서 **server → web**(웹 먼저면 WhatsApp 문의가 400) ③ About 콘텐츠 8개 언어 중 새로 쓴 문장 원어민 검수 ④ 일부 남은 샘플 언급(요청 서랍 문구 · leadMagnets · navigation · shippingCountries)
 
 ### remove-buyer-sample — 53행 (코드 완료 · 마이그레이션 대기 · 배포 전)
 

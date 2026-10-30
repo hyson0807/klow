@@ -120,7 +120,9 @@
 
 ### POST `/v1/buyer/inquiries`
 
-Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디자인 "Brand or product"), needs?(≤2000), market?(≤200 · "Business & market"), email, brandSlug?, productId?, qty?, website? }` → `200 { ok: true }`.
+Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디자인 "Brand or product"), needs?(≤2000), market?(≤200 · "Business & market"), email?, whatsapp?(≤40 · 숫자·+·공백·()-), brandSlug?, productId?, qty?, website? }` → `200 { ok: true }`.
+
+- **연락처 = 이메일 또는 WhatsApp**(2026-10-30 — 채팅형 문의의 기본 채널이 WhatsApp 이라 이메일 필수면 문의가 버려졌다). 둘 다 비면(WhatsApp 은 숫자 7자리 이상) 400. WhatsApp 만 오면 `email` 은 `''` 로 저장하고 번호는 `needs` 첫 줄(`WhatsApp: …`, 이미 적혀 오면 그대로)에 둔다 — 컬럼 없음, 스키마 무변경. 운영팀 메일엔 WhatsApp 행이 붙고 `replyTo` 는 생략된다(어드민 목록의 이메일 칸은 비어 보인다 — 상세의 요청 내용 첫 줄을 볼 것).
 
 - `brandSlug`·`productId` 는 **노출 중인 것만** 연결한다(아니면 null로 저장). 제품이 연결되면 그 브랜드도 연결된다.
 - `website` 는 honeypot — 채워져 오면 200 을 주고 저장·메일하지 않되 **warn 로그**(`buyer inquiry dropped by honeypot` · kind·ip·이메일 도메인)를 남긴다. ⚠️ klow_web 의 숨김 입력 DOM `name` 은 `kb_hp_x`(+ 비밀번호 관리자 무시 속성)다 — `website` 로 두었을 때 **브라우저 자동완성이 채워 운영의 진짜 견적 요청이 성공 화면만 띄우고 버려졌다**(2026-10-08). 서버로 보내는 키만 `website` 로 유지한다.
