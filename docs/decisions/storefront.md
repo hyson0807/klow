@@ -371,3 +371,16 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - **카테고리 페이지 `/shop/categories/[slug]` 는 그 카테고리 전용**(인디 + 그 카테고리 메이저) — 제목이 카테고리 이름이라 이 자리에서 다른 카테고리로 바꾸면 제목과 목록이 어긋난다. 다른 카테고리 줄은 그대로 페이지 이동이고 `?type=` 은 들고 간다(브랜드는 풀린다).
 - 올리브영 가져오기 스크립트(`scripts/import-buyer-majors.ts`)도 같은 규칙으로 카테고리를 찾거나 만든다(dry-run 은 `categoriesCreated` 에 적기만).
 - 배포: migrate `major_product_category`(ADD COLUMN + 데이터 — 롤링 안전) → klow_server → klow_admin · klow_web. 구 웹은 `categorySlug` 를 모르니 무해, 구 어드민은 `category` 를 보내 zod 가 버린다(저장 시 카테고리만 안 바뀐다).
+
+<a id="2026-10-29"></a>
+## 바이어 공간에서 샘플 박스·샘플 결제·장바구니를 걷어낸다 — 스키마까지 드롭 · 바이어는 둘러보고 문의한다 (2026-10-29 · 2026-10-14·2026-10-27-2·2026-10-27-3 폐기)
+
+사용자 지시로 바이어 공간의 $100 샘플 박스(큐레이션 `BuyerPackage` + 직접 고른 10개), 박스 장바구니(localStorage `kb.box.v2`), 샘플 주문 결제(Eximbay `Order.kind = buyer_sample`)와 그 뒤를 받치던 운영 흐름(브랜드 '샘플 요청' · 어드민 입고 확인·부분환불 · KLOW 합포장 EFS 송장)을 **통째로** 지웠다. 바이어는 제품을 둘러보고 견적 문의(`BuyerInquiry` — 인디 "Request a quote" · 메이저 주문 요청)만 보낸다.
+
+- **스키마까지 드롭**(사용자 결정 — "코드 깔끔하게"). 마이그레이션 `remove_buyer_sample_orders`: 테이블 `BuyerPackage`·`BuyerPackageItem`·`OrderBrandIntake`·`OrderMajorIntake`·`OrderPartialRefund`, enum `OrderKind`·`OrderBrandIntakeStatus`, `Order.kind`·`buyerUserId`·`buyerNote`, `OrderItem.cancelledAt`·`boxNo`·`boxPackageId`·`boxTitle`·`majorProductId`, `BuyerMajorProduct.sampleable`. `Shipment.brandId` 는 다시 **NOT NULL**(합포장 송장이 없어졌으므로) — `onlyBrandShipments()` 와 EFS 청구의 `klowSamples` 축도 함께 사라졌다.
+- ⚠️⚠️ **`kind` 를 그냥 드롭하면 남은 바이어 주문이 소비자 주문으로 조용히 바뀐다**(정산 후보·어드민 주문 목록·CRM 연락처에 섞인다). 그래서 마이그레이션 맨 앞에서 `kind = 'buyer_sample'` 주문과 그 송장을 지운다. 사용자 판단은 "운영에 실주문 없음/테스트뿐 — 지워도 됨"이었고, 운영 적용 전에 건수를 SELECT 로 다시 본다.
+- **소비자 쪽 `kind: consumer` 필터는 전부 걷었다**(정산 `SETTLEABLE_ORDER_WHERE` · 연락처 `CONTACT_ORDER_WHERE` · 어드민 주문 목록 · 대시보드 주문 유형 · 브랜드관 판매 통계 · 송장 대기 그룹 · 결제 prepare 소유권 · 소비자 주문 조회 `findConsumerOrder`). 모집단이 바이어 주문 0건이 된 뒤라 결과는 같다.
+- **인디 구간표 1행 = 1개 샘플가 규칙은 남긴다**(사용자 결정 — 가격 모델). PDP 구간표의 샘플 행 표시도 그대로고, '박스에 담기'만 없앴다. 메이저 `sampleable` 은 박스 전용이라 지웠다.
+- **KLOW 발송인(`ShopSettings.klowSender*`)은 남긴다** — 현장(onsite) 주문 결제의 Eximbay `ship_to` 전화번호가 여기서 나온다(2026-10-21 PayPal X049). 편집 엔드포인트 `admin/settings/klow-sender` 는 URL 그대로 shipments 모듈로 옮기고, 어드민 편집 버튼은 주문 목록 헤더로 옮겼다.
+- 브랜드 3PL 발송 대기 엑셀의 `Buyer Note` 열도 지웠다 — 소비자 주문은 이 칸을 쓴 적이 없다(바이어 체크아웃 전용 칸이었다).
+- ⚠️ **배포 순서**: klow_web · klow_admin · klow_brand(엔드포인트 호출 중단) → klow_server 코드 → 마이그레이션. DROP 이라 롤링 비안전 — 서버 코드와 마이그레이션은 단일 레플리카 컷오버로 묶거나 두 번에 나눈다.

@@ -19,7 +19,6 @@
 | [customer-reviews/](./customer-reviews/README.md) | 손님(구매자)이 제품 리뷰를 직접 쓴다. 배송완료(EFS 33·47·74 / 국내 발송처리 / 현장 결제+N일)를 cron 이 스캔해 **(주문 × 브랜드) 1통**씩 리뷰 요청 메일을 보내고, 전용 HMAC 토큰 링크로 비로그인 진입해 **그 브랜드 판매중 전 제품 중 자유 선택**해 평점·글·사진을 남긴다. `ReviewRequest` 행의 `@@unique([orderId, brandId])` 가 중복 발송 금지의 정본이고, `Review.source=customer` 는 브랜드가 수정·삭제할 수 없다 |
 | [buyer-platform/](./buyer-platform/README.md) | `klow.kr/` 를 해외 **바이어 공간**(디자인 `KLOWBUYER/`)으로 — 어드민이 브랜드를 골라 올리고 제품별 인증·도매 구간가·스펙·이미지·카테고리·홈 선반을 세팅한다. 원본 `Product`·`Brand`·`B2b*` 에 쓰지 않는 **1:1 오버레이 테이블**, 이미지는 빈 배열 = 브랜드 원본 추종. 로그인·채팅·샘플·결제는 스코프 밖 |
 | [buyer-auth/](./buyer-auth/README.md) | 바이어 공간의 **바이어 계정** — 이메일+비밀번호 로그인·가입(가입 이메일 OTP · 사업자 서류 R2 · 비번 찾기 · 세션 30일 슬라이딩) + 어드민 "바이어 계정"(목록·서류·검수 배지). 소비자 로그인(`klow_sid`)과 테이블·쿠키·라우트 전부 분리 |
-| [buyer-sample-order/](./buyer-sample-order/README.md) | 바이어 **샘플 주문·결제** — 샘플박스를 엑심베이로 결제 → 브랜드가 KLOW 사무실로 발송('발송함') → 어드민 입고 확인·부분환불 → 여러 브랜드를 한 박스에 담아 **EFS 송장 1장(발송인 KLOW)**. 소비자 `Order` 재사용(`kind=buyer_sample`), 브랜드 정산 없음(KLOW 사입 BM) |
 | [buyer-i18n/](./buyer-i18n/README.md) | 바이어 공간 다국어 URL(`/`=en · `/ja` `/zh` …) + 첫 방문 `/` 자동 언어(쿠키 → Accept-Language → Vercel IP 국가). 문구는 Claude 직접 번역, 바이어 DB 데이터는 서버 LLM 번역 캐시. 내부 경로 `kbl/[lang]` + middleware rewrite |
 
 ## 새 트랙을 만들 때

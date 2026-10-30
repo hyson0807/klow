@@ -967,7 +967,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 ### buyer-sample-order — 바이어 샘플 주문 · 결제 · 합포장 송장
 
-스펙: [`plan/buyer-sample-order/`](./plan/buyer-sample-order/README.md) — 결정 D1~D8 은 `README.md`, **빌드 스펙 정본은 `implementation-plan.md`**(§1 게이트 G1~G10 · §2 모델 · §3 API · §4 A·B·C).
+스펙: [`archive/buyer-sample-order/`](./archive/buyer-sample-order/README.md) — 결정 D1~D8 은 `README.md`, **빌드 스펙 정본은 `implementation-plan.md`**(§1 게이트 G1~G10 · §2 모델 · §3 API · §4 A·B·C).
 
 바이어가 샘플박스를 엑심베이로 결제 → 브랜드가 KLOW 사무실로 발송('발송함') → 어드민 입고 확인 → 여러 브랜드를 한 박스에 담아 **EFS 송장 1장(발송인 KLOW)**. 2026-10-14 계획 세션이 24행을 대체했다.
 
@@ -1122,6 +1122,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 50 | dampenerlab A | **댐프너랩 커스텀 댐프너 사이트 — 서버** — `Order.shopSite` + `OrderItem.customization` 마이그레이션 `20261029050441_add_shop_site_and_item_customization`(nullable ADD) · `v1/dampenerlab/{products,uploads/presign,orders}` · `orders.create` 선택 인자 · 결제 return 303/Eximbay 상품 링크를 `shop-sites.ts` env 고정 맵으로. git `feat/dampenerlab` + Neon DB 브랜치 `ep-restless-sky`(사용자 생성). 스펙 [plan/dampenerlab](./plan/dampenerlab/README.md) | 완료(feat 브랜치) | ✗ | 2026-10-29 | e80766a / - / - / - / (이 커밋) |
 | 51 | dampenerlab B | **`klow_dampenerlab` 레포 + 상품 페이지 클론 + Konva 편집기 전 기능** — 원본 템플릿(인쇄 영역·목업·출력 배율) 실측 이식 · 사진/텍스트(폰트 11·색 15)/디자인 소스 6폴더 76개/배경색/레이어/undo-redo/앞뒤 면 · 모양별 클립 · 케이스 편집 모달 · 인쇄 PNG(댐프너 1865px · 케이스 3900×2600). 자산은 `public/assets/`(대표님 허락). 사용자 지시로 A~C 를 한 세션에 | 완료(로컬) | ✗ | 2026-10-29 | - / - / - / - / (이 커밋) · klow_dampenerlab `0f74493` |
 | 52 | dampenerlab C | **체크아웃·결제·제작 파일 화면 + 배포** — 체크아웃(배송지·국가 규칙·동의 3+1) → 디자인 업로드 → 주문 → Eximbay → `/checkout/redirect`·`complete` ✅ · 어드민 주문 상세 + 브랜드 발송대기 상세에 디자인 미리보기·인쇄 파일 ✅ · 서버 `printUrl`/`previewUrl` 저장 ✅. **남은 것: 통관 품목(HS)·판매가(사용자) → staging 병합·DB migrate → Vercel 프로젝트 + DNS → 운영** | 진행 중(코드 완료) | ✗ | 2026-10-29 | 31182d3 / a65fb37 / e26cdc4 / - / (이 커밋) |
+| 53 | remove-buyer-sample | **바이어 공간 샘플 박스·샘플 결제·장바구니 전면 제거(스키마까지)** — 4레포 git `feat/remove-buyer-sample`(server·admin·brand 는 `feat/dampenerlab` 위, web 은 `staging` 위) + DB 브랜치 `ep-billowing-breeze`(사용자 생성). 서버 `buyer-orders` 모듈·`BuyerPackage`·`sampleable`·합포장 송장·`kind` 필터 제거, KLOW 발송인 편집은 shipments 로 이사. 결정 [storefront 2026-10-29](./decisions/storefront.md#2026-10-29). 트랙 밖 요청 — 4레포 순서 배포 + DROP 마이그레이션이라 행. **staging 배포 완료**(2026-10-30 — web·admin·brand → server push, Railway 배포가 마이그레이션 자동 적용) | 완료(staging) | ✗ | 2026-10-30 | 9f6e1c2 / 3950cd7 / 5f5ec5a / 2e34686 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1185,6 +1186,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### remove-buyer-sample — 53행 (코드 완료 · 마이그레이션 대기 · 배포 전)
+
+- 문서를 고친 것: 결정 `storefront.md#2026-10-29` · CLAUDE.md(모듈 목록 · 바이어 샘플 주문 행 삭제 · 결정 색인) · `server/modules/{buyer,payment,shipments}.md`(KLOW 발송인 엔드포인트는 shipments 로) · `buyer-orders.md` 삭제 · `plan/buyer-sample-order/` → `archive/`.
+- ⚠️ 마이그레이션 `20261029132355_remove_buyer_sample_orders` 생성됨(사용자 `--create-only`) + SQL 맨 앞에 정리 구문 추가 → 피처 DB(`ep-billowing-breeze`)에 적용 완료(사용자 `migrate dev`, 2026-10-29 — 주문 4132건 그대로 · `Shipment.brandId` NOT NULL 확인). 피처 DB(`ep-billowing-breeze`) 실측: buyer_sample 주문 0 · `brandId IS NULL` 송장 0 · 패키지 3. 정리 구문(멱등): `DELETE FROM "Shipment" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "kind" = 'buyer_sample');`(ShipmentItem cascade) · `DELETE FROM "PgSettlementRecord" WHERE "orderId" IN (같은 서브쿼리);` · `DELETE FROM "Order" WHERE "kind" = 'buyer_sample';`(OrderItem·입고·부분환불 cascade, Review·SeedingLink 는 SET NULL).
+- ⚠️⚠️ 운영 적용 전 운영 DB SELECT: `SELECT "paymentStatus", count(*) FROM "Order" WHERE "kind"='buyer_sample' GROUP BY 1` — 47행에서 운영 결제가 열려 있었다. paid/refunded 가 있으면 멈추고 사용자 확인(정리 구문이 결제 기록을 지운다).
+- ✅ 2026-10-30 staging: 네 레포 `feat/remove-buyer-sample` → `staging` ff·push(admin·brand 는 사용자 지시로 댐프너랩 UI 커밋 `a65fb37`·`e26cdc4` 도 함께). 순서 web·admin·brand → server. ⚠️ **staging Railway 배포가 `migrate deploy` 를 자동으로 돈다**(03:13 UTC 적용 확인 — 수동 실행 전에 이미 적용돼 있었다). staging DB 는 사전에 buyer_sample 0 · brandId NULL 송장 0 · 패키지 3. 확인: api-staging `/v1/buyer/packages` 404 · `klow-sender` 401 · staging.klow.kr `/shop/packages`·`/shop/checkout` 308 · `/just-be-me`·`/cart` 200.
+- 남은 일 (이 순서로): ① staging 실화면(어드민 KLOW 발송인·바이어 홈 구성 · 소비자 결제창) ② 운영 DB buyer_sample 건수 SELECT(위 ⚠️⚠️) ③ 운영: web·admin·brand → server(운영도 배포가 마이그레이션을 자동으로 도는지 먼저 확인 — 돈다면 코드와 DROP 이 같은 배포에 실린다).
+- 다음 단계가 알 것: `klow_server/.env` 가 지금 `ep-billowing-breeze`(이전 값은 파일 안 주석). 브랜드 3PL 발송 대기 엑셀에서 `Buyer Note` 열이 빠졌다(항상 비어 있던 열). 어드민 'KLOW 발송인' 버튼은 주문 목록 헤더로 옮겼다(현장 결제 `ship_to` 전화번호). klow_web 은 `/shop/{packages,checkout,account/requests}/*` 를 목록·계정으로 301(`next.config.js`, 7개 언어 접두 포함)하고 첫 마운트에 옛 박스 localStorage 키를 지운다(`KbBuyer.tsx`). 새 7개 언어 번역 43건은 원어민 검수 전. 용어집 `plan/buyer-i18n/glossary.md` 의 sample box·checkout 항목은 남아 있다.
 
 ### dampenerlab — 50~52행 (코드 완료 · feat 브랜치 · 배포 전)
 

@@ -15,7 +15,6 @@
 | `BuyerPriceTier` | 도매 구간가(USD 센트). **MOQ 의 정본**(아래) |
 | `BuyerCategory` | 홈 카테고리 탭 |
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
-| `BuyerPackage` · `BuyerPackageItem` | **$100 샘플 박스**(2026-10-27) — 어드민이 인디 제품(`buyerProductId`) **정확히 10개**로 구성하는 큐레이션 박스. `priceUsdCents`(기본 10000) · `published` · `sort`. 공개 = `published` + 10칸 전부 노출 가능·샘플가 있음(하나라도 빠지면 공개 화면·주문에서 자동으로 숨는다 — `buyer-public.service#packageRows`). 주문은 [buyer-orders](./buyer-orders.md) 의 `boxes` |
 | `BuyerShelf` · `BuyerShelfItem` · `BuyerShelfBand` | 홈 큐레이션 선반(수동으로 고른 제품 — **`kind` 인디/메이저, 섞지 않는다**: 항목은 `buyerProductId`·`majorProductId` 중 종류에 맞는 하나만, 서비스가 보장 · DB CHECK 없음) + 선반 안 필터 칩(band — 제품 속성이 아니라 그 선반 한정 분류, `BuyerShelfItem.bandId` 로 제품당 0~1개, 칩 삭제 시 `SetNull`) |
 | `BuyerBrandVideo` | 브랜드 마케팅 영상(유튜브·인스타, 브랜드당 최대 12, `sort`). `provider`·`externalId`·`vertical` 은 **서버가 url 을 파싱한 값이 정본**(`video-url.ts`). `thumbnailUrl` = R2(인스타 자동 복사 또는 수동 업로드), null 이면 유튜브는 `i.ytimg.com` 파생 · 인스타는 로고 카드 |
 | `BuyerTranslation` | `?lang=` 번역 캐시 — `(entityType, entityId, locale)` 유니크, `fields` Json(번역된 필드만), 스테일 판정은 `sourceHash`(원문 필드 해시). 다형이라 FK 없음(원본이 지워진 행은 남지만 읽히지 않는다). 아래 [`?lang=` 번역](#lang-번역) |
@@ -69,10 +68,6 @@
 | PUT | `/admin/buyer/shelves/order` | 순서 |
 | PATCH/DELETE | `/admin/buyer/shelves/:id` | 수정 / 삭제 — 항목이 있는 선반의 `kind` 변경은 400 `shelf_kind_locked` |
 | PUT | `/admin/buyer/shelves/:id/items` `{items: [{productId, tag?, bandId?}]}` | 선반 제품 통째 교체(최대 48). `productId` = 인디 선반은 `Product.id`, 메이저 선반은 `BuyerMajorProduct.id` — 종류가 다르거나 바이어 공간에 없는 제품은 400 `product_not_added`. `bandId` 는 이 선반의 필터만(400 `band_not_found`), 생략·null = 필터 없음 |
-| GET/POST | `/admin/buyer/packages` | 샘플 박스 목록(칸 순서 제품 + 각 `visible`·`sampleable`, 박스 `ready`=공개 조건 충족 · `hidden`=공개인데 지금 숨음) / 추가 `{title, tagline?, priceUsdCents?}` — **만들 때는 항상 비공개** |
-| PUT | `/admin/buyer/packages/order` | 순서 |
-| PATCH/DELETE | `/admin/buyer/packages/:id` | 수정 `{title?, tagline?, priceUsdCents? ($1~$10,000 센트), published?}` — `published: true` 는 10/10 + 전부 sampleable 이어야(400 `package_incomplete` / `package_unavailable_items` + `productIds`) / 삭제(결제된 주문은 `OrderItem.boxPackageId` 스냅샷이라 남는다) |
-| PUT | `/admin/buyer/packages/:id/items` `{productIds}` | 박스 구성 통째 교체(0~10, 순서 = 칸 순서, 중복 400). id 는 인디 `Product.id` · 메이저 `BuyerMajorProduct.id` 섞어서(2026-10-27). 어느 쪽에도 없으면 400 `product_not_added`, `sampleable` 꺼진 메이저 400 `major_not_sampleable`. 목록 칸에 `kind: 'indie'|'major'`. **공개 중인 박스는 바꾼 뒤에도 공개 조건을 만족해야 저장된다** |
 | PUT | `/admin/buyer/shelves/:id/bands` `{bands: [{id?, label, note?}]}` | 선반 필터 칩 통째 교체(최대 12, 라벨 중복 400). 배열 순서 = 칩 순서. `id` 있는 칩은 유지(제품 배정 보존), 빠진 칩은 삭제되고 그 제품은 필터 없음으로. 남의 선반 칩 id 는 400 `band_not_found` |
 | GET | `/admin/buyer/inquiries?status=new\|handled&kind=quote\|brand_request\|major_order` | 문의 목록(최신순 500) + 연결 브랜드·제품·메이저 브랜드·바이어 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
@@ -87,8 +82,7 @@
 
 | Method | Path | Throttle | 기능 |
 |---|---|---|---|
-| GET | `/v1/buyer/packages?lang=` | 전역 | 공개 샘플 박스 전부 `[{id, title, tagline, priceUsdCents, products: 카드 10개(각 `kind: 'indie'|'major'` — 메이저는 가격 없는 메이저 카드)}]` — klow_web `/shop/packages` 목록·상세(상세는 여기서 id 로 고른다) |
-| GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands, packages }`(packages = 위와 같은 공개 샘플 박스) — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
+| GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
@@ -97,7 +91,6 @@
 - **G12**: 없는 slug/id 와 비공개·미완비·미승인은 **같은 404**(`brand not found` / `product not found`) — 비공개 행의 존재를 새지 않는다. 브랜드는 노출 제품이 1개 이상일 때만 존재한다.
 - 카드 `priceUsdCents` = MOQ 구간 단가, `moq` = 둘째 행 시작 수량, `sampleUsdCents` = 1행 단가, `benefits` = 베네핏 키.
 - ⚠️ **$7 샘플은 서버가 정하지 않는다**(2026-10-22) — 운영팀이 구간표 1행에 넣은 실가격이 정본이고, klow_web 은 1행이 700센트인 제품을 "$7 샘플 대상"으로 본다. 덮어쓰기 코드 없음.
-- 샘플 주문(`buyer-orders`) 한 건 최대 **10개**(`BUYER_MAX_SAMPLE_SKUS` — klow_web `KB_MAX_SAMPLE_SKUS` 미러, 2026-10-22 에 50 → 10).
 - 조회는 throttle 을 조이지 않는다 — klow_web 은 ISR(`revalidate: 60`)로 받는다(Vercel egress IP 공유).
 - 프런트: klow_web `app/(kb)/kbl/[lang]/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
 - 서버 캐시 없음. 매 요청 노출 후보를 include 1회로 받아 메모리 판정(규모 수백 행).
@@ -114,7 +107,6 @@
 | `product` | `BuyerProduct` | `about` · `forText` · `keyActives[]` | PDP 만(홈·목록이 상세 문구까지 번역하면 첫 방문 비용이 커진다) |
 | `category` | `BuyerCategory` | `name` | 홈(노출 카테고리만) · PDP |
 | `shelf` / `shelfItem` / `band` | 선반 · 아이템 · 칩 | `title`·`lede` / `tag` / `label`·`note` | 홈 |
-| `package` | 샘플 박스 | `title`·`tagline` | 홈 · `/packages` |
 | `heroSlide` | `BuyerHeroSlide` | `caption` | 홈 |
 | `video` | `BuyerBrandVideo` | `title` | 브랜드 |
 | `brand` | `Brand.description` (브랜드관 한 줄 소개) | `intro` | 브랜드 |
@@ -140,7 +132,6 @@ Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디
 
 > 2026-10-27: 메이저 제품 카테고리 = 인디와 공용 `BuyerCategory`(`BuyerMajorProduct.categoryId`, SetNull) — 어드민 PATCH 는 `categoryId`(없는 id 400 `category_not_found`), 공개 카드·상세는 `category`(이름)·`categorySlug`. 옛 자유 텍스트 `category` 칸은 dormant(마이그레이션 `major_product_category` 가 그 값으로 카테고리를 만들어 연결). 홈 `categories` 집계·카테고리 삭제 409 가 메이저도 센다. 결정 [`storefront.md#2026-10-27-4`](../../decisions/storefront.md#2026-10-27-4).
 >
-> 2026-10-27: 메이저 제품 `sampleable`(어드민 PATCH, 기본 false)이 켜지면 $100 샘플 박스에 담긴다 — 공개 카드·상세에 `sampleable` 불린(가격은 여전히 BuyerGuard 전용). 판정 `isBoxableMajor`(`buyer-major.mapper.ts`). 결정 [`storefront.md#2026-10-27-3`](../../decisions/storefront.md#2026-10-27-3).
 
 Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본 `Brand`/`Product` 가 없다 — 바이어 전용 3테이블을 **어드민이 직접 만든다**. 1차 벤더 공급이라 샘플이 없고 MOQ 로만 판다(로그인 → MOQ 가격 → 주문 요청 → 운영팀 PI). 본문은 **영어만**(번역 없음 — klow_web 비영어판은 noindex + canonical en). 결정 [storefront 2026-10-22](../../decisions/storefront.md#2026-10-22).
 
@@ -159,7 +150,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/v1/buyer/major-brands/:slug/prices` | **BuyerGuard** | `{ products: [{id, tiers: [{minQty, unitUsdCents}]}] }` — 브랜드 전 제품, 브랜드관·상세 공용 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |
 
-`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient, msrpUsdCents, sampleable}`.
+`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient, msrpUsdCents}`.
 
 **어드민** (`admin-buyer-major.controller.ts`, AdminGuard — 이 테이블의 id 로 가리킨다)
 
