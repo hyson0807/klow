@@ -400,3 +400,5 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - 생성은 cron 이 아니라 인메모리 워커(동시 3, 부팅 시 `running` → `queued` 복구)다 — **단일 레플리카 전제**. 레플리카를 늘리면 조건부 `updateMany` 로 겹쳐 집지는 않지만 동시 생성 수가 레플리카 수만큼 곱해진다.
 - 마이그레이션 `20261031062753_add_buyer_major_image_drafts` 는 사용자 지시로 **staging DB(`ep-icy-flower`)에 직접 `migrate dev`**(DB 브랜치 없이 — klow Neon 프로젝트가 MCP 계정에 없어 fork 불가). CREATE 2 + enum + default ADD COLUMN 이라 롤링 안전·백필 없음.
 - **프롬프트는 어드민 편집(같은 날 사용자 요청)** — 계획서 D6(서버 상수 + 버전, 편집 UI 범위 밖)을 바꿨다. 저장마다 `BuyerMajorImagePrompt` 새 버전 행(덮어쓰지 않음)이라 어떤 결과가 어떤 문장으로 만들어졌는지 언제든 되짚을 수 있다. ⚠️ 새 버전을 저장하면 '전체 생성'이 이미 결과가 있는 제품까지 다시 만든다(비용) — 어드민 모달·카드(`프롬프트 v1(이전)`)가 이걸 알린다. 마이그레이션 `20261031070433_add_buyer_major_image_prompts` 도 staging DB 직접.
+- **수정 요청(같은 날 사용자 요청)** — 생성 결과에 한 문장 요청을 달아 다시 만든다. 처음부터 다시 만들면 좋았던 부분까지 바뀌므로 **직전 결과를 고칠 대상, 원본을 라벨·로고 정답으로 함께 넣는다**(gpt-image 편집은 여러 장 입력을 받는다). 실측 1회: 요청한 d'Alba 로고만 추가되고 구도·조명·배경 유지, $0.061. 결과는 새 초안이라 G2(생성 ≠ 적용)·되돌리기 흐름이 그대로 산다. 마이그레이션 `20261031071752_add_buyer_major_image_revisions`.
+- **운영 배포 2026-10-31(사용자)** — klow_server `50971f8` · klow_admin `e0c86ad` 를 staging·main 에 함께. 이 main 에는 53행(바이어 샘플 제거 — DROP 마이그레이션)도 같이 실렸다.
