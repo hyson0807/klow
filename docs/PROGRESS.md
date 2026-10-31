@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 55·56행 — buyer-major-images.** 어드민에서 메이저 브랜드 이미지를 AI 로 통일. **55행 A(klow_server)는 2026-10-31 에 끝났다 — staging DB 직접 migrate + klow_server `0d5e7e7` staging 배포 완료**(사용자 지시). **다음: 56행 B(klow_admin 제작 페이지)** — `§9` 55행 메모를 먼저 읽는다(원본 사진 고르기 UI 필요 · 적용 규칙 (a) 확정 질문 남음). 사용자 준비물: staging·운영 Railway 에 `OPENAI_ADMIN_KEY`. ⚠️ 운영 배포 전 `§7` 53행(sampleable DROP)이 운영에 먼저 나가야 한다(같은 서버 레포 순서). 관련 실데이터: 운영 메이저 50 브랜드 · 579 제품 · 이미지 2,146.
+**`§7` 55·56행 — buyer-major-images 는 2026-10-31 한 세션에 A·B 모두 끝났다 — staging 배포 완료**(klow_server `0d5e7e7` · klow_admin `95de654`, staging DB 에 마이그레이션 직접 적용). admin-staging `/buyer/major/images` 실화면 확인(비용 패널 · d'Alba 카드 · 확인창 · 원본 고르기). 일괄 생성은 사용자 결정으로 아직 안 돌린다. **다음: 운영 배포**(사용자 확인 후) — ⚠️ `§7` 53행(sampleable DROP)이 운영에 먼저 → 운영 DB `migrate deploy` → klow_server → klow_admin · 운영 Railway 에 `OPENAI_ADMIN_KEY`. 적용 규칙 (a) 확정 질문 남음. `§9` 55행 메모.
 
 **`§7` 54행 — 바이어 공간 리뉴얼(2026-10-30, 트랙 밖 요청)은 staging 배포 완료**(klow_server `9be7883` → klow_web `816922b`). 다음: staging 실화면 확인 → 운영 배포(server → web). `§9` 54행 메모.
 
@@ -1146,7 +1146,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 53 | remove-buyer-sample | **바이어 공간 샘플 박스·샘플 결제·장바구니 전면 제거(스키마까지)** — 4레포 git `feat/remove-buyer-sample`(server·admin·brand 는 `feat/dampenerlab` 위, web 은 `staging` 위) + DB 브랜치 `ep-billowing-breeze`(사용자 생성). 서버 `buyer-orders` 모듈·`BuyerPackage`·`sampleable`·합포장 송장·`kind` 필터 제거, KLOW 발송인 편집은 shipments 로 이사. 결정 [storefront 2026-10-29](./decisions/storefront.md#2026-10-29). 트랙 밖 요청 — 4레포 순서 배포 + DROP 마이그레이션이라 행. **staging 배포 완료**(2026-10-30 — web·admin·brand → server push, Railway 배포가 마이그레이션 자동 적용) | 완료(staging) | ✗ | 2026-10-30 | 9f6e1c2 / 3950cd7 / 5f5ec5a / 2e34686 / (이 커밋) |
 | 54 | buyer-renewal | **바이어 공간 리뉴얼(update 브랜치) → staging — 문의 중심** — 검색형 홈 · Shop 좌측 필터 · Discuss wholesale/요청 채팅 병합, 샘플박스 제거, 메이저는 서버 데이터로 연결, 제품 상세 MOQ 가격은 로그인 무관 블러, 요청 채팅 상단 바·K 아바타 제거(사이트 헤더 유지), WhatsApp 문의 서버 수신(스키마 무변경). 트랙 밖 요청(2026-10-30) — 2레포 순서 배포라 행. **staging 배포 완료**(server → web) | 완료(staging) | ✗ | 2026-10-30 | c135afe · 9be7883 / - / - / a33a38a · 816922b / (이 커밋) |
 | 55 | buyer-major-images A | **klow_server — 메이저 제품 이미지 AI 리터치: 스키마 + 생성 워커 + 어드민 API** — `BuyerMajorImageDraft` + `BuyerMajorProduct.originalImages` + `OpenAiCreditTopup` · `gpt-image-2.5-sunburst` 편집 → sharp **contain** 4:5 WebP → R2 · 테스트/전체 적재·재생성(`sourceUrl` 로 원본 선택)·적용·되돌리기 API · 비용 기록 + 조직 사용액(`OPENAI_ADMIN_KEY`) + 충전 기록 → 남은 예산 근사. 사용자 결정: 일괄 생성은 안 돌림(시스템만) · 최신 모델 high · 확인창에 비용. **사용자 지시로 staging DB 직접 `migrate dev` + staging 배포 완료**(api-staging 401 확인). 실생성 1장 $0.052·33초. 스펙 [plan/buyer-major-images](./plan/buyer-major-images/README.md) · 결정 [storefront 2026-10-31](./decisions/storefront.md#2026-10-31) | 완료(staging) | ✗ | 2026-10-31 | 0d5e7e7 / - / - / - / (이 커밋) |
-| 56 | buyer-major-images B | **klow_admin — 이미지 제작 페이지 + 배포** — 상단 비용 패널(이번 달 OpenAI 사용액·브랜드 생성 비용·남은 예산 근사·충전 기록) · 브랜드 선택 → 테스트 1장 → 원본/결과 비교 → 브랜드 전체 생성(확인창에 예상 비용/남은 예산 · 진행 그리드·폴링) → 선택 적용·되돌리기 · staging → 운영(server → admin, Railway 에 `OPENAI_ADMIN_KEY`) | 대기 | ✗ | 2026-10-31 | - / - / - / - / - |
+| 56 | buyer-major-images B | **klow_admin — 이미지 제작 페이지 + 배포** — `/buyer/major/images`(메이저 목록 헤더 '이미지 제작'): 비용 패널(조직 사용액·브랜드 생성 비용·남은 예산 근사·장당 실측 + 충전 기록 모달) · 브랜드 선택(sessionStorage) · 원본|결과 4:5 카드 · 테스트 1장 · 전체 생성 확인창(대상 × 장당 + 남은 예산) · 4초 폴링 · 생성 완료 기본 체크 → 선택 적용 · 되돌리기·버리기·재생성·**원본 사진 고르기**. 같은 세션에서 이어 진행(사용자 지시). **staging 배포 + admin-staging 실화면 확인 완료**(생성은 안 누름). 운영 배포 대기 | 완료(staging) | ✗ | 2026-10-31 | - / 95de654 / - / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1211,13 +1211,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 다음 단계가 알 것:
 ```
 
-### buyer-major-images — 55행 (A 완료 · staging 배포 완료)
+### buyer-major-images — 55·56행 (A·B 완료 · staging 배포 완료)
 
 - **문서를 고친 것**: `server/modules/buyer.md`(메이저 이미지 절 + env 3개) · 결정 `storefront.md#2026-10-31` + README·CLAUDE.md 색인 · CLAUDE.md e2e ERROR 줄 수(6) · `klow_server/.env.example`.
 - **계획서와 다르게 한 것**: ① 모델 `gpt-image-2.5-sunburst`(gpt-image-1 종료) — 실측 **$0.052/장**(추정의 1/5) ② 4:5 는 **contain**(크롭하니 뚜껑이 잘렸다) ③ 테스트·재생성에 `sourceUrl`(그 제품 원본 사진 중 하나) — staging d'Alba Mild Sun Cream 의 `images[0]` 이 질감 사진이라 없는 튜브를 지어냈다 ④ 목록 응답에 `sourceImages[]` ⑤ `sharp` dev → dependency ⑥ 컨트롤러는 새 파일 `admin-buyer-major-image.controller.ts` ⑦ DB 브랜치 없이 staging DB 직접(사용자 지시).
 - **확인한 것**: staging DB + 실 OpenAI·R2 로 테스트 1장 → done(WebP 1024×1280 34KB) · 중복 적재 재사용 · 적용(images 5→6, 백업) · 되돌리기 원복 · 부팅 시 running 복구 · 키 없음 503 · Admin 키로 이번 달 조직 사용액 $32.48 · 충전 기록 → 남은 예산 · typecheck·jest 1731·e2e·`npm run start`(라우트 502) · api-staging 401.
 - **확인하지 못한 것**: contain 프레이밍을 **실생성으로는 안 봤다**(승인 1장을 크롭 버전에 썼다 — 단위 테스트만). B 의 첫 테스트 1장에서 눈으로 볼 것. staging 에 테스트 초안 1건(d'Alba, `done`·적용 해제 상태)이 남아 있다.
-- **남은 일 (이 순서로)**: 56행 B(어드민 화면 — 원본 썸네일 줄 + 원본 바꿔 재생성 · 비용 패널 · 확인창 `estimatePerImageMicros`) → 사용자가 Railway 에 `OPENAI_ADMIN_KEY` → 운영(53행 운영 배포 뒤 · migrate deploy → server → admin).
+- **B(같은 세션, klow_admin `95de654`)**: `/buyer/major/images` — tsc·eslint·build 통과, admin-staging 실화면 확인(로그인은 사용자) — staging Railway 엔 이미 `OPENAI_ADMIN_KEY` 가 있었다(조직 사용액 $32.53 표시). 생성·적용 버튼은 누르지 않았다. 원본 고르기 모달에서 d'Alba 제품들 사진 절반이 질감 컷임을 봤다 — **전체 생성 전에 카드마다 원본을 훑어볼 것**.
+- **남은 일 (이 순서로)**: (사용자) 적용 규칙 (a) 확정 · 소브랜드 1개로 실생성 → contain 결과 눈으로 확인 → 운영 배포(53행 운영 배포 뒤 · 운영 DB migrate deploy → server → admin · 운영 Railway `OPENAI_ADMIN_KEY`).
 - **다음 단계가 알 것**: 적용 규칙 (a)(`[결과, ...원본]`)는 사용자가 일괄 생성을 미뤄 **확정 질문을 안 했다** — 운영 적용 전에 물을 것. 금액은 전부 micro-USD 정수. 조직 사용액은 다른 프로젝트 사용분도 포함한다(화면 문구에 표시).
 
 ### buyer-renewal — 54행 (staging 배포 완료 · 운영 배포 전)

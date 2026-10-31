@@ -179,6 +179,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 - **워커**(`buyer-major-image-worker.service.ts`) — 적재 API 는 `queued` 행만 만들고 즉시 반환(202), 워커가 동시 `BUYER_IMAGE_GEN_CONCURRENCY`(기본 3)장씩 집는다. 원본 fetch(허용 오리진 = `R2_PUBLIC_BASE` + `BUYER_IMAGE_SOURCE_ORIGINS`, https · 리다이렉트 거부 · ≤20MB) → `images.edit`(`gpt-image-2.5-sunburst` · high · 1024×1536, SDK 재시도 3회) → `sharp` 로 **contain** 1024×1280(모서리 배경색으로 채움 — 자르지 않는다) WebP ≤250KB → R2 `brands/buyer/major-gen/<uuid>.webp`. 실패는 그 행만 `failed` + 사유. 부팅 시 `running` → `queued` 복구(G6). 단일 레플리카 전제(집기는 조건부 `updateMany`).
 - **비용** — 응답 `usage` 토큰 × 단가(`buyer-major-image.prompts.ts` 상수: 텍스트 입력 $5 · 이미지 입력 $8 · 출력 $30 / 1M)를 `costUsdMicros` 에 기록. 2026-10-31 실측 1장 = **$0.052**, 33초.
 - ⚠️ **프롬프트를 고치면 `BUYER_MAJOR_IMAGE_PROMPT_VERSION` 을 올린다** — 중복 적재 판정(G4)·`skipDone` 이 버전 단위다.
+- 프런트: klow_admin `/buyer/major/images`(메이저 목록 헤더 '이미지 제작') — 진행 중이면 목록 GET 을 4초 폴링(숨은 탭 정지), 생성 완료 초안 기본 체크 → 선택 적용.
 - ⚠️ `OPENAI_ADMIN_KEY` 는 `openai-usage.client.ts` 에서만 읽는다(G9 — 조직 관리 권한 키). 응답·로그·에러 문구에 싣지 않는다.
 
 **어드민** (`admin-buyer-major-image.controller.ts`, AdminGuard — 비용이 드는 건 POST 적재·재시도뿐, GET 은 생성 0회)
