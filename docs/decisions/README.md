@@ -6,7 +6,7 @@
 | 주제 | 파일 | 건수 |
 |---|---|---|
 | 제품 · 가격 · 번역 | [`products.md`](./products.md) | 11 |
-| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 19 |
+| 브랜드관 · 프로모션 · 방문 통계 | [`storefront.md`](./storefront.md) | 20 |
 | 배송 · 시딩 · EFS 송장 | [`shipping-seeding.md`](./shipping-seeding.md) | 20 |
 | 정산 | [`settlement.md`](./settlement.md) | 10 |
 | EFS 배송비 후청구 | [`efs-billing.md`](./efs-billing.md) | 2 |
@@ -112,3 +112,4 @@
 | `2026-10-16` | [바이어 공간 다국어 = 언어별 URL 이 각각 색인된다 (canonical 은 자기 언어 · hreflang 8개 + x-default · UI 문구는 직접 번역 사전 `kb` · 서버로 가는 값은 영어 · 티어 배지는 번역 안 함)](./storefront.md#2026-10-16) | storefront |
 | `2026-10-14` | [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400)](./shipping-seeding.md#2026-10-14) | shipping-seeding |
 | `2026-10-31` | [메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용 · 원본 백업 · 자르지 않고 채운다 · 원본 사진은 고른다 · sharp 는 런타임 의존성](./storefront.md#2026-10-31) | storefront |
+| `2026-11-01` | [인디 브랜드도 AI 이미지 제작 — 바이어 공간 사진만 바꾼다 · 바이어 공간에 추가된 제품만 · 이미지 제작은 별도 탭](./storefront.md#2026-11-01) | storefront |

@@ -203,6 +203,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-27` [메이저 제품 카테고리 = 인디와 같은 홈 카테고리(`categoryId`) — 기존 자유 입력은 카테고리로 만들어 유지 · `/shop/products` 카테고리 줄은 이 자리 필터(종류·브랜드와 AND) · 카테고리 페이지는 그 카테고리 전용(인디+메이저)](docs/decisions/storefront.md#2026-10-27-4)
 - `2026-10-29` [바이어 공간 샘플 박스·샘플 결제·장바구니 제거 — 스키마까지 드롭(`Order.kind`·입고·부분환불·`BuyerPackage`·`sampleable`) · `Shipment.brandId` 다시 NOT NULL · 남은 바이어 주문은 마이그레이션이 지운다 · 인디 1행 샘플가 규칙과 KLOW 발송인(현장 결제 `ship_to`)은 유지](docs/decisions/storefront.md#2026-10-29)
 - `2026-10-31` [메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용(초안 테이블 → 적용 API 만 `images` 변경) · 최초 적용 때 `originalImages` 백업 · 4:5 는 자르지 않고 채운다 · 생성 원본은 제품 사진 중에서 고른다(대표 사진이 질감 컷인 제품 있음) · `sharp` 는 런타임 dependency · 모델 `gpt-image-2.5-sunburst` 실측 $0.05/장 · `OPENAI_ADMIN_KEY` 는 사용액 조회 한 곳만](docs/decisions/storefront.md#2026-10-31)
+- `2026-11-01` [인디 브랜드도 AI 이미지 제작 — 적용은 바이어 공간 사진(`BuyerProduct.images`)만(브랜드 원본 `Product.image` 무변경) · 바이어 공간에 추가된 제품만 · 인디 백업 = raw `preAiImages` + `aiImagesApplied`(따라가기면 빈 배열) · 초안 테이블 메이저·인디 공용 · 어드민 별도 탭 `/buyer/images` · staging 인디 원본은 `cdn.klow.kr` 라 `BUYER_IMAGE_SOURCE_ORIGINS` 필요](docs/decisions/storefront.md#2026-11-01)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

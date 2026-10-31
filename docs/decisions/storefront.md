@@ -403,3 +403,16 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - **수정 요청(같은 날 사용자 요청)** — 생성 결과에 한 문장 요청을 달아 다시 만든다. 처음부터 다시 만들면 좋았던 부분까지 바뀌므로 **직전 결과를 고칠 대상, 원본을 라벨·로고 정답으로 함께 넣는다**(gpt-image 편집은 여러 장 입력을 받는다). 실측 1회: 요청한 d'Alba 로고만 추가되고 구도·조명·배경 유지, $0.061. 결과는 새 초안이라 G2(생성 ≠ 적용)·되돌리기 흐름이 그대로 산다. 마이그레이션 `20261031071752_add_buyer_major_image_revisions`.
 - **운영 배포 2026-10-31(사용자)** — klow_server `50971f8` · klow_admin `e0c86ad` 를 staging·main 에 함께. 이 main 에는 53행(바이어 샘플 제거 — DROP 마이그레이션)도 같이 실렸다.
 - **4:5 패딩 = 가장자리 색 잇기(같은 날, 사용자 지적 '좌우 배경색이 살짝 다르다')** — 좌상단 모서리 한 색으로 채우면 모델 배경의 조명 그라데이션(좌상단 밝음 → 오른쪽·아래 어두움) 때문에 오른쪽 경계가 보였다. 가장자리 16px 띠를 행마다 평균 → 1/16 로 줄였다 늘려 노이즈 제거 → 패딩 폭으로 늘린다. ⚠️ `extendWith: 'copy'`(픽셀 한 줄 복제)는 쓰지 않는다 — 그 줄 노이즈가 가로 줄무늬가 된다. 이미 만든 결과는 그대로이고 재생성·수정 요청부터 적용된다. klow_server `fix(buyer)` 커밋(기능 브랜치, 배포는 사용자).
+
+<a id="2026-11-01"></a>
+## 인디 브랜드도 AI 이미지 제작 — 바이어 공간 사진만 바꾼다 · 바이어 공간에 추가된 제품만 · 이미지 제작은 별도 탭 (2026-11-01)
+
+사용자 요청으로 메이저 이미지 제작(2026-10-31)을 인디에도 연다. 어드민 페이지는 `/buyer/major/images` → **`/buyer/images`**(사이드바 '바이어 공간 › 이미지 제작'), 브랜드 선택에 인디·메이저를 함께 띄운다. 엔드포인트 [`server/modules/buyer.md`](../server/modules/buyer.md#메이저-이미지-ai-리터치-buyer-major-images-2026-10-31).
+
+- ⚠️⚠️ **인디 적용은 바이어 공간 사진(`BuyerProduct.images`)만** 바꾼다(사용자 결정). 브랜드 원본 `Product.image`·`detailImages` 는 소비자 브랜드관·시딩·B2B·브랜드 스튜디오가 쓰고 브랜드가 언제든 덮어쓰는 브랜드 자산이라 건드리지 않는다.
+- **대상은 바이어 공간에 추가된 제품만**(`BuyerProduct` 행, 공개 여부 무관 — 사용자 결정). 적용할 칸이 그 행에 있어서다.
+- ⚠️ **인디 백업은 raw 값 + 플래그** — `BuyerProduct.images` 가 빈 배열이면 원본 대표 사진을 실시간으로 따라간다(G5). 그래서 백업 `preAiImages` 가 빈 배열(= 따라가기였다)일 수 있고, '적용함' 은 `aiImagesApplied` 가 따로 든다. 따라가기 상태에서 적용하면 `[결과, 원본 대표]` 로 **따라가기가 풀리고**(이후 브랜드가 대표 사진을 바꿔도 바이어 화면은 안 바뀐다), 되돌리면 다시 따라간다. 이름을 `originalImages` 로 하지 않은 건 인디 편집기 DTO 의 `originalImages`(원본 사진 고르기 후보)와 겹쳐서다.
+- **초안 테이블 하나를 공용으로**(`BuyerMajorImageDraft` 에 `buyerProductId` 추가, `majorProductId` nullable) — 이름에 Major 가 남지만 rename 은 수동 SQL 예외라 위험 대비 이득이 없다. 정확히 하나만 채우는 규칙은 서비스가 강제(`BuyerShelfItem` 선례).
+- 인디 경로는 인디 어드민 관례대로 **원본 `Brand.id`·`Product.id`** 로 가리킨다(`brands/:brandId/image-drafts…`). 메이저 경로는 그대로(운영 배포된 구 어드민 호환), `image-costs` 의 `kind` 생략 = major.
+- ⚠️ **staging 인디 원본은 전부 `https://cdn.klow.kr`(운영 CDN)** — staging `R2_PUBLIC_BASE` 와 달라 워커가 '허용되지 않은 원본 호스트'로 거절한다. staging Railway 에 `BUYER_IMAGE_SOURCE_ORIGINS=https://cdn.klow.kr` 를 넣어야 staging 에서 인디 생성이 된다(운영은 R2 공개 주소가 cdn.klow.kr 이면 그대로 통과 — 운영 1장 테스트로 확인).
+- 마이그레이션 `20261031150818_add_buyer_indie_image_drafts` 는 사용자 지시로 staging DB 에 직접 `migrate dev`. 전부 additive(NOT NULL 해제 포함) — 롤링 안전. 구 서버 코드는 새 nullable 칸을 몰라도 기존 행이 전부 채워져 있어 깨지지 않는다.
