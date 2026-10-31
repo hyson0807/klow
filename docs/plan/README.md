@@ -20,6 +20,7 @@
 | [buyer-platform/](./buyer-platform/README.md) | `klow.kr/` 를 해외 **바이어 공간**(디자인 `KLOWBUYER/`)으로 — 어드민이 브랜드를 골라 올리고 제품별 인증·도매 구간가·스펙·이미지·카테고리·홈 선반을 세팅한다. 원본 `Product`·`Brand`·`B2b*` 에 쓰지 않는 **1:1 오버레이 테이블**, 이미지는 빈 배열 = 브랜드 원본 추종. 로그인·채팅·샘플·결제는 스코프 밖 |
 | [buyer-auth/](./buyer-auth/README.md) | 바이어 공간의 **바이어 계정** — 이메일+비밀번호 로그인·가입(가입 이메일 OTP · 사업자 서류 R2 · 비번 찾기 · 세션 30일 슬라이딩) + 어드민 "바이어 계정"(목록·서류·검수 배지). 소비자 로그인(`klow_sid`)과 테이블·쿠키·라우트 전부 분리 |
 | [buyer-i18n/](./buyer-i18n/README.md) | 바이어 공간 다국어 URL(`/`=en · `/ja` `/zh` …) + 첫 방문 `/` 자동 언어(쿠키 → Accept-Language → Vercel IP 국가). 문구는 Claude 직접 번역, 바이어 DB 데이터는 서버 LLM 번역 캐시. 내부 경로 `kbl/[lang]` + middleware rewrite |
+| [buyer-major-images/](./buyer-major-images/README.md) | 메이저 제품 이미지 AI 일괄 리터치 — 어드민에서 브랜드 선택 → 테스트 1장 → 전체 생성 → 검토 후 적용(원본 백업·되돌리기). OpenAI 이미지 편집 API + `sharp` 로 4:5 WebP(≤250KB) |
 
 ## 새 트랙을 만들 때
 

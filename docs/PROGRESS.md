@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 55·56행 — buyer-major-images(2026-10-31 계획 세션).** 어드민에서 메이저 브랜드 이미지를 AI 로 통일(테스트 1장 → 전체 생성 → 검토 후 적용 · 원본 백업). **다음: 55행 A(klow_server)** — 착수 첫머리에 `plan/buyer-major-images/README.md` 의 **사용자 확인 3가지**를 묻는다. ⚠️ `§7` 53행(sampleable DROP)이 든 `staging` 위에서 시작. 관련 실데이터: 운영 메이저 50 브랜드 · 579 제품 · 이미지 2,146(스킬 `oliveyoung-major-import`, 2026-10-27~28 적재 — 워크스페이스 `.claude/skills/`, 데이터 `.oy-import/`(gitignore)).
+
 **`§7` 54행 — 바이어 공간 리뉴얼(2026-10-30, 트랙 밖 요청)은 staging 배포 완료**(klow_server `9be7883` → klow_web `816922b`). 다음: staging 실화면 확인 → 운영 배포(server → web). `§9` 54행 메모.
 
 **`§7` 50~52행 — dampenerlab(2026-10-29, 사용자 지시로 A~C 한 세션).** 아이템샵 대표님의 커스텀 댐프너를 `dampenerlab.klow.kr` 에서 해외 판매(원본 페이지 영어 클론 + Konva 편집기 + KLOW Eximbay·EFS). **코드 완료** — 네 레포 모두 git `feat/dampenerlab`(klow_server `e80766a`·`31182d3` · klow_admin `a65fb37` · klow_brand `e26cdc4` · 신규 klow_dampenerlab `0f74493`, **원격 없음·push 안 함**), DB 브랜치 `ep-restless-sky`. 로컬 왕복 확인: 편집 → 체크아웃 → R2 업로드 → 주문 → Eximbay **테스트 결제창 열림**(fgkey 통과) · 실패 return 303 → 사이트 실패 화면. 다음: ⚠️ **통관 품목·HS 코드 + 판매가(사용자)** → staging(DB migrate → server → admin·brand) → Vercel 프로젝트 + `dampenerlab.klow.kr` DNS → 어드민에서 브랜드·제품 생성 + Railway env 3개 → 테스트 결제 1건 → 운영. `§9` 50행 메모.
@@ -1033,6 +1035,23 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 제목과 순서만 — 트랙 문서 §B·§C. B 는 klow_server → klow_web, C 는 klow_web(루트 레이아웃 route group 분리 + JSON-LD·alt·인증 메타).
 
+### buyer-major-images — 메이저 제품 이미지 AI 일괄 리터치 (어드민 제작 페이지)
+
+스펙: [`plan/buyer-major-images/`](./plan/buyer-major-images/README.md) — 결정 D1~D6 · **착수 시 사용자 확인 3가지**는 `README.md`, **빌드 스펙 정본은 `implementation-plan.md`**(§1 게이트 G1~G8 · §2 설계 · §3 A·B · §4 프롬프트 원문).
+
+어드민에서 브랜드 선택 → **테스트 1장** → 결과 확인 → **브랜드 전체 생성** → 검토 → **선택 적용**(원본 백업·되돌리기). OpenAI 이미지 편집 API(구독제 아님) + `sharp` 로 4:5 · 1024×1280 · WebP ≤ 250KB.
+
+- ⚠️ `§7` 53행(remove-buyer-sample)이 `BuyerMajorProduct.sampleable` 을 DROP — 이 트랙은 그 변경이 든 `staging` 위에서 시작
+- ⚠️ 생성 ≠ 적용(G2) · 원본 보존(G1) — 생성 모델은 라벨 글자를 바꿔 그릴 수 있다
+
+#### 55. A. klow_server — 스키마 + 생성 워커 + 어드민 API
+
+트랙 문서 §3 A 가 정본(읽을 것 · 마이그레이션 `add_buyer_major_image_drafts` · git `feat/buyer-major-images` + Neon DB 브랜치 · 세션 안 순서 ①~⑤ · 완료 기준).
+
+#### 56. B. klow_admin — 제작 페이지 + 배포
+
+제목과 순서만 — 트랙 문서 §3 B(화면 → 로컬 왕복 → staging → 운영, server → admin).
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -1126,6 +1145,8 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 52 | dampenerlab C | **체크아웃·결제·제작 파일 화면 + 배포** — 체크아웃(배송지·국가 규칙·동의 3+1) → 디자인 업로드 → 주문 → Eximbay → `/checkout/redirect`·`complete` ✅ · 어드민 주문 상세 + 브랜드 발송대기 상세에 디자인 미리보기·인쇄 파일 ✅ · 서버 `printUrl`/`previewUrl` 저장 ✅. **남은 것: 통관 품목(HS)·판매가(사용자) → staging 병합·DB migrate → Vercel 프로젝트 + DNS → 운영** | 진행 중(코드 완료) | ✗ | 2026-10-29 | 31182d3 / a65fb37 / e26cdc4 / - / (이 커밋) |
 | 53 | remove-buyer-sample | **바이어 공간 샘플 박스·샘플 결제·장바구니 전면 제거(스키마까지)** — 4레포 git `feat/remove-buyer-sample`(server·admin·brand 는 `feat/dampenerlab` 위, web 은 `staging` 위) + DB 브랜치 `ep-billowing-breeze`(사용자 생성). 서버 `buyer-orders` 모듈·`BuyerPackage`·`sampleable`·합포장 송장·`kind` 필터 제거, KLOW 발송인 편집은 shipments 로 이사. 결정 [storefront 2026-10-29](./decisions/storefront.md#2026-10-29). 트랙 밖 요청 — 4레포 순서 배포 + DROP 마이그레이션이라 행. **staging 배포 완료**(2026-10-30 — web·admin·brand → server push, Railway 배포가 마이그레이션 자동 적용) | 완료(staging) | ✗ | 2026-10-30 | 9f6e1c2 / 3950cd7 / 5f5ec5a / 2e34686 / (이 커밋) |
 | 54 | buyer-renewal | **바이어 공간 리뉴얼(update 브랜치) → staging — 문의 중심** — 검색형 홈 · Shop 좌측 필터 · Discuss wholesale/요청 채팅 병합, 샘플박스 제거, 메이저는 서버 데이터로 연결, 제품 상세 MOQ 가격은 로그인 무관 블러, 요청 채팅 상단 바·K 아바타 제거(사이트 헤더 유지), WhatsApp 문의 서버 수신(스키마 무변경). 트랙 밖 요청(2026-10-30) — 2레포 순서 배포라 행. **staging 배포 완료**(server → web) | 완료(staging) | ✗ | 2026-10-30 | c135afe · 9be7883 / - / - / a33a38a · 816922b / (이 커밋) |
+| 55 | buyer-major-images A | **klow_server — 메이저 제품 이미지 AI 리터치: 스키마 + 생성 워커 + 어드민 API** — `BuyerMajorImageDraft` + `BuyerMajorProduct.originalImages`(마이그레이션 독립) · OpenAI 이미지 편집 → sharp 4:5 WebP → R2 · 테스트/전체 적재·적용·되돌리기 API. 착수 전 사용자 확인 3가지(대표 1장 vs 전체 · 품질/모델 · 비용 확인창). 스펙 [plan/buyer-major-images](./plan/buyer-major-images/README.md) | 대기 | ✗ | 2026-10-31 | - / - / - / - / (이 커밋) |
+| 56 | buyer-major-images B | **klow_admin — 이미지 제작 페이지 + 배포** — 브랜드 선택 → 테스트 1장 → 원본/결과 비교 → 브랜드 전체 생성(진행 그리드·폴링) → 선택 적용·되돌리기 · staging → 운영(server → admin) | 대기 | ✗ | 2026-10-31 | - / - / - / - / - |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
