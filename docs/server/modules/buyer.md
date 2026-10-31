@@ -3,8 +3,8 @@
 - **모듈 경로**: `src/modules/buyer/`
 - **목적**: 해외 바이어가 `klow.kr/` 에서 둘러보는 **KLOW 가 골라 올린 브랜드·제품**의 데이터. 관리자가 klow_admin "바이어 공간"에서 채우고(`/admin/buyer/*`), klow_web 이 공개 API(`/v1/buyer/*`)로 그린다. 브랜드(klow_brand)는 무관하다.
 - **설계 정본**: [`docs/plan/buyer-platform/`](../../plan/buyer-platform/README.md) — 불변식 G1~G12 는 `implementation-plan.md §1`.
-- **관련 파일**: 메이저(buyer-major) `buyer-major.service.ts`(공개·주문 요청) · `buyer-major-admin.service.ts` · `buyer-major.mapper.ts` · `major-slug.ts`(인디·메이저 슬러그 양방향 검사) · `admin-buyer-major.controller.ts` — 아래 [메이저 브랜드](#메이저-브랜드) · 인디 `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-translation.service.ts`(`?lang=` LLM 번역 캐시) · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
-- **마이그레이션**: `20261022080453_add_buyer_major`(메이저 3테이블 + `BuyerShelf.kind` + `BuyerShelfItem.majorProductId`(+`buyerProductId` NOT NULL 해제) + `BuyerProduct.benefits` + `BuyerInquiry` 메이저 칸 + enum 값 `major_order` — 전부 ADD, 롤링 안전, 백필 없음) · `20261016045800_add_buyer_translation`(`BuyerTranslation` — CREATE 만, 롤링 안전, 백필 없음) · `20261015040748_add_buyer_brand_videos`(`BuyerBrandVideo` + enum `BuyerVideoProvider` — CREATE 만, 롤링 안전) · `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
+- **관련 파일**: 메이저(buyer-major) `buyer-major.service.ts`(공개·주문 요청) · `buyer-major-admin.service.ts` · `buyer-major.mapper.ts` · `major-slug.ts`(인디·메이저 슬러그 양방향 검사) · `admin-buyer-major.controller.ts` — 아래 [메이저 브랜드](#메이저-브랜드) · 메이저 이미지 AI 리터치 `buyer-major-image.{service,prompts}.ts` · `buyer-major-image-worker.service.ts` · `buyer-major-image-frame.ts` · `openai-usage.client.ts` · `admin-buyer-major-image.controller.ts` — 아래 [메이저 이미지](#메이저-이미지-ai-리터치-buyer-major-images-2026-10-31) · 인디 `buyer-completeness.ts`(노출 판정·이미지 추종·MOQ/카드가·프리필 — 순수 함수) · `buyer.mapper.ts`(공용 include·공개 DTO) · `buyer-admin.service.ts` · `buyer-public.service.ts` · `buyer-translation.service.ts`(`?lang=` LLM 번역 캐시) · `buyer-inquiry-email.ts` · `admin-buyer.controller.ts` · `public-buyer.controller.ts` · 검증 `common/validation/buyer.ts` · 메일 발송 `web-auth/email.service.ts#sendPrepared`(B2B 주문서 알림과 공용)
+- **마이그레이션**: `20261031062753_add_buyer_major_image_drafts`(`BuyerMajorImageDraft` + enum + `OpenAiCreditTopup` CREATE + `BuyerMajorProduct.originalImages` default ADD — 롤링 안전, 백필 없음) · `20261022080453_add_buyer_major`(메이저 3테이블 + `BuyerShelf.kind` + `BuyerShelfItem.majorProductId`(+`buyerProductId` NOT NULL 해제) + `BuyerProduct.benefits` + `BuyerInquiry` 메이저 칸 + enum 값 `major_order` — 전부 ADD, 롤링 안전, 백필 없음) · `20261016045800_add_buyer_translation`(`BuyerTranslation` — CREATE 만, 롤링 안전, 백필 없음) · `20261015040748_add_buyer_brand_videos`(`BuyerBrandVideo` + enum `BuyerVideoProvider` — CREATE 만, 롤링 안전) · `20261004140057_add_buyer_platform` — 신규 테이블 8 + enum 3 + **카테고리 7종 SQL 시드**(id `bcat_<slug>`, `ON CONFLICT DO NOTHING`). 전부 `CREATE TABLE` 이라 롤링 안전.
 
 ## 데이터 모델
 
@@ -150,6 +150,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/v1/buyer/major-brands/:slug` | 없음 | 브랜드관 — 요약 + `metaTitle`·`metaDescription`·`intro[]`·`sellsTo`·`faq[]`·`products` |
 | GET | `/v1/buyer/major-products/:id` | 없음 | 제품 상세(인디 PDP 와 같은 필드 이름, 가격 없음) + 같은 브랜드 다른 제품 최대 8 |
 | GET | `/v1/buyer/major-brands/:slug/prices` | **BuyerGuard** | `{ products: [{id, tiers: [{minQty, unitUsdCents}]}] }` — 브랜드 전 제품, 브랜드관·상세 공용 |
+| GET | `/v1/buyer/major-prices` | **BuyerGuard** | 위와 같은 모양을 노출 메이저 제품 **전부**에 대해 한 번에(2026-10-28 — 목록이 브랜드마다 부르던 30여 회를 1회로). klow_web `useKbMajorPrices()` 가 이것만 쓴다. 브랜드별 엔드포인트는 구 웹 호환으로 남긴다 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |
 
 `MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient, msrpUsdCents}`.
@@ -168,11 +169,40 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 
 - 프런트: klow_admin `/buyer/major` · `/buyer/major/[id]` · `/buyer/major/products/[id]` · klow_web `KbMajorBrandPage`·`KbMajorProductPage`·`KbMajorCard`(`useKbMajorPrices`)·`KbMajorOrder`. 목록은 인디와 하나다 — `/shop/products`·`/shop/brands` 가 `GET /v1/buyer/major-brands` 를 함께 받아 종류 탭(`?type=major|indie`)으로 거른다. 구 허브 `/shop/major-brands` 는 308([결정 2026-10-27](../../decisions/storefront.md#2026-10-27)).
 
+## 메이저 이미지 AI 리터치 (buyer-major-images, 2026-10-31)
+
+메이저 제품 사진을 하나의 프롬프트로 통일된 스튜디오 컷(4:5 · 크림 배경 · 홍보 문구 제거)으로 바꾸는 어드민 제작 도구. 스펙 [`plan/buyer-major-images/`](../../plan/buyer-major-images/README.md), 결정 [storefront 2026-10-31](../../decisions/storefront.md#2026-10-31).
+
+- **생성 ≠ 적용(G2)** — 생성 결과는 `BuyerMajorImageDraft` 에만 쌓인다. `BuyerMajorProduct.images` 는 **적용** API 에서만 바뀐다.
+- **원본 보존(G1)** — 최초 적용 때 `images` 를 `originalImages` 에 1회 백업하고 `images = [결과, ...원본]`(최대 12). 재적용해도 백업은 그대로, 되돌리기는 백업으로 복원하고 비운다. R2 객체는 원본·결과 모두 지우지 않는다.
+- **생성 원본** = 원본 사진(`originalImages` 가 있으면 그것, 없으면 `images`)의 첫 장. 테스트·재생성은 `sourceUrl` 로 그 제품의 원본 사진 중 하나를 고를 수 있다(그 밖의 URL 은 400 `source_not_in_product` — 워커 fetch 를 임의 주소로 유도하지 못하게). ⚠️ 대표 사진이 제품 컷이 아닌 제품이 있다(질감·모델 컷 → 모델이 없는 용기를 지어낸다).
+- **워커**(`buyer-major-image-worker.service.ts`) — 적재 API 는 `queued` 행만 만들고 즉시 반환(202), 워커가 동시 `BUYER_IMAGE_GEN_CONCURRENCY`(기본 3)장씩 집는다. 원본 fetch(허용 오리진 = `R2_PUBLIC_BASE` + `BUYER_IMAGE_SOURCE_ORIGINS`, https · 리다이렉트 거부 · ≤20MB) → `images.edit`(`gpt-image-2.5-sunburst` · high · 1024×1536, SDK 재시도 3회) → `sharp` 로 **contain** 1024×1280(모서리 배경색으로 채움 — 자르지 않는다) WebP ≤250KB → R2 `brands/buyer/major-gen/<uuid>.webp`. 실패는 그 행만 `failed` + 사유. 부팅 시 `running` → `queued` 복구(G6). 단일 레플리카 전제(집기는 조건부 `updateMany`).
+- **비용** — 응답 `usage` 토큰 × 단가(`buyer-major-image.prompts.ts` 상수: 텍스트 입력 $5 · 이미지 입력 $8 · 출력 $30 / 1M)를 `costUsdMicros` 에 기록. 2026-10-31 실측 1장 = **$0.052**, 33초.
+- ⚠️ **프롬프트를 고치면 `BUYER_MAJOR_IMAGE_PROMPT_VERSION` 을 올린다** — 중복 적재 판정(G4)·`skipDone` 이 버전 단위다.
+- ⚠️ `OPENAI_ADMIN_KEY` 는 `openai-usage.client.ts` 에서만 읽는다(G9 — 조직 관리 권한 키). 응답·로그·에러 문구에 싣지 않는다.
+
+**어드민** (`admin-buyer-major-image.controller.ts`, AdminGuard — 비용이 드는 건 POST 적재·재시도뿐, GET 은 생성 0회)
+
+| Method | Path | 기능 |
+|---|---|---|
+| GET | `/admin/buyer/major-brands/:id/image-drafts` | `{promptVersion, model, apiKeyConfigured, brandCostMicros, summary:{total,noImage,queued,running,done,failed,applied}, products:[{id,name,published,sourceUrl,sourceImages[],currentImage,imageCount,applied,draft}]}` — `draft` 는 버린 것 제외 최신 초안. 폴링용 |
+| POST | `/admin/buyer/major-brands/:id/image-drafts/test` | 202 · `{productId?, sourceUrl?}` → 초안 1건(`isTest`). 진행 중 초안이 있으면 그걸 돌려준다. 키 없으면 503 `openai_not_configured` |
+| POST | `/admin/buyer/major-brands/:id/image-drafts` | 202 · `{skipDone=true}` → 이미지 있는 전 제품 적재(같은 버전 `done`·`applied` 제품은 skipDone 이면 제외, 진행 중은 재사용) · 응답 = `{queued, ...목록}` |
+| POST | `/admin/buyer/major-brands/:id/image-drafts/apply` | `{draftIds[]}` — `done` 만, 제품당 하나(400 `draft_not_done`·`duplicate_product`·`draft_not_in_brand`) · 응답 = 목록 |
+| POST | `/admin/buyer/major-brands/:id/image-drafts/revert` | `{productIds[]}` — 적용 안 한 제품은 400 `not_applied` · 응답 = 목록 |
+| POST | `/admin/buyer/image-drafts/:draftId/retry` | 202 · `{sourceUrl?}` → 같은 제품 새 초안(원본 기본 = 직전 초안의 원본) |
+| POST | `/admin/buyer/image-drafts/:draftId/discard` | `done`·`failed` → `discarded` |
+| GET | `/admin/buyer/image-costs?brandId=&refresh=1` | 전부 micro-USD: `ours{totalMicros,monthMicros,brandMicros}` · `estimatePerImageMicros`(현 모델 실측 평균, 표본 0 이면 상수 $0.25) · `estimateSamples` · `org{adminKeyConfigured,monthMicros,sinceFirstTopupMicros,fetchedAt,error}`(Costs API, 10분 캐시 — `refresh=1` 무시) · `budget{topupMicros,firstTopupAt,remainingMicros}`(= Σ충전 − 첫 충전일 이후 조직 사용액, 못 구하면 null). 월 경계는 UTC |
+| GET/POST/DELETE | `/admin/buyer/openai-topups` · `/:id` | 충전 기록 — POST `{amountUsdCents(≥100), toppedUpAt:'YYYY-MM-DD'(UTC 자정), note?}` · 응답 = 목록(최신 충전일 순) |
+
 ## 환경변수
 
 | env | 기본값 | 비고 |
 |---|---|---|
 | `BUYER_INQUIRY_EMAIL` | (비움) | 문의 수신함. 비면 `CONTACT_INBOX_EMAIL` → `team@klow.kr` |
 | `ADMIN_FRONTEND_URL` | (기존) | 메일의 "어드민에서 문의 보기" 링크(`/buyer/inquiries`) |
-| `OPENAI_API_KEY` · `OPENAI_MODEL` | (기존) | `?lang=` 번역. 키가 없으면 번역 없이 영어로 응답(부팅·요청 모두 실패하지 않는다) |
+| `OPENAI_API_KEY` · `OPENAI_MODEL` | (기존) | `?lang=` 번역. 키가 없으면 번역 없이 영어로 응답(부팅·요청 모두 실패하지 않는다). 메이저 이미지 생성도 이 키(없으면 적재 503) |
+| `OPENAI_ADMIN_KEY` | (비움) | 메이저 이미지 비용 패널의 조직 사용액(`sk-admin-…`). 비면 그 칸만 null — 생성은 무관 |
+| `BUYER_IMAGE_GEN_CONCURRENCY` | `3` | 메이저 이미지 동시 생성 수(1~10) |
+| `BUYER_IMAGE_SOURCE_ORIGINS` | (비움) | 원본 fetch 허용 오리진 추가(쉼표). 기본은 `R2_PUBLIC_BASE` 오리진만 |
 | `RESEND_API_KEY` | (기존) | 비면 `[DEV email] buyer inquiry …` 콘솔 로깅. ⚠️ dev 도 키가 있어 실발송 — 테스트는 `RESEND_API_KEY= npm run start` |

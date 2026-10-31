@@ -118,7 +118,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 **검증 3층** (파일을 옮기거나 모듈 배선을 바꾼 뒤 반드시):
 
 1. **`npm run typecheck`** — `tsconfig.json`(src + 스펙) **과 `tsconfig.scripts.json`(prisma/·scripts/·test/) 둘 다** 돌린다. ⚠️ **`npx tsc --noEmit` 만 쓰면 안 된다** — `tsconfig.json` 은 `rootDir: ./src` + `exclude: [prisma, test]` 라 `src/` 밖을 구조적으로 못 본다. 그래서 `src/` 를 리팩터링하면 거기서 import 하는 seed/backfill 스크립트가 조용히 깨지고 나머지 검증이 전부 초록불로 통과한다(2026-08 정리에서 백필 3개가 실제로 이렇게 죽었다).
-2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩(현재 3줄) 남는다**. 그건 의도된 fail-closed 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 36개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 14개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
+2. **`npm run test:e2e`** — `test/app.e2e-spec.ts` 가 **DB 없이**(PrismaService 를 스텁으로 override — ⚠️ `onModuleInit` 을 가진 provider 가 하나 더 있다: `BrandDomainsService` 가 오리진 스냅샷을 프라이밍하는데, 스텁에는 `brandDomain` 이 없어 **부팅마다 ERROR 로그 한 줄씩 남는다**. 2026-10-31 부터 `BuyerMajorImageWorker` 의 `running` 초안 복구도 같은 이유로 한 줄씩 더 남는다(현재 부팅 3회 × 2 = 6줄). 둘 다 의도된 경로이고 스펙은 그대로 통과한다) `AppModule` 을 `init()` 까지 띄운다. 세 가지를 잡는다: ① 36개 모듈 DI 그래프(provider 미등록·미export·순환 모듈), ② **cron 14개 등록 여부**, ③ `CRON_ENABLED='false'` 면 0개. ⚠️ `@Cron` 클래스를 모듈 providers 에 안 넣으면 **조용히 실행되지 않는다** — typecheck 는 통과하고 로그도 안 남는다. 새 cron 을 추가하면 그 스펙의 기대 목록에 이름을 넣을 것.
 3. **`npm run start`** — env 가드 + 실제 DB 연결 + 라우트 매핑(현재 375개 — 2026-09-23 실측. 아래 항목들의 기재가 서로 어긋나므로 부팅 로그를 정본으로 볼 것). 1·2 가 커버하지 못하는 건 `main.ts` 의 fail-closed env 검사와 실 DB 접속뿐이다.
 
 ⚠️ `npm run lint` 는 `--fix` 를 물고 있어 **리팩터링과 무관한 파일의 기존 포맷 부채까지 건드린다.** diff 를 깨끗하게 유지하려면 `npx eslint <바꾼 파일>` 로 좁혀 쓸 것.
@@ -202,6 +202,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-27` [메이저 제품도 $100 샘플 박스에 — KLOW 직접 조달(`OrderMajorIntake` 주문당 1행) · 칸 가격 인디와 동일 · 어드민 제품별 `sampleable` · 주문 줄 `majorProductId`(productId null) · MOQ 가격은 계속 BuyerGuard 만](docs/decisions/storefront.md#2026-10-27-3) — **2026-10-29 제거**
 - `2026-10-27` [메이저 제품 카테고리 = 인디와 같은 홈 카테고리(`categoryId`) — 기존 자유 입력은 카테고리로 만들어 유지 · `/shop/products` 카테고리 줄은 이 자리 필터(종류·브랜드와 AND) · 카테고리 페이지는 그 카테고리 전용(인디+메이저)](docs/decisions/storefront.md#2026-10-27-4)
 - `2026-10-29` [바이어 공간 샘플 박스·샘플 결제·장바구니 제거 — 스키마까지 드롭(`Order.kind`·입고·부분환불·`BuyerPackage`·`sampleable`) · `Shipment.brandId` 다시 NOT NULL · 남은 바이어 주문은 마이그레이션이 지운다 · 인디 1행 샘플가 규칙과 KLOW 발송인(현장 결제 `ship_to`)은 유지](docs/decisions/storefront.md#2026-10-29)
+- `2026-10-31` [메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용(초안 테이블 → 적용 API 만 `images` 변경) · 최초 적용 때 `originalImages` 백업 · 4:5 는 자르지 않고 채운다 · 생성 원본은 제품 사진 중에서 고른다(대표 사진이 질감 컷인 제품 있음) · `sharp` 는 런타임 dependency · 모델 `gpt-image-2.5-sunburst` 실측 $0.05/장 · `OPENAI_ADMIN_KEY` 는 사용액 조회 한 곳만](docs/decisions/storefront.md#2026-10-31)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

@@ -384,3 +384,18 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - **KLOW 발송인(`ShopSettings.klowSender*`)은 남긴다** — 현장(onsite) 주문 결제의 Eximbay `ship_to` 전화번호가 여기서 나온다(2026-10-21 PayPal X049). 편집 엔드포인트 `admin/settings/klow-sender` 는 URL 그대로 shipments 모듈로 옮기고, 어드민 편집 버튼은 주문 목록 헤더로 옮겼다.
 - 브랜드 3PL 발송 대기 엑셀의 `Buyer Note` 열도 지웠다 — 소비자 주문은 이 칸을 쓴 적이 없다(바이어 체크아웃 전용 칸이었다).
 - ⚠️ **배포 순서**: klow_web · klow_admin · klow_brand(엔드포인트 호출 중단) → klow_server 코드 → 마이그레이션. DROP 이라 롤링 비안전 — 서버 코드와 마이그레이션은 단일 레플리카 컷오버로 묶거나 두 번에 나눈다.
+
+<a id="2026-10-31"></a>
+## 메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용 · 원본 백업 · 자르지 않고 채운다 · 원본 사진은 고른다 · sharp 는 런타임 의존성 (2026-10-31)
+
+어드민에서 메이저 제품 사진을 하나의 프롬프트로 통일된 스튜디오 컷으로 바꾸는 도구의 서버 쪽(buyer-major-images A — 스펙 [`plan/buyer-major-images/`](../plan/buyer-major-images/README.md), 엔드포인트 [`server/modules/buyer.md`](../server/modules/buyer.md#메이저-이미지-ai-리터치-buyer-major-images-2026-10-31)). 사용자 결정: **일괄 생성은 지금 돌리지 않는다 — 시스템만 만든다**(검증용 실생성 1장만 허용).
+
+- ⚠️⚠️ **생성 결과는 초안 테이블(`BuyerMajorImageDraft`)에만** 쌓이고, 판매 화면의 `BuyerMajorProduct.images` 는 어드민 **적용** API 에서만 바뀐다. 생성 모델은 라벨·로고 글자를 조금씩 바꿔 그리므로 사람이 보고 적용한다.
+- ⚠️⚠️ **원본은 버리지 않는다** — 최초 적용 때 `images` 를 `originalImages` 에 1회 백업(이후 덮어쓰지 않음), 되돌리기는 백업으로 복원하고 비운다. 적용 규칙은 계획 기본값 (a) `images = [결과, ...원본]` — 원본 사진은 상세 갤러리 뒤에 그대로 남는다. (b 전체 교체·c 전 이미지 생성은 사용자가 일괄 생성을 미뤄 확정하지 않았다 — 운영 적용 전에 다시 물을 것.)
+- **모델 = `gpt-image-2.5-sunburst` high**(사용자 선택 '최신 모델'). 계획서의 `gpt-image-1` 은 2026-10-23 종료됐다. Sunburst 는 2.5 의 편집 정확도 변형(Flare 와 단가 동일, 더 느림). SDK 타입에 아직 없어 문자열로 넘긴다. 비용은 응답 `usage` × 서버 상수 단가로 기록 — **실측 1장 $0.052 · 33초**(계획서 추정 $0.25~0.30 의 1/5). 579장이면 약 $30.
+- ⚠️ **4:5 맞추기는 자르지 않고 채운다(contain)** — 계획서 D2 는 "2:3 받고 패딩/크롭"이었지만 실생성 1장에서 위아래를 자르니 **튜브 뚜껑이 잘렸다**. 모서리 배경색으로 양옆을 채운다(크림 단색 배경이라 이음매가 안 보인다).
+- ⚠️ **생성 원본은 고를 수 있어야 한다** — 실측 1장(d'Alba Mild Sun Cream)의 `images[0]` 이 제품 컷이 아니라 **크림 질감 사진**이었고, 모델이 거기서 없는 튜브를 지어냈다. 테스트·재생성 API 가 `sourceUrl`(그 제품의 원본 사진 중 하나만 — SSRF 겸)을 받는다. 브랜드 전체 생성은 원본 대표 사진을 쓰므로 **어드민 화면이 원본 썸네일을 보여주고 이상한 제품은 원본을 바꿔 재생성**하는 흐름이 필요하다(B 단계).
+- ⚠️ **`sharp` 를 devDependency → dependency 로 옮겼다** — 서버 런타임(워커)이 쓴다. Dockerfile 이 `npm prune --omit=dev` 를 돌아 dev 로 두면 배포본이 `Cannot find module 'sharp'` 로 **부팅부터 죽는다**(모듈 import 시점) — 로컬 typecheck·e2e 는 dev 의존성이 깔려 있어 통과하므로 못 잡는다. 그래서 `scripts/shrink-image.ts` 의 "서버 런타임에서 import 하지 말 것" 주석도 고쳤다. lockfile 의 alpine(musl) 바이너리는 그대로 설치된다.
+- **OpenAI 잔액은 API 로 못 읽는다** — 조직 사용액(Costs API, Admin 키 `OPENAI_ADMIN_KEY` — 생성용 `sk-proj-` 키는 권한 없음)과 어드민이 입력한 충전 기록(`OpenAiCreditTopup`)으로 **근사**한다(= Σ충전 − 첫 충전일 이후 조직 사용액). 조직 사용액은 다른 프로젝트·기능 사용분까지 포함한다. Admin 키는 조직 관리 권한이라 `openai-usage.client.ts` 한 곳에서만 읽고 응답·로그에 싣지 않는다.
+- 생성은 cron 이 아니라 인메모리 워커(동시 3, 부팅 시 `running` → `queued` 복구)다 — **단일 레플리카 전제**. 레플리카를 늘리면 조건부 `updateMany` 로 겹쳐 집지는 않지만 동시 생성 수가 레플리카 수만큼 곱해진다.
+- 마이그레이션 `20261031062753_add_buyer_major_image_drafts` 는 사용자 지시로 **staging DB(`ep-icy-flower`)에 직접 `migrate dev`**(DB 브랜치 없이 — klow Neon 프로젝트가 MCP 계정에 없어 fork 불가). CREATE 2 + enum + default ADD COLUMN 이라 롤링 안전·백필 없음.
