@@ -22,6 +22,8 @@
 - **G6 동시성 상한** — 서버 전체 동시 생성 N(기본 3, env). 서버 재시작 시 `running` 초안은 `queued` 로 되돌려 다시 집는다(유실 없음).
 - **G7 키는 서버만** — `OPENAI_API_KEY` 는 클라로 안 나간다. 키 없으면 생성 API 503(화면은 안내).
 - **G8 프롬프트 버전** — 초안에 `promptVersion` 저장. 프롬프트 원문은 서버 상수 파일 하나(`*.prompts.ts` — CLAUDE.md 접미사 규칙).
+- **G9 Admin 키 격리** — `OPENAI_ADMIN_KEY` 는 조직 관리 권한(키·멤버 관리까지)이라 **사용액 조회 클라이언트 한 곳에서만** 읽고, 로그·응답·에러 메시지에 절대 싣지 않는다. 생성 경로는 이 키를 쓰지 않는다(생성 = `OPENAI_API_KEY`). 없으면 조직 사용액·예산 칸만 비활성(부팅 차단 안 함).
+- **G10 사용액 조회 캐시** — Costs API 는 지연 반영 + 호출 제한이 있다 → 서버 메모리 캐시 10분, 어드민 "새로고침" 은 캐시 무시 1회. 화면에 "OpenAI 기준 · 지연 반영 · 정확한 잔액은 OpenAI Billing" 문구.
 
 ## 2. 설계
 
@@ -37,6 +39,9 @@ model BuyerMajorImageDraft {
   error          String?  @db.VarChar(500)
   promptVersion  String   @db.VarChar(20)
   isTest         Boolean  @default(false)
+  inputTokens    Int?                          // 응답 usage — 비용 계산 근거(D7 ①)
+  outputTokens   Int?
+  costUsdMicros  Int?                          // 1e-6 USD. 단가는 서버 상수(모델·품질별) — 단가 바뀌면 상수만 갱신
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   majorProduct   BuyerMajorProduct @relation(fields: [majorProductId], references: [id], onDelete: Cascade)
@@ -44,9 +49,18 @@ model BuyerMajorImageDraft {
   @@index([status, createdAt])
 }
 // BuyerMajorProduct 에 추가: originalImages String[] @default([])  — 최초 적용 시 1회 백업(이후 덮어쓰지 않음)
+
+// 예산(D7 ③) — 어드민이 입력하는 OpenAI 충전 기록. 행 1개 = 충전 1건(누적 합 = 총 충전액)
+model OpenAiCreditTopup {
+  id          String   @id @default(cuid())
+  amountUsdCents Int
+  note        String   @default("") @db.VarChar(200)
+  toppedUpAt  DateTime                       // 이 시점 이후 사용액을 차감
+  createdAt   DateTime @default(now())
+}
 ```
 
-신규 테이블 + nullable/default 컬럼뿐 → **롤링 안전 · 백필 없음**.
+신규 테이블 2 + nullable/default 컬럼뿐 → **롤링 안전 · 백필 없음**. ⚠️ 착수 시 기존 설정 테이블(키-값)이 있는지 먼저 찾아보고, 있으면 `OpenAiCreditTopup` 대신 재사용을 검토한다.
 
 ### 2-2. 서버 (klow_server `src/modules/buyer/` — 평면 파일, 접미사 규칙)
 
@@ -57,6 +71,8 @@ model BuyerMajorImageDraft {
   2. `openai.images.edit({ model, image, prompt, size: '1024x1536', quality, output_format: 'webp' })`
   3. `sharp` → 1024×1280 크림색(프롬프트 배경과 같은 색) 패딩/중앙 크롭 → WebP q80, 크기 검사(G3)
   4. `r2.uploadBytes({ scope:'buyer', folder:'major-gen', ... })` → `done`
+  5. 응답 `usage`(input/output 토큰)로 `costUsdMicros` 계산·저장(실패한 호출도 과금됐으면 기록)
+- `openai-usage.client.ts` — `OPENAI_ADMIN_KEY` 로 `GET https://api.openai.com/v1/organization/costs?start_time=…&bucket_width=1d`(페이지네이션) → 기간 합계. 10분 캐시(G10). 키 없으면 `null`(G9)
 - 컨트롤러는 기존 `admin-buyer-major.controller.ts` 에 추가(AdminGuard):
 
 | Method | Path | 동작 |
@@ -67,6 +83,8 @@ model BuyerMajorImageDraft {
 | POST | `admin/buyer/image-drafts/:draftId/retry` · `/discard` | 개별 재시도·버리기 |
 | POST | `admin/buyer/major-brands/:id/image-drafts/apply` | body `{draftIds[]}` — `done` 만 적용(G2·G1) |
 | POST | `admin/buyer/major-brands/:id/image-drafts/revert` | body `{productIds[]}` — `originalImages` 로 복원 |
+| GET | `admin/buyer/image-costs?brandId=` | ① 우리 기록 합계(브랜드·전체·이번 달) ② 조직 사용액(이번 달·충전 이후) ③ 남은 예산 근사 = Σ충전 − 첫 충전 이후 조직 사용액. `?refresh=1` 캐시 무시 |
+| GET·POST·DELETE | `admin/buyer/openai-topups` | 충전 기록 목록·추가·삭제(금액 USD · 날짜 · 메모) |
 
 - ⚠️ 감사 로그: admin mutation 은 `AdminAuditInterceptor` 가 자동 기록(추가 작업 없음).
 - 적용 규칙(착수 시 사용자 확인 1번에 따라): 기본 (a) `images = [resultUrl, ...originalImages]`(최대 `BUYER_MAX_IMAGES`).
@@ -78,6 +96,7 @@ model BuyerMajorImageDraft {
   2. **테스트** 버튼 — 제품 1개 선택(기본 첫 제품) → 원본 | 결과 나란히(4:5 프레임) → 재생성/버리기
   3. **브랜드 전체 생성** — 확인창(제품 수 × 예상 단가) → 진행 그리드(제품 카드: 원본·결과·상태 배지, 3~5초 폴링, 전부 끝나면 폴링 중지)
   4. 카드별 체크(기본: `done` 전부 체크) → **선택 적용** · 적용된 제품은 **되돌리기**
+- **상단 비용 패널(D7)**: 이번 달 OpenAI 사용액 · 이 브랜드 생성 비용 · 남은 예산(근사) + 새로고침 + "충전 기록" 모달(금액·날짜·메모 입력). Admin 키 없으면 ②·③ 대신 안내 문구. 전체 생성 확인창에 "예상 비용 / 남은 예산" 함께 표시
 - 모든 생성·적용·실패는 토스트(Admin UI Convention). 폴링은 탭이 숨겨지면 멈춤.
 
 ## 3. 단계
@@ -87,9 +106,9 @@ model BuyerMajorImageDraft {
 - **읽을 것**: 이 문서 §0~§2 · `README.md` 착수 시 확인 3가지 · `docs/server/modules/buyer.md#메이저-브랜드` · 결정 storefront 2026-10-22·2026-10-29
 - **선행**: `§7` 53행 브랜치가 들어간 `staging`. 사용자 확인 3가지(README) 답 받기
 - **건드리는 레포 · 배포 순서**: klow_server 단독(B 보다 먼저 — 어드민은 새 API 없으면 화면만 실패)
-- **스키마·데이터 위험**: `add_buyer_major_image_drafts`(CREATE 1 + ADD COLUMN default 1 · 롤링 안전 · 백필 없음). ⚠️ git `feat/buyer-major-images` + **Neon DB 브랜치**(CLAUDE.md 규칙)
-- **세션 안 순서(정지점)**: ① 마이그레이션 ② 프롬프트·서비스·워커(로컬에서 실제 1장 생성 — 키 필요, 약 $0.3) ③ 컨트롤러 + zod ④ `docs/server/modules/buyer.md` ⑤ 검증 3층(e2e 의 DI 그래프 — 워커 provider 등록 확인)
-- **완료 기준**: 로컬 DB 브랜치에서 테스트 API 1회 → 1~2분 내 `done` + R2 WebP 1024×1280 ≤250KB · 같은 제품 재요청 시 중복 적재 안 됨 · 적용 → `images[0]` 교체 + `originalImages` 백업 · 되돌리기 → 원복 · 서버 재시작 중 `running` → 재처리됨 · 키 없을 때 503
+- **스키마·데이터 위험**: `add_buyer_major_image_drafts`(CREATE 2(초안·충전 기록) + ADD COLUMN default 1 · 롤링 안전 · 백필 없음). ⚠️ git `feat/buyer-major-images` + **Neon DB 브랜치**(CLAUDE.md 규칙)
+- **세션 안 순서(정지점)**: ① 마이그레이션 ② 프롬프트·서비스·워커 + 토큰 비용 기록(로컬에서 실제 1장 생성 — 약 $0.3) ③ 사용액 클라이언트(`OPENAI_ADMIN_KEY`)·충전 기록·비용 API ④ 컨트롤러 + zod ⑤ `docs/server/modules/buyer.md` ⑥ 검증 3층(e2e 의 DI 그래프 — 워커 provider 등록 확인)
+- **완료 기준**: 로컬 DB 브랜치에서 테스트 API 1회 → 1~2분 내 `done` + R2 WebP 1024×1280 ≤250KB · 같은 제품 재요청 시 중복 적재 안 됨 · 적용 → `images[0]` 교체 + `originalImages` 백업 · 되돌리기 → 원복 · 서버 재시작 중 `running` → 재처리됨 · 키 없을 때 503 · 생성 1장 후 `costUsdMicros` 기록 · `image-costs` 가 Admin 키로 이번 달 조직 사용액을 돌려줌(키 빼면 해당 칸 `null`, 다른 값은 정상) · 응답·로그에 Admin 키 없음
 
 ### B. klow_admin — 제작 페이지 + 배포  (`§7` 56행)
 
@@ -97,7 +116,8 @@ model BuyerMajorImageDraft {
 - **건드리는 레포 · 배포 순서**: klow_admin → (마무리) staging: DB migrate → server → admin · 운영: 같은 순서
 - **스키마·데이터 위험**: 없음(A 의 마이그레이션 배포만)
 - **세션 안 순서(정지점)**: ① 화면·API 클라 ② 로컬 왕복(브랜드 1개 테스트 → 전체 → 적용 → 되돌리기) ③ staging 배포 + staging 에서 소브랜드 1개 실생성 ④ 운영 배포(사용자 확인 후) — 운영 시범 브랜드 1개는 사용자가 화면으로
-- **완료 기준**: 어드민에서 브랜드 선택 → 테스트 결과 확인 → 전체 생성 진행 그리드 → 선택 적용 → klow.kr 브랜드 페이지에 4:5 새 이미지 노출 → 되돌리기 원복
+- **완료 기준**: 어드민에서 브랜드 선택 → 비용 패널(이번 달 사용액·남은 예산) 표시 → 테스트 결과 확인 → 전체 생성 확인창에 예상 비용/남은 예산 → 진행 그리드 → 선택 적용 → klow.kr 브랜드 페이지에 4:5 새 이미지 노출 → 되돌리기 원복 · 충전 기록 추가 시 남은 예산 갱신
+- **배포 전 사용자 작업**: staging·운영 Railway 에 `OPENAI_ADMIN_KEY`
 
 ## 4. 프롬프트 원문 (사용자 제공, 2026-10-31 — `PROMPT_VERSION = 'v1'`)
 
