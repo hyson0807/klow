@@ -22,7 +22,7 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
-**`§7` 59·60·61행 — buyer-sample-checkout 트랙 등록(2026-11-02 계획).** 바이어 공간 제품 상세 "Get N samples" → 엑심베이 결제(샘플 단가×개수 + 목적국 7kg 요율) → 어드민 '바이어 주문' 탭 → **KLOW 송장**(발송인 KLOW · EFS 배송비 KLOW 부담 — 미매칭·브랜드 청구 제외) + Retail price 전면 숨김. 다음: **59행(A) klow_server** — 착수 전 git `feat/buyer-sample-checkout` + **Neon DB 브랜치(사용자 생성)** 필요. 스펙 [`plan/buyer-sample-checkout/`](./plan/buyer-sample-checkout/README.md). ⚠️ C 착수 전 사용자 확인: 메이저 제품 통관 HS 코드 · `ShopSettings.klowSender*` 운영값 입력 여부.
+**`§7` 59·60·61행 — buyer-sample-checkout 트랙 등록(2026-11-02 계획).** 바이어 공간 제품 상세 "Get N samples" → 엑심베이 결제(샘플 단가×개수 + 목적국 7kg 요율) → 어드민 '바이어 주문' 탭 → **KLOW 송장**(발송인 KLOW · EFS 배송비 KLOW 부담 — 미매칭·브랜드 청구 제외) + Retail price 전면 숨김. 다음: **59행(A) klow_server** — git `feat/buyer-sample-checkout` + Neon DB 브랜치 **`ep-delicate-moon-a1dbshsn`**(사용자 생성 완료 · 접속 문자열은 2026-11-02 대화 — 문서에 적지 않는다). 스펙 [`plan/buyer-sample-checkout/`](./plan/buyer-sample-checkout/README.md). HS 는 화장품 코드(D11), 송장 발급 전 어드민이 제품별 신고가 등을 확인·수정하는 폼(D12). ⚠️ C 착수 전 확인: `ShopSettings.klowSender*` 운영값 입력 여부.
 
 **`§7` 58행 — 바이어 문의 WhatsApp·목표 MOQ 컬럼화(2026-11-02, 트랙 밖 요청)는 ✅ staging·운영 배포 완료**(server `2946563` → web `f324cdb` · admin `8a45309`, main push 후 api.klow.kr 재기동 확인). 남은 것: 운영 어드민 `/buyer/inquiries` 가 열리는지(= 운영 자동 migrate 적용 확인) + 운영 백필 건수 SELECT. `§9` 58행 메모.
 
@@ -1176,7 +1176,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 58 | buyer-inquiry-columns | **바이어 문의 WhatsApp·목표 MOQ 컬럼화** — `BuyerInquiry.whatsapp`·`targetMoq`(마이그레이션 `20261102081040_buyer_inquiry_contact_columns` — nullable ADD + 같은 SQL 안의 멱등 백필: 기존 행은 `needs` 의 `WhatsApp:`·`Target MOQ:` 줄에서, `needs` 무변경) · 서버는 WhatsApp 을 더 이상 `needs` 앞에 안 붙이고 구 웹의 `Target MOQ:` 줄은 폴백으로 읽는다 · 웹 Discuss 가 `targetMoq` 필드로 · 어드민 목록 '연락처'(이메일+WhatsApp)·수량(qty 없으면 목표 MOQ). 트랙 밖 요청(2026-11-02) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시) · staging push(사용자) → 2026-11-02 main push server → web·admin(api.klow.kr 재기동 확인 · 운영 마이그레이션은 서버 배포의 자동 migrate 에 맡김)** | 완료 | ✓ | 2026-11-02 | 2946563 / 8a45309 / - / f324cdb / (이 커밋) |
 | 59 | buyer-sample-checkout | **A. klow_server — 스키마 + 주문·결제 + 소비자 축 제외 + 어드민 API** — `BuyerProduct`·`BuyerMajorProduct` 샘플 개수·단가 · `Order.kind`/`buyerUserId` · `OrderItem.buyerProductId`·`majorProductId`(줄은 브랜드에 안 묶음 · 마이그레이션 `add_buyer_sample_checkout` + 인디 1행 단가 백필) · **결제 확정 부수효과 분기(G8 — 송장 자동발급·브랜드 알림톡 차단)** · `kind` 필터 재부착(G2) · `/v1/buyer/sample-quote`·`sample-orders`(7kg 요율) · 결제 바이어 소유권 · 어드민 바이어 주문 API. git `feat/buyer-sample-checkout` + **DB 브랜치 필요** | 대기 | ✗ | | |
 | 60 | buyer-sample-checkout | **B. klow_admin + klow_web** — 제품 샘플 2칸 · 주문 목록 유형 '바이어주문' · `/buyer/orders` 탭 · Retail price 전면 제거 · 상세 샘플 단가 + "Get N samples"(Discuss wholesale 아래) · 주문서 → 엑심베이 → 결과 · kb 8개 언어 | 대기 | ✗ | | |
-| 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · 발급 시 바이어 추적 메일 · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web) | 대기 | ✗ | | |
+| 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · **발급 폼(제품별 신고가·HS·무게 확인·수정)** · 발급 시 바이어 추적 메일 · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
