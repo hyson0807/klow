@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 58행 — 바이어 문의 WhatsApp·목표 MOQ 컬럼화(2026-11-02, 트랙 밖 요청)는 staging 브랜치 커밋까지**(staging DB `ep-icy-flower` 에 `20261102081040_buyer_inquiry_contact_columns` 직접 `migrate dev` · klow_server `2946563` → klow_web `f324cdb` · klow_admin `8a45309`, **push 안 함**). 다음(사용자): **server → web·admin** 순서로 staging push → 운영(운영 DB `migrate deploy` 가 운영 문의를 같이 백필 → server → web·admin). ⚠️ 54행(WhatsApp 문의 서버 수신)이 아직 운영 전이면 함께 나간다. `§9` 58행 메모.
+
 **`§7` 57행 — 인디 브랜드도 AI 이미지 제작(2026-11-01)은 기능 브랜치 커밋까지**(klow_server `feat/buyer-major-images` `b7396e5`(4:5 패딩)·`922cdeb`·`8c9796b`('생성 중' 멈춤 수정 — 운영 ARENCIA 2건은 이 배포 직후 부팅 복구로 다시 생성된다) · klow_admin `3532d37`, **push 안 함** — 배포는 사용자). staging DB 에 `add_buyer_indie_image_drafts` 적용됨. 다음(사용자): server → admin 순서로 staging·운영 배포 · **staging Railway `BUYER_IMAGE_SOURCE_ORIGINS=https://cdn.klow.kr`**(staging 인디 원본이 운영 CDN) · 운영 DB 에 마이그레이션 4개(`_drafts`·`_prompts`·`_revisions`·`_indie`) 적용 확인 · 인디 1장 실생성. `§9` 55행 메모.
 
 **`§7` 55·56행 — buyer-major-images ✅ 운영 배포 완료(2026-10-31, 사용자)** — klow_server `50971f8` · klow_admin `e0c86ad` 가 staging·main 둘 다. 어드민 `/buyer/major/images`: 비용 패널 · 테스트/전체 생성 · 원본 고르기 · **프롬프트 편집(버전)** · **수정 요청** · 선택 적용·되돌리기. ⚠️ **운영 DB 마이그레이션 3개**(`add_buyer_major_image_drafts`·`_prompts`·`_revisions`)가 적용됐는지 확인 필요 — 이 세션은 운영 DB 에 접근하지 않았다(Railway 자동 마이그레이션이면 이미 적용). 운영 Railway `OPENAI_ADMIN_KEY` 도. 남은 것: 적용 규칙 (a) 확정 · 운영 시범 브랜드 1개(사용자). `§9` 55행 메모.
@@ -1150,6 +1152,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 55 | buyer-major-images A | **klow_server — 메이저 제품 이미지 AI 리터치: 스키마 + 생성 워커 + 어드민 API** — `BuyerMajorImageDraft` + `BuyerMajorProduct.originalImages` + `OpenAiCreditTopup` · `gpt-image-2.5-sunburst` 편집 → sharp **contain** 4:5 WebP → R2 · 테스트/전체 적재·재생성(`sourceUrl` 로 원본 선택)·적용·되돌리기 API · 비용 기록 + 조직 사용액(`OPENAI_ADMIN_KEY`) + 충전 기록 → 남은 예산 근사. 사용자 결정: 일괄 생성은 안 돌림(시스템만) · 최신 모델 high · 확인창에 비용. **사용자 지시로 staging DB 직접 `migrate dev` + staging 배포 → 2026-10-31 사용자가 main(운영) 배포**. 실생성 1장 $0.052·33초. 스펙 [plan/buyer-major-images](./plan/buyer-major-images/README.md) · 결정 [storefront 2026-10-31](./decisions/storefront.md#2026-10-31) | 완료(운영) | ✗ | 2026-10-31 | 0d5e7e7 / - / - / - / (이 커밋) |
 | 56 | buyer-major-images B | **klow_admin — 이미지 제작 페이지 + 배포** — `/buyer/major/images`(메이저 목록 헤더 '이미지 제작'): 비용 패널(조직 사용액·브랜드 생성 비용·남은 예산 근사·장당 실측 + 충전 기록 모달) · 브랜드 선택(sessionStorage) · 원본|결과 4:5 카드 · 테스트 1장 · 전체 생성 확인창(대상 × 장당 + 남은 예산) · 4초 폴링 · 생성 완료 기본 체크 → 선택 적용 · 되돌리기·버리기·재생성·**원본 사진 고르기** · **생성 프롬프트 편집** · **생성 결과 수정 요청**(직전 결과 + 원본으로 요청 부분만 — 마이그레이션 `add_buyer_major_image_revisions`)(저장마다 새 버전 · 이력 — 같은 날 사용자 요청, 서버 마이그레이션 `add_buyer_major_image_prompts` staging DB 직접). 같은 세션에서 이어 진행(사용자 지시). **staging 배포 + admin-staging 실화면 확인 완료**(생성은 안 누름). **2026-10-31 사용자가 staging·main 배포**(api.klow.kr 새 라우트 401 확인) | 완료(운영) | ✗ | 2026-10-31 | 62a800a · 50971f8 / 95de654 · ed43eb2 · e0c86ad / - / - / (이 커밋) |
 | 57 | buyer-major-images C | **인디 브랜드도 AI 이미지 제작 + 이미지 제작 별도 탭** — 서버: 초안 메이저·인디 공용(`buyerProductId`) · `BuyerProduct.preAiImages`·`aiImagesApplied` · `buyer-image-target.ts` · 인디 경로 `admin/buyer/brands/:brandId/image-drafts…` · 마이그레이션 `add_buyer_indie_image_drafts`(staging DB 직접, 사용자 지시). 어드민: `/buyer/major/images` → `/buyer/images`(사이드바 '이미지 제작'), 인디·메이저 브랜드 optgroup, 인디 '원본 따라감' 배지. 사용자 결정: 적용은 바이어 공간 사진만 · 바이어 공간에 추가된 제품만. 트랙 밖 요청(2026-11-01) — 2레포 순서 배포 + 마이그레이션이라 행. 같은 날 앞선 4:5 패딩 수정(server `b7396e5`)과 **'생성 중' 멈춤 수정**(server `8c9796b` — 종료 시 되돌리기 + 1분 점검 cron `buyer-image-sweep`, 운영 ARENCIA 2건 사고)도 이 배포에 실린다. 결정 [storefront 2026-11-01](./decisions/storefront.md#2026-11-01) | 완료(커밋) | ✗ | 2026-11-01 | b7396e5 · 922cdeb · 8c9796b / 3532d37 / - / - / (이 커밋) |
+| 58 | buyer-inquiry-columns | **바이어 문의 WhatsApp·목표 MOQ 컬럼화** — `BuyerInquiry.whatsapp`·`targetMoq`(마이그레이션 `20261102081040_buyer_inquiry_contact_columns` — nullable ADD + 같은 SQL 안의 멱등 백필: 기존 행은 `needs` 의 `WhatsApp:`·`Target MOQ:` 줄에서, `needs` 무변경) · 서버는 WhatsApp 을 더 이상 `needs` 앞에 안 붙이고 구 웹의 `Target MOQ:` 줄은 폴백으로 읽는다 · 웹 Discuss 가 `targetMoq` 필드로 · 어드민 목록 '연락처'(이메일+WhatsApp)·수량(qty 없으면 목표 MOQ). 트랙 밖 요청(2026-11-02) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시) · staging 브랜치 커밋, push 안 함** | 완료(staging 커밋) | ✗ | 2026-11-02 | 2946563 / 8a45309 / - / f324cdb / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1213,6 +1216,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-inquiry-columns — 58행 (staging 커밋 · push 전)
+
+- 한 것: `BuyerInquiry.whatsapp`(≤40)·`targetMoq`(≤60) 컬럼 + 마이그레이션 SQL 안의 멱등 백필(정규식 `(?n)^WhatsApp:` — 숫자·+·공백·괄호·하이픈이고 숫자 7자리 이상만 · `(?n)^Target MOQ:` — 빈 값 제외). 54행 메모의 '컬럼화는 후속 후보'를 이걸로 닫았다.
+- 확인한 것: staging DB 는 문의 **0건**이라 백필 대상이 없었다 — 정규식은 임시 VALUES 4건으로 SELECT 검증(본문에 바이어가 쓴 `WhatsApp: call me` 는 거부). server typecheck·buyer 단위 152·e2e 통과(새 테스트 2: 컬럼 저장 · 구 웹 `Target MOQ:` 줄 폴백). web·admin tsc·eslint 통과.
+- 확인하지 못한 것: 실제 문의 POST 왕복(로컬 서버가 staging DB + 실메일이라 안 보냄) · 어드민 화면 실렌더 · **운영 백필 건수**(운영 DB 미접속 — 배포 뒤 `SELECT count(*) FILTER (WHERE whatsapp IS NOT NULL), count(*) FILTER (WHERE "targetMoq" IS NOT NULL) FROM "BuyerInquiry"` 로 확인).
+- 남은 일 (이 순서로): ① staging push server → web·admin ② staging 에서 Discuss 문의 1건 → 어드민 연락처·수량 열 확인 ③ 운영 DB `migrate deploy` → server → web·admin.
+- 다음 단계가 알 것: ⚠️ web 이 server 보다 먼저 나가면 zod 가 `targetMoq` 를 버려 목표 MOQ 가 사라진다(본문 줄도 이제 안 보낸다). 옛 문의는 `needs` 에 `WhatsApp:` 줄이 그대로 남아 상세에서 두 번 보인다(의도 — 본문 무변경).
 
 ### buyer-major-images — 55·56행 (A·B 완료 · staging 배포 완료)
 
