@@ -21,6 +21,7 @@
 | [buyer-auth/](./buyer-auth/README.md) | 바이어 공간의 **바이어 계정** — 이메일+비밀번호 로그인·가입(가입 이메일 OTP · 사업자 서류 R2 · 비번 찾기 · 세션 30일 슬라이딩) + 어드민 "바이어 계정"(목록·서류·검수 배지). 소비자 로그인(`klow_sid`)과 테이블·쿠키·라우트 전부 분리 |
 | [buyer-i18n/](./buyer-i18n/README.md) | 바이어 공간 다국어 URL(`/`=en · `/ja` `/zh` …) + 첫 방문 `/` 자동 언어(쿠키 → Accept-Language → Vercel IP 국가). 문구는 Claude 직접 번역, 바이어 DB 데이터는 서버 LLM 번역 캐시. 내부 경로 `kbl/[lang]` + middleware rewrite |
 | [buyer-major-images/](./buyer-major-images/README.md) | 메이저 제품 이미지 AI 일괄 리터치 — 어드민에서 브랜드 선택 → 테스트 1장 → 전체 생성 → 검토 후 적용(원본 백업·되돌리기). OpenAI 이미지 편집 API + `sharp` 로 4:5 WebP(≤250KB) |
+| [buyer-sample-checkout/](./buyer-sample-checkout/README.md) | 바이어 제품 샘플 주문 — 상세 "Get N samples" → 엑심베이(샘플 단가×개수 + 7kg 요율) → 어드민 바이어 주문 탭 → KLOW 송장(배송비 KLOW 부담 · efs-billing 청구 제외) |
 
 ## 새 트랙을 만들 때
 

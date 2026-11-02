@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 59·60·61행 — buyer-sample-checkout 트랙 등록(2026-11-02 계획).** 바이어 공간 제품 상세 "Get N samples" → 엑심베이 결제(샘플 단가×개수 + 목적국 7kg 요율) → 어드민 '바이어 주문' 탭 → **KLOW 송장**(발송인 KLOW · EFS 배송비 KLOW 부담 — 미매칭·브랜드 청구 제외) + Retail price 전면 숨김. 다음: **59행(A) klow_server** — 착수 전 git `feat/buyer-sample-checkout` + **Neon DB 브랜치(사용자 생성)** 필요. 스펙 [`plan/buyer-sample-checkout/`](./plan/buyer-sample-checkout/README.md). ⚠️ C 착수 전 사용자 확인: 메이저 제품 통관 HS 코드 · `ShopSettings.klowSender*` 운영값 입력 여부.
+
 **`§7` 58행 — 바이어 문의 WhatsApp·목표 MOQ 컬럼화(2026-11-02, 트랙 밖 요청)는 ✅ staging·운영 배포 완료**(server `2946563` → web `f324cdb` · admin `8a45309`, main push 후 api.klow.kr 재기동 확인). 남은 것: 운영 어드민 `/buyer/inquiries` 가 열리는지(= 운영 자동 migrate 적용 확인) + 운영 백필 건수 SELECT. `§9` 58행 메모.
 
 **`§7` 57행 — 인디 브랜드도 AI 이미지 제작(2026-11-01)은 기능 브랜치 커밋까지**(klow_server `feat/buyer-major-images` `b7396e5`(4:5 패딩)·`922cdeb`·`8c9796b`('생성 중' 멈춤 수정 — 운영 ARENCIA 2건은 이 배포 직후 부팅 복구로 다시 생성된다) · klow_admin `3532d37`, **push 안 함** — 배포는 사용자). staging DB 에 `add_buyer_indie_image_drafts` 적용됨. 다음(사용자): server → admin 순서로 staging·운영 배포 · **staging Railway `BUYER_IMAGE_SOURCE_ORIGINS=https://cdn.klow.kr`**(staging 인디 원본이 운영 CDN) · 운영 DB 에 마이그레이션 4개(`_drafts`·`_prompts`·`_revisions`·`_indie`) 적용 확인 · 인디 1장 실생성. `§9` 55행 메모.
@@ -1056,6 +1058,25 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 
 제목과 순서만 — 트랙 문서 §3 B(화면 → 로컬 왕복 → staging → 운영, server → admin).
 
+### buyer-sample-checkout — 바이어 제품 샘플 주문 (KLOW 직접 조달 · KLOW 송장)
+
+스펙: [`plan/buyer-sample-checkout/`](./plan/buyer-sample-checkout/README.md) — 결정 D1~D10 은 `README.md`, **빌드 스펙 정본은 `implementation-plan.md`**(§1 게이트 G1~G7 · §2 데이터 모델 · §3 A·B·C).
+
+- ⚠️ 2026-10-29 에 지운 샘플 박스(`9f6e1c2`)의 `Order.kind` 필터 자리를 **다시** 건다(G2) — 하나라도 빠지면 바이어 주문이 브랜드 정산 후보가 된다
+- ⚠️ KLOW 송장 = `Shipment.brandId` NULL(C 의 두 번째 마이그레이션) · efs-billing 은 '매칭됨 + KLOW 부담'(G5)
+
+#### 59. A. klow_server — 스키마 + 주문·결제 + 소비자 축 제외 + 어드민 API
+
+트랙 문서 §3 A 가 정본(읽을 것 · 마이그레이션 `add_buyer_sample_checkout` · git `feat/buyer-sample-checkout` + Neon DB 브랜치 · 세션 안 순서 1~6 · 완료 기준).
+
+#### 60. B. klow_admin + klow_web — 입력칸 · 바이어 주문 탭 · 상세 버튼 · 주문서·결제
+
+제목과 순서만 — 트랙 문서 §3 B.
+
+#### 61. C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포
+
+제목과 순서만 — 트랙 문서 §3 C(착수 전 메이저 HS 코드 사용자 확인).
+
 ### 일정에 없는 트랙 — custom-domain · mcf
 
 **문서는 그대로 두되 `§7` 표에는 올리지 않는다** (2026-09-22, 사용자 결정 — 당분간 구현 계획 없음).
@@ -1153,6 +1174,9 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 56 | buyer-major-images B | **klow_admin — 이미지 제작 페이지 + 배포** — `/buyer/major/images`(메이저 목록 헤더 '이미지 제작'): 비용 패널(조직 사용액·브랜드 생성 비용·남은 예산 근사·장당 실측 + 충전 기록 모달) · 브랜드 선택(sessionStorage) · 원본|결과 4:5 카드 · 테스트 1장 · 전체 생성 확인창(대상 × 장당 + 남은 예산) · 4초 폴링 · 생성 완료 기본 체크 → 선택 적용 · 되돌리기·버리기·재생성·**원본 사진 고르기** · **생성 프롬프트 편집** · **생성 결과 수정 요청**(직전 결과 + 원본으로 요청 부분만 — 마이그레이션 `add_buyer_major_image_revisions`)(저장마다 새 버전 · 이력 — 같은 날 사용자 요청, 서버 마이그레이션 `add_buyer_major_image_prompts` staging DB 직접). 같은 세션에서 이어 진행(사용자 지시). **staging 배포 + admin-staging 실화면 확인 완료**(생성은 안 누름). **2026-10-31 사용자가 staging·main 배포**(api.klow.kr 새 라우트 401 확인) | 완료(운영) | ✗ | 2026-10-31 | 62a800a · 50971f8 / 95de654 · ed43eb2 · e0c86ad / - / - / (이 커밋) |
 | 57 | buyer-major-images C | **인디 브랜드도 AI 이미지 제작 + 이미지 제작 별도 탭** — 서버: 초안 메이저·인디 공용(`buyerProductId`) · `BuyerProduct.preAiImages`·`aiImagesApplied` · `buyer-image-target.ts` · 인디 경로 `admin/buyer/brands/:brandId/image-drafts…` · 마이그레이션 `add_buyer_indie_image_drafts`(staging DB 직접, 사용자 지시). 어드민: `/buyer/major/images` → `/buyer/images`(사이드바 '이미지 제작'), 인디·메이저 브랜드 optgroup, 인디 '원본 따라감' 배지. 사용자 결정: 적용은 바이어 공간 사진만 · 바이어 공간에 추가된 제품만. 트랙 밖 요청(2026-11-01) — 2레포 순서 배포 + 마이그레이션이라 행. 같은 날 앞선 4:5 패딩 수정(server `b7396e5`)과 **'생성 중' 멈춤 수정**(server `8c9796b` — 종료 시 되돌리기 + 1분 점검 cron `buyer-image-sweep`, 운영 ARENCIA 2건 사고)도 이 배포에 실린다. 결정 [storefront 2026-11-01](./decisions/storefront.md#2026-11-01) | 완료(커밋) | ✗ | 2026-11-01 | b7396e5 · 922cdeb · 8c9796b / 3532d37 / - / - / (이 커밋) |
 | 58 | buyer-inquiry-columns | **바이어 문의 WhatsApp·목표 MOQ 컬럼화** — `BuyerInquiry.whatsapp`·`targetMoq`(마이그레이션 `20261102081040_buyer_inquiry_contact_columns` — nullable ADD + 같은 SQL 안의 멱등 백필: 기존 행은 `needs` 의 `WhatsApp:`·`Target MOQ:` 줄에서, `needs` 무변경) · 서버는 WhatsApp 을 더 이상 `needs` 앞에 안 붙이고 구 웹의 `Target MOQ:` 줄은 폴백으로 읽는다 · 웹 Discuss 가 `targetMoq` 필드로 · 어드민 목록 '연락처'(이메일+WhatsApp)·수량(qty 없으면 목표 MOQ). 트랙 밖 요청(2026-11-02) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시) · staging push(사용자) → 2026-11-02 main push server → web·admin(api.klow.kr 재기동 확인 · 운영 마이그레이션은 서버 배포의 자동 migrate 에 맡김)** | 완료 | ✓ | 2026-11-02 | 2946563 / 8a45309 / - / f324cdb / (이 커밋) |
+| 59 | buyer-sample-checkout | **A. klow_server — 스키마 + 주문·결제 + 소비자 축 제외 + 어드민 API** — `BuyerProduct`·`BuyerMajorProduct` 샘플 개수·단가 · `Order.kind`/`buyerUserId` · `OrderItem.majorProductId`(마이그레이션 `add_buyer_sample_checkout` + 인디 1행 단가 백필) · `kind` 필터 재부착(G2) · `/v1/buyer/sample-quote`·`sample-orders`(7kg 요율) · 결제 바이어 소유권 · 어드민 바이어 주문 API. git `feat/buyer-sample-checkout` + **DB 브랜치 필요** | 대기 | ✗ | | |
+| 60 | buyer-sample-checkout | **B. klow_admin + klow_web** — 제품 샘플 2칸 · 주문 목록 유형 '바이어주문' · `/buyer/orders` 탭 · Retail price 전면 제거 · 상세 샘플 단가 + "Get N samples"(Discuss wholesale 아래) · 주문서 → 엑심베이 → 결과 · kb 8개 언어 | 대기 | ✗ | | |
+| 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web) | 대기 | ✗ | | |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
