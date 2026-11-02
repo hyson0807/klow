@@ -116,7 +116,7 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 
 | Method | Path                              | Guard                          | 기능                                                                       |
 |--------|-----------------------------------|--------------------------------|-----------------------------------------------------------------------------|
-| POST   | `/v1/payment/prepare`             | OptionalUser + 게스트 쿠키     | 결제 준비 — 바디 `{ orderId, issuerCountry?: 'KR' }`. 동의 3종 + ownership + 24h 유효기간 재검증 후 Eximbay `/v1/payments/ready` 로 `fgkey` 발급, 클라 SDK 가 그대로 되돌려 보낼 payload(`payment`/`merchant`/`buyer`/`url`/`settings`/`product`/`surcharge?`/`ship_to`/`tax?`)를 echo 반환 |
+| POST   | `/v1/payment/prepare`             | OptionalUser + 게스트 쿠키     | 결제 준비 — 바디 `{ orderId, issuerCountry?: 'KR' }`. ⚠️ **소비자 주문(`kind=consumer`)만** — 바이어 샘플 주문은 바이어 세션 전용 `POST /v1/buyer/sample-orders/:id/prepare`(`prepareForBuyer`, USD 만 — [buyer-orders](./buyer-orders.md)). 동의 3종 + ownership + 24h 유효기간 재검증 후 Eximbay `/v1/payments/ready` 로 `fgkey` 발급, 클라 SDK 가 그대로 되돌려 보낼 payload(`payment`/`merchant`/`buyer`/`url`/`settings`/`product`/`surcharge?`/`ship_to`/`tax?`)를 echo 반환 |
 | POST   | `/v1/payment/verify`              | public (60/분)                 | 결제 결과 검증 — 바디 `{ querystring }`. Eximbay 재조회 + `pgCurrency` 기준 금액 검증(KRW ±1 / USD ±0.01) + `paymentStatus` 멱등 전이. 성공 시 게스트 주문 쿠키 정리, 응답 `{ orderId }`. **이제는 구 결제창 호환용 폴백** — 주 경로는 `/payment/return` 이다. ⚠️ 예전 5회/분은 **IP 기준**이라 부스(공용 NAT) 결제를 429 로 죽였다 |
 | POST   | `/v1/payment/report-failure`      | OptionalUser + 게스트 쿠키     | 결제 실패 보고 — 바디 `{ orderId, reason? ≤500자 }`. `pending → failed` 멱등 전이(다른 상태면 현재 상태 그대로 반환), 사유는 타임스탬프와 함께 `paymentFailureReason` 에 저장. 응답 `{ status }` |
 
@@ -131,7 +131,7 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 
 | Method     | Path              | Guard                          | 기능                                                                 |
 |------------|-------------------|--------------------------------|----------------------------------------------------------------------|
-| GET / POST | `/payment/return` | 없음 (`@SkipThrottle`, Origin 가드 예외) | Eximbay `return_url`. 결과를 querystring 으로 정규화 → `handleReturn` 으로 확정(`rescode=0000` 이면 `parseAndMarkPaid`, 아니면 소유권 검증 없이 pending→failed) → klow_web `/checkout/redirect?<원본qs>&klow_verified=1` 로 **303** |
+| GET / POST | `/payment/return` | 없음 (`@SkipThrottle`, Origin 가드 예외) | Eximbay `return_url`. 결과를 querystring 으로 정규화 → `handleReturn` 으로 확정(`rescode=0000` 이면 `parseAndMarkPaid`, 아니면 소유권 검증 없이 pending→failed) → klow_web `/checkout/redirect?<원본qs>&klow_verified=1` 로 **303**. 단 단독 판매 사이트 주문은 그 사이트로, **바이어 샘플 주문은 `{FRONTEND_URL}/shop/sample-orders/:id`**(querystring 없음 — 그 화면은 서버 상태를 읽는다) |
 
 - **절대 throw 하지 않는다.** 여기서 던지면 결제를 마친 손님이 에러 화면을 보는데 승인이 취소되지도 않는다. 확정 실패는 Sentry 로 올리고 웹훅·크론이 주워 담는다.
 - **원본 querystring 을 그대로 넘겨 303** 한다 — klow_web 의 기존 분기(시딩 링크 복귀·현장 부스 성공화면·결제한 상품만 카트에서 제거)가 브라우저 `sessionStorage` 에만 있는 정보를 쓰기 때문에 서버가 대신 판단할 수 없다. `klow_verified=1` 은 "서버가 이미 확정했으니 다시 verify 하지 말라"는 신호.
@@ -190,6 +190,8 @@ form POST 에는 브라우저 Origin 이 없어서 예외가 빠지면 **모든 
 5. `notifyBrandsOfPaidOrderSafe` — **주문에 담긴 제품의 브랜드(들)에게 "새 주문 접수" 카카오 알림톡**(onsite 제외). 브랜드가 스튜디오 주문현황 탭에서 발송처리를 놓치지 않도록. 조회·조립·발송의 정본은 **`orders/brand-order-alimtalk.ts` 의 `notifyBrandsOfOrderSafe`** 이고 여기 있는 건 `sendOrderConfirmationSafe` 와 같은 **얇은 래퍼**다 — 무가 시딩 claim·재발송(`seeding.service`)이 같은 함수를 쓰므로 문자 내용이 갈리지 않는다. ⚠️ 이 래퍼의 **이름을 바꾸지 말 것** — `payment-reconcile.spec.ts` 가 인스턴스 프로퍼티로 덮어써 스텁하므로 이름이 바뀌면 스텁이 조용히 안 먹고 결제 스펙이 실제 알림 경로를 탄다. 브랜드 집합은 송장과 동일 규칙(productId→`Product.brandId`, 없으면 `OrderItem.brandId`), 수신번호는 같은 파일의 **`resolveBrandAlertPhone`**(`Brand.senderPhone` 우선·없으면 `BrandUser.phone` 폴백) — ⚠️ 그 함수를 브랜드 알림 토글의 "켤 수 있는가" 검증도 **함께 쓴다**(각자 구현하면 "토글은 켜졌는데 알림은 안 가는" 상태가 생긴다). ⚠️⚠️ **시딩 주문의 제품명은 `OrderItem.productName` 이 아니다** — 그건 EFS 통관 신고용 일반 품명(`Korean Skincare Toner` 류)이라, 고객 대면 경로 4곳이 쓰는 `seedingItemNames()`+`displayLines()` 파생을 여기서도 태운다(2026-09-04. 그전까지 브랜드는 자기가 보내야 할 제품을 알 수 없는 문자를 받았다). 일반 주문은 파생이 `[]` 라 원본 라인 그대로다. ⚠️ **opt-in 축은 인자로 받는다** — `requireSeedingOptIn: false`(여기, 매출 주문이라 항상 발송) vs `true`(무가 시딩·재발송 — `Brand.seedingAlertEnabled` 를 켠 브랜드에게만). **비대칭이 의도다.** 승인 템플릿("브랜드 일반주문 발생") 변수는 **`#{country}`(주문국)·`#{products}`("제품명 x 개수, ..." 목록)** 2개뿐 — 본문/버튼(KLOW)/고객센터 문구는 템플릿 고정 텍스트. ⚠️ `#{products}` 는 `kakao.service.ts` 의 `renderProducts` 가 **8개까지만 싣고 나머지를 `외 N건`** 으로 접는다(브랜드 지정 시딩은 박스당 수량이 1~99라 그만큼 펼쳐지는데, 치환 후 본문이 카카오 상한을 넘으면 발송이 통째로 거절되고 catch 가 삼켜 아무도 모른다 — 접는 건 문자열 길이뿐이고 통 수는 1건당 1통 그대로다). 알림톡 설정(`SOLAPI_KAKAO_PFID`/`SOLAPI_KAKAO_TEMPLATE_ORDER_PAID`)이 없으면 `[DEV kakao]` 콘솔 로그로 폴백.
 
 현장(`channel='onsite'`) 주문은 배송이 없어 4·5를 건너뛰고, `paid` 전이와 동시에 `status='completed'` 로 확정된다.
+
+⚠️⚠️ **바이어 샘플 주문(`Order.kind = buyer_sample`, 2026-11-02)은 이 블록 맨 앞에서 갈라진다** — 위 0~5를 **전부** 건너뛰고 `buyer-orders/buyer-sample-paid.ts#onBuyerSamplePaidSafe`(바이어 확인 메일 + 운영팀 알림)만 돈다. 특히 4(송장 자동 발급)가 돌면 줄에 브랜드가 없어 실패 알림 SMS·재시도 예약이 남고, 5(알림톡)가 인디 브랜드에 KLOW 직접 조달 주문을 알린다. return·웹훅·재조정 cron 이 모두 `markPaid` 를 타므로 분기는 한 곳이다. 회귀 잠금 `__tests__/buyer-sample-payment.spec.ts`. 자세히는 [buyer-orders](./buyer-orders.md).
 
 ## 환경변수
 

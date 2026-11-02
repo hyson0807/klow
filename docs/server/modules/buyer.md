@@ -11,7 +11,7 @@
 | 모델 | 역할 |
 |---|---|
 | `BuyerBrand` | 원본 `Brand` 의 1:1 오버레이(`brandId @unique`). 공개 토글·순서·tier·프로필(도시·설립·리드타임·지역·마케팅 지원·derm)·로고 덮어쓰기 |
-| `BuyerProduct` | 원본 `Product` 의 1:1 오버레이(`productId @unique`). 공개 토글·카테고리·영문명·스펙·인증(CPNP/FDA OTC/SPF/GMP)·MSRP·이미지·`benefits`(인디 목록 사이드바 필터 — 고정 8키 `BUYER_BENEFITS`, klow_web `KB_BENEFITS` 미러) |
+| `BuyerProduct` | 원본 `Product` 의 1:1 오버레이(`productId @unique`). 공개 토글·카테고리·영문명·스펙·인증(CPNP/FDA OTC/SPF/GMP)·MSRP·**샘플 개수·단가**(`sampleQty`·`sampleUnitUsdCents` — 둘 다 있어야 "Get N samples", [buyer-orders](./buyer-orders.md))·이미지·`benefits`(인디 목록 사이드바 필터 — 고정 8키 `BUYER_BENEFITS`, klow_web `KB_BENEFITS` 미러) |
 | `BuyerPriceTier` | 도매 구간가(USD 센트). **MOQ 의 정본**(아래) |
 | `BuyerCategory` | 홈 카테고리 탭 |
 | `BuyerHeroSlide` | 홈 히어로(연결 제품 선택) |
@@ -32,7 +32,8 @@
 - `Product.hidden`·구독 상태는 **보지 않는다** — 소비자 판매의 게이트(`PUBLIC_PRODUCT_WHERE`)와 무관하다.
 - ⚠️ 판정은 **읽을 때 계산**한다(저장 컬럼 없음) — 원본 `image`·`status`·`slug` 가 다른 화면에서 바뀌어서다. 공개 API 는 값싼 조건을 where 로 먼저 줄이고 최종 판정은 `evaluate()` 가 한다.
 
-**구간가 규칙(G10)** — `common/validation/buyer.ts#buyerTierIssue` 가 입력 검증과 완비 판정 둘 다의 정본: 첫 행 `minQty=1`(샘플가) · 2~6행 · 시작 수량 엄격 오름차순 · 단가 > 0. **MOQ = 둘째 행 시작 수량**, 카드·패널·선반의 대표 도매가 = **MOQ 구간 단가**(`cardPrice()`, G11). 제품·브랜드에 MOQ 컬럼은 없다.
+**구간가 규칙(G10)** — `common/validation/buyer.ts#buyerTierIssue` 가 입력 검증과 완비 판정 둘 다의 정본: ≤6행 · 시작 수량 엄격 오름차순 · 단가 > 0 · **MOQ 구간(`minQty > 1`)이 1행 이상**. **MOQ = `minQty > 1` 인 첫 행의 시작 수량**, 카드·패널·선반의 대표 도매가 = **MOQ 구간 단가**(`cardPrice()`, G11). 제품·브랜드에 MOQ 컬럼은 없다.
+⚠️ **2026-11-02(buyer-sample-checkout D4)부터 첫 행 = 1개(샘플가)를 강제하지 않는다** — 샘플의 정본이 `sampleQty`·`sampleUnitUsdCents` 로 옮겨 갔다(마이그레이션이 1행 단가를 `sampleUnitUsdCents` 로 백필, 개수는 비움). 옛 데이터의 1개 행은 계속 허용하되 MOQ 가 아니다(건너뛴다).
 브랜드 `openingOrder` = 노출 제품 MOQ 최솟값, `retailMultiple` = MSRP 있는 노출 제품의 `MSRP ÷ MOQ 구간가` 평균(소수 1자리) — 응답 시 계산.
 
 **이미지(G5)**: `BuyerProduct.images = []` 이면 원본 **대표사진 1장**(`image`, 비었거나 동영상이면 `detailImages` 의 첫 비동영상 — 확장자 mp4/mov/webm 판별)을 실시간으로 쓴다. 한 장이라도 넣으면 그 배열이 정본. 로고도 같다(`logoUrl` null → `logosWide[0] ?? logosCircle[0]`).
@@ -85,12 +86,12 @@
 | GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
-| GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 |
+| GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`**(샘플 주문 제안 — 둘 다 있을 때만) |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
 - **G12**: 없는 slug/id 와 비공개·미완비·미승인은 **같은 404**(`brand not found` / `product not found`) — 비공개 행의 존재를 새지 않는다. 브랜드는 노출 제품이 1개 이상일 때만 존재한다.
-- 카드 `priceUsdCents` = MOQ 구간 단가, `moq` = 둘째 행 시작 수량, `sampleUsdCents` = 1행 단가, `benefits` = 베네핏 키.
-- ⚠️ **$7 샘플은 서버가 정하지 않는다**(2026-10-22) — 운영팀이 구간표 1행에 넣은 실가격이 정본이고, klow_web 은 1행이 700센트인 제품을 "$7 샘플 대상"으로 본다. 덮어쓰기 코드 없음.
+- 카드 `priceUsdCents` = MOQ 구간 단가, `moq` = MOQ 구간 시작 수량, `sampleUsdCents` = **샘플 단가(`sampleOffer` — 개수·단가 둘 다 있을 때만, 아니면 null)**, `benefits` = 베네핏 키.
+- 샘플 주문 자체(견적·주문·결제)는 [buyer-orders](./buyer-orders.md). (2026-10-22 의 "구간표 1행 = $7 샘플가" 규칙은 2026-11-02 에 새 칸으로 대체됐다.)
 - 조회는 throttle 을 조이지 않는다 — klow_web 은 ISR(`revalidate: 60`)로 받는다(Vercel egress IP 공유).
 - 프런트: klow_web `app/(kb)/kbl/[lang]/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
 - 서버 캐시 없음. 매 요청 노출 후보를 include 1회로 받아 메모리 판정(규모 수백 행).
@@ -149,7 +150,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 |---|---|---|---|
 | GET | `/v1/buyer/major-brands` | 없음 | 허브·헤더 메뉴 `{ brands: [{slug,name,logo,heroIngredients,tagline,productCount}], products: MajorCard[] }` |
 | GET | `/v1/buyer/major-brands/:slug` | 없음 | 브랜드관 — 요약 + `metaTitle`·`metaDescription`·`intro[]`·`sellsTo`·`faq[]`·`products` |
-| GET | `/v1/buyer/major-products/:id` | 없음 | 제품 상세(인디 PDP 와 같은 필드 이름, 가격 없음) + 같은 브랜드 다른 제품 최대 8 |
+| GET | `/v1/buyer/major-products/:id` | 없음 | 제품 상세(인디 PDP 와 같은 필드 이름, 도매 가격 없음) + 같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`** — 샘플 단가는 도매 구간가가 아니라 공개한다(2026-11-02) |
 | GET | `/v1/buyer/major-brands/:slug/prices` | **BuyerGuard** | `{ products: [{id, tiers: [{minQty, unitUsdCents}]}] }` — 브랜드 전 제품, 브랜드관·상세 공용 |
 | GET | `/v1/buyer/major-prices` | **BuyerGuard** | 위와 같은 모양을 노출 메이저 제품 **전부**에 대해 한 번에(2026-10-28 — 목록이 브랜드마다 부르던 30여 회를 1회로). klow_web `useKbMajorPrices()` 가 이것만 쓴다. 브랜드별 엔드포인트는 구 웹 호환으로 남긴다 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |

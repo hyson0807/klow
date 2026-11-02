@@ -47,7 +47,7 @@
 
 ### B. klow_admin + klow_web — 입력칸 · 바이어 주문 탭 · 상세 버튼 · 주문서·결제
 
-제목과 순서만(A 응답 모양이 확정된 뒤 정밀화).
+제목과 순서만(A 응답 모양이 확정된 뒤 정밀화). **A 확정(2026-11-02)**: API 모양 정본은 [`server/modules/buyer-orders.md`](../../server/modules/buyer-orders.md) — 결제 결과 화면 경로 `/shop/sample-orders/[id]`(서버 return 303 목적지, `GET /v1/buyer/sample-orders/:id` 로 상태를 읽는다) · prepare `POST /v1/buyer/sample-orders/:id/prepare` · 진행표 `§9` 59행 메모.
 - **세션 안 순서**: ① admin 제품 편집 샘플 2칸(인디·메이저) ② admin 주문 목록 유형 '바이어주문'(`orderTypeOf`·`ORDER_TYPE_BADGE`) ③ admin `/buyer/orders` 목록·상세(Sidebar 바이어 그룹 한 줄) — 송장 버튼 자리만 ④ web Retail price 전면 제거(`KbMajorPricing` · `KbProductCard` · 그 외 `msrpUsdCents` 렌더 전부) ⑤ web 상세 샘플 단가 표시 + "Get N samples" 버튼(Discuss wholesale **아래**, 인디 `KbPricing` · 메이저 `KbMajorPricing`) + 인디 구간표 1행 샘플 표시 제거(D4) ⑥ web 주문서(배송지 · 견적 · 동의) → 엑심베이 → 결과 화면 — 배송지 칸 규칙(주 · 일본 영문 주소 · 길이)은 소비자 체크아웃 것을 재사용(일본 영문 주소 칸 사고 [shipping-seeding 2026-09-30-3](../../decisions/shipping-seeding.md#2026-09-30-3)). 결과 화면은 `(kb)` 레이아웃 안 — 서버 return 303 이 소비자 `/checkout/redirect` 로 가지 않게 A ④에서 분기 ⑦ `kb` 사전 8개 언어(`npm run kb:check`)
 - **배포 순서**: server(A) → admin → web. web 이 먼저면 버튼이 404 견적을 받는다
 

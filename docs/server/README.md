@@ -59,6 +59,7 @@ NestJS 백엔드(`klow_server`, port 4000)의 **모듈별 엔드포인트** 한�
 |            | [brand-notices](./modules/brand-notices.md)                          | 브랜드관 공지 팝업 (기간 한정 안내 · 사진 · 자동 번역 · 오늘 하루 보지 않기) |
 |            | [b2b](./modules/b2b.md)                                              | B2B 도매 — 바이어 공개 페이지(도매가·MOQ·구간) + 주문서 접수·알림메일 + AI 원본 가격표 추출 |
 |            | [buyer](./modules/buyer.md)                                          | 바이어 공간(klow.kr/) — 어드민 큐레이션 오버레이(브랜드·제품·구간가·홈 구성) + 공개 API + 문의 저장·메일 |
+|            | [buyer-orders](./modules/buyer-orders.md)                            | 바이어 제품 샘플 주문 — "Get N samples" 견적(7kg 요율)·주문·엑심베이 결제(바이어 세션) + 어드민 바이어 주문 목록·상세 · 소비자/브랜드 축 제외(`Order.kind`) |
 |            | [buyer-auth](./modules/buyer-auth.md)                                | 바이어 계정 — 이메일+비번 로그인·가입(이메일 OTP·서류 R2 비공개 업로드)·비번 찾기 + 어드민 검수 상태(배지)·서류 프록시 |
 |            | [dampenerlab](./modules/dampenerlab.md)                              | 댐프너랩 커스텀 댐프너 단독 판매 사이트(dampenerlab.klow.kr) — 디자인 파일 presign · 주문 래핑(`shopSite` + 라인별 `customization`) · 결제 return 을 그 사이트로 |
 |            | [instagram](./modules/instagram.md)                                  | 브랜드 IG 계정 연동 → 포스팅 댓글에 브랜드관 링크 DM(private reply) |

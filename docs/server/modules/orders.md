@@ -159,8 +159,10 @@
 **`type` 쿼리 (주문 유형 필터)** — `Order.isSeeding` + `Order.channel` + **시딩 결제주체**를 한 축으로
 접은 값이라 DB enum 이 아니다. `seedingCustomer`(고객 결제 시딩) / `seedingBrand`(브랜드 결제 = 무가
 시딩) / `onsite`(부스 QR 현장결제, 배송 없음) / `general`(그 외 일반 결제 주문) 넷은 배타적이라
-합집합이 전체다. ⚠️ **시딩 주문도 `channel` 은 기본값 `web`** 이므로 `isSeeding` 을 먼저 걸러야
-`general` 에 섞이지 않는다. 화이트리스트 밖 값은 필터를 걸지 않고 무시한다(무검증인
+합집합이 소비자 주문 전체다. ⚠️ **시딩 주문도 `channel` 은 기본값 `web`** 이므로 `isSeeding` 을 먼저 걸러야
+`general` 에 섞이지 않는다. **`buyerSample`**(2026-11-02) = `Order.kind = buyer_sample`(바이어 제품 샘플 주문 —
+[buyer-orders](./buyer-orders.md)) 이고, ⚠️ 바이어 주문도 `!isSeeding + channel=web` 이라 `general` 은 `kind=consumer` 를
+함께 건다. 유형 미지정(전체)은 kind 를 걸지 않아 바이어 주문도 보인다(목록 응답 행에 `kind` 가 실린다). 화이트리스트 밖 값은 필터를 걸지 않고 무시한다(무검증인
 `status`/`paymentStatus` 와 달리 Prisma 에러로 새지 않는다). 어드민 주문 목록의 **유형 컬럼 배지**와
 상단 필터 셀렉트가 이 축을 쓴다(선택지는 klow_admin `ORDER_TYPE_BADGE` 맵에서 파생된다).
 
@@ -180,6 +182,8 @@ URL·북마크가 그 값을 들고 올 수 있다.
 그 표기(무가)는 화면이 정한다. 회귀 잠금은 `orders/__tests__/admin-order-type-filter.spec.ts`.
 
 ## public-orders.controller.ts (`@Controller('v1/orders')`)
+
+> ⚠️ 회원·게스트 조회/취소(`findOneForUser`·`findOneForGuest`)는 `findConsumerOrder` 를 거쳐 **바이어 샘플 주문을 404** 로 본다(2026-11-02 — 바이어 주문도 `userId=null` + 바이어 이메일이라 kind 를 안 보면 게스트 취소 OTP 로 전액 환불이 열린다). 새 소비자 경로는 `findOne` 이 아니라 이걸 거칠 것.
 
 > 가드는 라우트별 상이 — 회원 전용은 `UserGuard`, 회원/비회원 공용은 `OptionalUserGuard`, 비회원 흐름은 public + `THROTTLE_TIGHT`.
 
