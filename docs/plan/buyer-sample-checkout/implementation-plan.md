@@ -37,7 +37,7 @@
 - **할 일 (세션 안 순서 = 넘칠 때 정지점)**
   1. 스키마 + 마이그레이션(`migrate dev` — 비대화형이면 사용자 실행) + 백필
   2. G2 필터 재부착 + 회귀 스펙(정산 후보에 `buyer_sample` 주문이 안 들어감)
-  3. 공개 API(BuyerGuard): `GET /v1/buyer/sample-quote?type=indie|major&id=&country=` → `{ qty, unitUsdCents, shippingUsdCents, totalUsdCents }` (7kg 티어 없으면 400 `no_sample_rate`) · `POST /v1/buyer/sample-orders` `{ type, id, 배송지 }` → `Order(kind=buyer_sample, buyerUserId, isSeeding=false, channel=web)` + 줄 1개(qty = `sampleQty`) — 노출(`published`) · 샘플 칸 둘 다 있어야 · 동의 3종은 소비자와 같은 zod
+  3. 공개 API(BuyerGuard): `GET /v1/buyer/sample-quote?type=indie|major&id=&country=` → `{ qty, unitUsdCents, shippingUsdCents, totalUsdCents }` (국가 = 시딩 `supportedCountries()` 기준 · `enabled` 무관 · 7kg 티어 없으면 400 `no_sample_rate`. 같은 목록을 `GET /v1/buyer/sample-countries` 로 주문서 드롭다운에 준다) · `POST /v1/buyer/sample-orders` `{ type, id, 배송지 }` → `Order(kind=buyer_sample, buyerUserId, isSeeding=false, channel=web)` + 줄 1개(qty = `sampleQty`) — 노출(`published`) · 샘플 칸 둘 다 있어야 · 동의 3종은 소비자와 같은 zod
   4. 결제: prepare/verify/report-failure 소유권을 **바이어 세션**으로도 통과(소비자 `userId`·게스트 토큰과 별개 분기) · return 303 목적지를 바이어 결제 결과 화면(`/shop/sample-orders/:id/complete` 류 — B 에서 확정)으로 · 결제 확정 시 메일 2통(바이어 확인 · 운영팀 — 수신 주소는 바이어 문의 메일과 같은 env)
   5. 어드민 API: 인디·메이저 제품 PATCH 에 `sampleQty`(1~100)·`sampleUnitUsdCents` · `GET /admin/buyer/orders`(목록 — 결제 상태 필터) · `GET /admin/buyer/orders/:id`(상세 — 바이어 계정·배송지·줄·결제·송장) · 어드민 주문 목록 `type=buyerSample` 필터 + 응답에 `kind`
   6. 공개 제품 응답에 `sample: { qty, unitUsdCents } | null`
