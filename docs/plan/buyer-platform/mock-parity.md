@@ -31,7 +31,7 @@ README 의 결정 4("행동 버튼은 문의 폼 하나")·"스코프 밖" 을 �
 | PDP 구간가 로그인 게이트 (`KbPricing`, 2026-10-08) | 로그인 전(서버 바이어 세션 없음 — 28 에서 실세션으로 이었다)엔 샘플 행만 가격 공개, MOQ 이상 행은 **자리표시 `$00.00` 블러**(KLOWBUYER `login` 브랜치 방식). 그 행 클릭 · 수량을 MOQ 이상으로 올리면 `/shop/signin?next=<상세>` | ⚠️ **화면 가림뿐이다** — `GET /v1/buyer/products/:id` 가 전 구간을 공개로 내려 RSC 페이로드에 실린다. 서버 바이어 인증이 생기면 **서버가 비로그인 응답에서 MOQ 이상 구간을 잘라야** 진짜로 가려진다 — 게이트를 실세션으로 잇는 것은 ✅ buyer-auth 28(검수 상태 무관 — 로그인이면 연다), 서버측 은닉은 그 트랙도 스코프 밖(별도 결정) | buyer-auth 28 |
 | 체크아웃·결제·완료 `/shop/checkout/*` · 요청 상세 `/shop/account/requests/[id]` | ❌ **2026-10-29 제거** — 바이어는 견적 문의만 보낸다 |
 | Concierge `/shop/match` (`KbConcierge`) | 질문 5개 디자인 그대로. 점수는 디자인 규칙을 **가진 필드로만** 계산(`lib/buyer-space-mock#matchBrands`) — 라인은 `icons`/`gems` 만 tier 로, 판매채널은 가중치 0 | `BuyerBrand` 에 **취급 라인(`lines`)·적합 채널(`channels`)** 컬럼 + 어드민 입력, (선택) 답변 저장해 운영팀 리드로 | 25 |
-| 제품 채팅 (`KbAskProduct`) | 즉답 3개는 실데이터(브랜드 도시·리드타임·서류 지역·인증·구간가). 이관 카드에 **이메일**을 남기면 그 질문을 문의 API 로 전송, WhatsApp 만 남기면 이 브라우저에만(서버 문의가 이메일 필수) | 실시간 채팅 또는 브랜드 담당자 이관 큐, WhatsApp 채널, 스레드 서버 저장, `BuyerInquiry` 에 연락 채널 컬럼 | 25 |
+| ~~제품 채팅 (`KbAskProduct`)~~ | **2026-11-02 제거** — PDP "Ask the brand team" 버튼과 채팅 서랍은 Discuss wholesale(`/shop/discuss/[id]`)과 중복이라 뺐다. 제품 문의는 Discuss 하나로 받는다 | — | 25 |
 | 리뷰 (PDP `#reviews`, `KbReviews`) | **그 제품에 이미 등록된 리뷰**(브랜드 등록 + 고객 작성, `/v1/reviews?productId=`)를 영어 번역으로 노출(2026-10-06). 리뷰 개수는 표시하지 않는다(평균 별점만). 바이어 주문 리뷰가 아니라서 "verified buyers" 문구는 뺐다. 0건이면 빈 문구 | 바이어 주문 기반 리뷰 수집(검증된 주문만), 사진 업로드, 번역 메뉴(디자인 Translate — 7개 언어) | 25 |
 
 ## 디자인과 의도적으로 다른 곳 (전부)
