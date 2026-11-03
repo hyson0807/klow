@@ -73,6 +73,7 @@
 | PUT | `/admin/buyer/shelves/:id/bands` `{bands: [{id?, label, note?}]}` | 선반 필터 칩 통째 교체(최대 12, 라벨 중복 400). 배열 순서 = 칩 순서. `id` 있는 칩은 유지(제품 배정 보존), 빠진 칩은 삭제되고 그 제품은 필터 없음으로. 남의 선반 칩 id 는 400 `band_not_found` |
 | GET | `/admin/buyer/inquiries?status=new\|handled&kind=quote\|brand_request\|major_order` | 문의 목록(최신순 500) + 연결 브랜드·제품·메이저 브랜드·바이어 |
 | PATCH | `/admin/buyer/inquiries/:id` `{status?, adminNote?}` | 처리 상태·메모 |
+| GET | `/admin/buyer/inquiries/:id/attachments/:index` | 문의 첨부 원본 **중계**(공개 URL 없음 — 아래 첨부). 이미지·PDF `inline`, 엑셀·CSV `attachment` · `nosniff` · `CSP sandbox` · `no-store`. 목록·수정 응답의 `attachments` 는 `{fileName, contentType, size}[]`(키를 내리지 않는다) |
 
 - ⚠️ **인스타 썸네일은 비공식 경로**다(oEmbed `thumbnail_url` 은 2025-11 제거). `video-meta.client.ts` 가 등록 시점 1회만 릴스 페이지를 `facebookexternalhit` UA 로 읽어 `og:image` 를 R2(`brands/buyer/videos/`)로 복사한다 — 인스타 CDN URL 은 서명 만료가 있어 **원본 URL 을 저장하지 않는다**. fetch 대상은 파서가 만든 `www.instagram.com` 주소뿐이고 이미지는 `*.cdninstagram.com`·`*.fbcdn.net` https 만(SSRF 축). 로그인 벽·IP 차단으로 실패하면 어드민이 썸네일을 직접 올린다. 결정 [storefront 2026-10-15-2](../../decisions/storefront.md#2026-10-15-2).
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
@@ -88,6 +89,7 @@
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`**(샘플 주문 제안 — 둘 다 있을 때만) |
+| POST | `/v1/buyer/inquiries/attachments/presign` | **10회/분/IP** | 요청 채팅 첨부 업로드 URL `{ uploadUrl, key }` (비공개 키 · 크기 서명 · 300초) |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
 - **G12**: 없는 slug/id 와 비공개·미완비·미승인은 **같은 404**(`brand not found` / `product not found`) — 비공개 행의 존재를 새지 않는다. 브랜드는 노출 제품이 1개 이상일 때만 존재한다.
@@ -122,7 +124,16 @@
 
 ### POST `/v1/buyer/inquiries`
 
-Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디자인 "Brand or product"), needs?(≤2000), market?(≤200 · "Business & market"), email?, whatsapp?(≤40 · 숫자·+·공백·()-), brandSlug?, productId?, qty?, targetMoq?(≤60 · Discuss 목표 MOQ 영어 문구), website? }` → `200 { ok: true }`.
+Body `BuyerInquiryInput`: `{ kind: 'quote'|'brand_request', subject(1~200 · 디자인 "Brand or product"), needs?(≤2000), market?(≤200 · "Business & market"), email?, whatsapp?(≤40 · 숫자·+·공백·()-), brandSlug?, productId?, qty?, targetMoq?(≤60 · Discuss 목표 MOQ 영어 문구), attachments?(≤5 — 아래), website? }` → `200 { ok: true }`.
+
+- **첨부(2026-11-03)** — klow_web `/shop/request` 채팅의 제품 사진·PDF·엑셀/CSV. 형식 `image/jpeg|png|webp` · `application/pdf` · xlsx · xls · `text/csv`, 파일당 10MB, 문의당 5개(`BUYER_INQUIRY_ATTACHMENT_TYPES` 등 `common/validation/buyer.ts`).
+  1. 클라가 `POST /v1/buyer/inquiries/attachments/presign {contentType, size, fileName}` → 서버가 키 `buyer-inquiries/<uuid>/<32hex>.<ext>`(`buyer-inquiry-attachment.ts`) + **크기를 서명에 넣은** PUT URL 을 준다 — 다른 크기의 PUT 은 R2 가 403(staging 실측).
+  2. 브라우저가 R2 로 직접 PUT(⚠️ 버킷 CORS 가 klow_web 오리진 PUT 을 허용해야 한다 — 가입 서류와 같은 조건. staging 버킷은 `localhost:3001` 실측 통과).
+  3. 문의 POST 의 `attachments: [{key, fileName, contentType, size}]` — 서버가 **키 형식(확장자 = 선언 형식) + `headObject` 실재**를 확인하고 크기는 R2 값을 저장한다. 하나라도 어긋나면 400 `attachment_missing`. 같은 키 두 번은 400.
+  - 저장은 `BuyerInquiry.attachments` Json(마이그레이션 `20261103060102_buyer_inquiry_attachments`). 운영팀 메일엔 파일명 목록만, 파일은 어드민 중계로만 연다(가입 서류 G2 와 같은 규칙 — 버킷이 공개라 **키가 비밀**).
+  - 공개 폼이라 presign 에 토큰이 없다 — 방어는 throttle · 형식/크기 상한(서명) · 생성 시 실재 확인. 문의로 이어지지 않은 업로드는 고아 오브젝트로 남는다(가입 서류와 같은 잔여 위험 — 라이프사이클 규칙은 미적용).
+  - ⚠️ **배포 순서 server → web** — 구 서버는 `attachments` 를 zod 가 버려 문의는 저장되지만 첨부가 사라지고, presign 라우트는 404 다.
+  - 국가는 klow_web 에서 **목록에 없으면 입력한 글자 그대로** `market` 에 온다(2026-11-03 — 서버 규칙 무변경, 200자 문자열).
 
 - **연락처 = 이메일 또는 WhatsApp**(2026-10-30 — 채팅형 문의의 기본 채널이 WhatsApp 이라 이메일 필수면 문의가 버려졌다). 둘 다 비면(WhatsApp 은 숫자 7자리 이상) 400. WhatsApp 만 오면 `email` 은 `''` 로 저장한다. 번호는 **`whatsapp` 컬럼**(2026-11-02 — 그 전엔 `needs` 첫 줄 `WhatsApp: …` 이었고 마이그레이션이 그 줄에서 백필했다). 운영팀 메일엔 WhatsApp 행이 붙고 `replyTo` 는 생략된다. 어드민 목록은 '연락처' 열에 이메일·WhatsApp 을 함께 보인다.
 - **목표 MOQ = `targetMoq`**(2026-11-02) — klow_web Discuss 대화의 선택지 문구("1 carton (50 pcs)"·"2–5 cartons"·"300 pcs"…). 구간이라 숫자 `qty` 와 별개이고, 어드민 목록 수량 열은 `qty` 가 없으면 이 값을 보인다. ⚠️ 구 klow_web 은 이 값을 `needs` 의 `Target MOQ: …` 줄로만 보내므로 필드가 없으면 서버가 그 줄에서 읽는다(배포 창·열린 탭 폴백). ⚠️ **배포 순서 server → web** — zod 가 모르는 키를 버려서 web 이 먼저 나가면 목표 MOQ 가 사라진다.
