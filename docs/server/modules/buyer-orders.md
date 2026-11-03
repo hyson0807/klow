@@ -23,7 +23,7 @@
 | GET | `/v1/buyer/sample-countries` | 전역 | `{ countries: [{iso2, nameEn}] }` — 주문서 국가 드롭다운(위 규칙, 영문명 순) |
 | GET | `/v1/buyer/sample-quote?type=indie\|major&id=&country=&city?=&postalCode?=` | 전역 | `{ qty, unitUsdCents, subtotalUsdCents, shippingUsdCents, totalUsdCents }`. `id` = 바이어 공간 PDP 주소의 id(인디 = 원본 `Product.id`, 메이저 = `BuyerMajorProduct.id`). 404 `sample not available` · 400 `no_sample_rate` |
 | POST | `/v1/buyer/sample-orders` | **10회/분/IP** | 바디 `{ type, id, fullName, phone, country, countryCode, state?, addressLine1, addressLine2?, city, postalCode, recipientTaxId?, recipientNameEn?, addressLine1En?, email?, agreedToTerms: true, agreedToRefund: true, agreedToPgDataSharing: true }` → `{ orderId, totalUsdCents }`(결제 대기 주문) |
-| GET | `/v1/buyer/sample-orders/:id` | 전역 | 바이어 **본인** 주문만(남의 것·소비자 주문 404). `{ id, createdAt, paidAt, status, item: {type, name, brandName, image, qty, unitUsdCents}, subtotalUsdCents, shippingUsdCents, totalUsdCents, shipTo }` — 결제 결과 화면이 읽는다 |
+| GET | `/v1/buyer/sample-orders/:id` | 전역 | 바이어 **본인** 주문만(남의 것·소비자 주문 404). `{ id, createdAt, paidAt, status, item: {type, productId(PDP 주소 id · 제품 삭제 시 null), name, brandName, image, qty, unitUsdCents}, subtotalUsdCents, shippingUsdCents, totalUsdCents, shipTo }` — 결제 결과 화면이 읽는다 |
 | POST | `/v1/buyer/sample-orders/:id/prepare` | 전역 | 엑심베이 결제창 준비 — **해외 카드(USD)만**. 응답은 소비자 `POST /v1/payment/prepare` 와 같은 echo payload([payment](./payment.md)). 소유권 = `kind=buyer_sample && buyerUserId == 세션` |
 
 `status` = `awaiting_payment`(결제 전·결제창 이탈) / `payment_failed` / `paid`(KLOW 구매·포장 중) / `shipped` / `delivered`(주문 `completed`) / `cancelled`(환불·취소).
