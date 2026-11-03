@@ -25,9 +25,10 @@
 
 ## 노출 판정 — `buyer-completeness.ts` 한 곳(G3)
 
-공개 = `BuyerBrand.published && BuyerProduct.published && 필수 7 완비 && Brand.status=approved && Product.status=approved && Brand.slug != null && Product.brandId == BuyerBrand.brandId`.
+공개 = `BuyerBrand.published && BuyerProduct.published && 필수 6 완비 && Brand.status=approved && Product.status=approved && Brand.slug != null && Product.brandId == BuyerBrand.brandId`.
 
-- **필수 7**: `category` · `tiers`(구간 규칙 충족) · `about` · `size` · `madeIn` · `ingredients` · `image`(원본 추종 포함)
+- **필수 6**: `category` · `about` · `size` · `madeIn` · `ingredients` · `image`(원본 추종 포함)
+- ⚠️ **구간가(`tiers`)는 2026-11-03 부터 필수가 아니다** — 손님 화면이 도매가를 아예 안 보여 주므로(2026-10-30) 가격 없이도 노출한다. 비어 있으면 `priceUsdCents`·`moq` 가 null 이고 PDP 는 구간표 없이 Discuss 버튼만 뜬다. 행을 넣으면 구간 규칙은 저장 zod 가 그대로 지킨다. 어드민 배지도 `n/6`.
 - **노출 불가 사유**(어드민 표시용, 공개 토글과 별개): `incomplete` · `no_slug` · `brand_not_approved` · `product_not_approved` · `brand_mismatch`
 - `Product.hidden`·구독 상태는 **보지 않는다** — 소비자 판매의 게이트(`PUBLIC_PRODUCT_WHERE`)와 무관하다.
 - ⚠️ 판정은 **읽을 때 계산**한다(저장 컬럼 없음) — 원본 `image`·`status`·`slug` 가 다른 화면에서 바뀌어서다. 공개 API 는 값싼 조건을 where 로 먼저 줄이고 최종 판정은 `evaluate()` 가 한다.
@@ -77,7 +78,7 @@
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
 - ⚠️ 감사 로그(`AdminAuditInterceptor`)는 본문 10KB 초과분을 자른다 — 성분 8000자 PATCH 는 잘릴 수 있다(R8, 수용).
 - 이미지 재크롭용 프록시(`image-source`)는 **만들지 않는다**(2026-10-04 판정) — R2 가 어드민 오리진 GET 을 CORS 로 허용해서 klow_admin 이 브라우저에서 직접 받아 크롭한다(운영 `cdn.klow.kr` → `admin.klow.kr` · dev 버킷 → `localhost:3000`·`admin-staging.klow.kr` 실측). ⚠️ dev 버킷은 **`localhost:3000` 만** 허용이라 어드민을 다른 포트로 띄우면 재크롭·업로드가 CORS 로 실패한다(화면은 토스트로 "파일로 다시 올려 달라"). 외부 호스트 원본 이미지도 같은 이유로 재크롭이 안 되고 파일 업로드로 대신한다.
-- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영 — 그래서 서버는 `preview` 를 싣지 않는다), 필수 7칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
+- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영 — 그래서 서버는 `preview` 를 싣지 않는다), 필수 6칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
 
 ## public-buyer.controller.ts (`@Controller('v1/buyer')`, 인증 없음)
 
