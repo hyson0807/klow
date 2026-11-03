@@ -156,7 +156,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/v1/buyer/major-prices` | **BuyerGuard** | 위와 같은 모양을 노출 메이저 제품 **전부**에 대해 한 번에(2026-10-28 — 목록이 브랜드마다 부르던 30여 회를 1회로). klow_web `useKbMajorPrices()` 가 이것만 쓴다. 브랜드별 엔드포인트는 구 웹 호환으로 남긴다 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |
 
-`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient, msrpUsdCents}`.
+`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient}`. ⚠️ 소매가(`msrpUsdCents`)는 인디·메이저 카드·상세 어느 공개 응답에도 싣지 않는다(2026-11-03 — 화면에서만 숨기면 RSC 페이로드로 보인다). 서버 안에서 브랜드 `retailMultiple` 계산에만 쓴다.
 
 **어드민** (`admin-buyer-major.controller.ts`, AdminGuard — 이 테이블의 id 로 가리킨다)
 
