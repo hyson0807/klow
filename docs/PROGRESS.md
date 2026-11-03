@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 61행(C) — 코드·문서 완료, staging 배포만 남았다(2026-11-03).** 세 레포 `feat/buyer-sample-checkout`(server `232da9d` · admin `5de9523` · web 은 B 그대로) + DB 브랜치 `ep-delicate-moon` 에 `20261103032646_shipment_brand_nullable` 적용. 남은 것(⑦ — 사용자 확인 후): ① **staging·운영 `ShopSettings.klowSender*` 입력**(비면 발급 400 — DB 브랜치는 비어 있었다) ② staging 병합: staging DB `migrate deploy`(대기 2개 — `add_buyer_sample_checkout`·`shipment_brand_nullable`, 둘 다 롤링 안전) → klow_server → klow_admin → klow_web push ③ staging 테스트 결제 1건 ④ **EFS 실발급 1건은 사용자 확인 후**. `§9` 61행 메모.
+
 **`§7` 59·60·61행 — buyer-sample-checkout 트랙 등록(2026-11-02 계획).** 바이어 공간 제품 상세 "Get N samples" → 엑심베이 결제(샘플 단가×개수 + 목적국 7kg 요율) → 어드민 '바이어 주문' 탭 → **KLOW 송장**(발송인 KLOW · EFS 배송비 KLOW 부담 — 미매칭·브랜드 청구 제외) + Retail price 전면 숨김. **59·60행(A·B)은 끝났다**(2026-11-02~03 — 세 레포 `feat/buyer-sample-checkout`: server `df9914a`·`56a805a` · admin `e133dbb` · web `e06ad99`, push 안 함 · DB 브랜치 **`ep-delicate-moon-a1dbshsn`** — `klow_server/.env` 는 staging 으로 되돌렸으니 C 세션은 접속 문자열을 다시 받아 넣는다). 로컬에서 엑심베이 테스트 결제 성공·환불까지 왕복 확인. 다음: **61행(C) KLOW 송장 + efs-billing + staging 배포** — `§9` 60행 메모. 스펙 [`plan/buyer-sample-checkout/`](./plan/buyer-sample-checkout/README.md). HS 는 화장품 코드(D11), 송장 발급 전 어드민이 제품별 신고가 등을 확인·수정하는 폼(D12). ⚠️ C 착수 전 확인: `ShopSettings.klowSender*` 운영값 입력 여부.
 
 **`§7` 58행 — 바이어 문의 WhatsApp·목표 MOQ 컬럼화(2026-11-02, 트랙 밖 요청)는 ✅ staging·운영 배포 완료**(server `2946563` → web `f324cdb` · admin `8a45309`, main push 후 api.klow.kr 재기동 확인). 남은 것: 운영 어드민 `/buyer/inquiries` 가 열리는지(= 운영 자동 migrate 적용 확인) + 운영 백필 건수 SELECT. `§9` 58행 메모.
@@ -1176,7 +1178,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 58 | buyer-inquiry-columns | **바이어 문의 WhatsApp·목표 MOQ 컬럼화** — `BuyerInquiry.whatsapp`·`targetMoq`(마이그레이션 `20261102081040_buyer_inquiry_contact_columns` — nullable ADD + 같은 SQL 안의 멱등 백필: 기존 행은 `needs` 의 `WhatsApp:`·`Target MOQ:` 줄에서, `needs` 무변경) · 서버는 WhatsApp 을 더 이상 `needs` 앞에 안 붙이고 구 웹의 `Target MOQ:` 줄은 폴백으로 읽는다 · 웹 Discuss 가 `targetMoq` 필드로 · 어드민 목록 '연락처'(이메일+WhatsApp)·수량(qty 없으면 목표 MOQ). 트랙 밖 요청(2026-11-02) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시) · staging push(사용자) → 2026-11-02 main push server → web·admin(api.klow.kr 재기동 확인 · 운영 마이그레이션은 서버 배포의 자동 migrate 에 맡김)** | 완료 | ✓ | 2026-11-02 | 2946563 / 8a45309 / - / f324cdb / (이 커밋) |
 | 59 | buyer-sample-checkout | **A. klow_server — 스키마 + 주문·결제 + 소비자 축 제외 + 어드민 API** — `BuyerProduct`·`BuyerMajorProduct` 샘플 개수·단가 · `Order.kind`/`buyerUserId` · `OrderItem.buyerProductId`·`majorProductId`(줄은 브랜드에 안 묶음 · 마이그레이션 `add_buyer_sample_checkout` + 인디 1행 단가 백필) · **결제 확정 부수효과 분기(G8 — 송장 자동발급·브랜드 알림톡 차단)** · `kind` 필터 재부착(G2) · `/v1/buyer/sample-quote`·`sample-orders`(7kg 요율) · 결제 바이어 소유권 · 어드민 바이어 주문 API. git `feat/buyer-sample-checkout` + DB 브랜치 `ep-delicate-moon`(마이그레이션 `20261102143319_add_buyer_sample_checkout` 적용 · 백필 31/31) — **push 안 함** · 2026-11-03 staging(`db19ac0` 구간가 필수 해제) 위로 rebase | 완료 | ✗ | 2026-11-02 | df9914a / - / - / - / 6e33d58 |
 | 60 | buyer-sample-checkout | **B. klow_admin + klow_web** — 제품 샘플 2칸 · 주문 목록 유형 '바이어주문' · `/buyer/orders` 탭 · Retail price 전면 제거 · 상세 샘플 단가 + "Get N samples"(Discuss wholesale 아래) · 주문서 → 엑심베이 → 결과 · kb 8개 언어. 세 레포 git `feat/buyer-sample-checkout`(server 보강 `56a805a` — 결과 화면용 `item.productId`) — **push 안 함** | 완료 | ✗ | 2026-11-03 | 56a805a / e133dbb / - / e06ad99 / (이 커밋) |
-| 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · **발급 폼(제품별 신고가·HS·무게 확인·수정)** · 발급 시 바이어 추적 메일 · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web) | 대기 | ✗ | | |
+| 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · **발급 폼(제품별 신고가·HS·무게 확인·수정)** · 발급 시 바이어 추적 메일 · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web). **①~⑥ 완료**(DB 브랜치 `ep-delicate-moon` 에 `20261103032646_shipment_brand_nullable` 적용 · server·admin `feat/buyer-sample-checkout` 커밋, web 무변경) — **⑦ staging 배포 남음(사용자 확인)** | 진행 중(부분 완료) | ✗ | 2026-11-03 | 232da9d / 5de9523 / - / - / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1240,6 +1242,15 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-sample-checkout — 61행 C (부분 완료 · ①~⑥ · server `232da9d` · admin `5de9523` · push 안 함 · staging 대기)
+
+- **한 것**: server — 마이그레이션 `20261103032646_shipment_brand_nullable`(DROP NOT NULL + `trackingEmailSentAt`, FK Restrict 유지) · `createKlowForBuyerOrder`(폼 값 → 24번 라인별 통관, `requestPayload.klowForm`, 자동 재시도 없음, `retry` 400) · `GET …/shipment-draft`·`POST …/shipment` · 추적 메일(송장당 1회 선점) · 발급 뒤 환불 400 · `onlyBrandShipments` 재부착(9f6e1c2 역적용) · efs-billing `klowShipments`(옛 `klowSamples` 이름 변경해 역적용). admin — 상세 'KLOW 송장' 카드 + 발급 폼 모달 · KLOW 발송인 모달 재사용 · 송장·추적·주문 상세 브랜드 칸 'KLOW'(`shipmentBrandName`) · 실패 탭 KLOW 송장은 '발급 폼' 링크 · EFS 청구 'KLOW 송장 배송비 (KLOW 부담)' 표 복원.
+- **스펙과 다르게 한 것**: 발급 폼에 **박스 무게 없음** — 시딩·일반 송장 모두 25번을 비워 보낸다(EFS 입고 실측)는 기존 payload 기준을 따랐다. 폼은 품명·수량·신고 단가·HS·통관 분류(영문)·27번 배송비. KLOW 송장 **자동 재시도 없음**(추적 메일 단일 경로). 추적 메일 링크는 소비자 `/track/:id?t=`(소비자 레이아웃).
+- **확인한 것(로컬 :4010 · DB 브랜치 · `EFS_API_BASE=127.0.0.1:9` 로 실EFS 차단)**: draft 기본값 · 발송인 공란 400 · zod 400(한글 품명·0 신고가·HS) · 폼 줄 불일치 400 · 발급 → `failed`(brandId null · nextRetryAt null · sendData 4번 KLOW · 24번 폼 값 · URL `/shop/products/<원본 Product.id>`) · 재발급 draft 가 앞선 값 · `/admin/shipments/:id/retry` 400 · (SQL 로 submitted 가장) 환불 400 · `/v1/orders/:id/tracking?t=` 200(브랜드 'KLOW')·토큰 없으면 404 · EFS 청구 리포트 `rows` 0 / `klowShipments` 1. 어드민 화면(:3010) 상세·발급 모달 스크린샷. 검증: typecheck 2종 · jest 1790 · e2e · 라우트 519(+2) · admin `next build`.
+- **확인하지 못한 것**: EFS **실발급 성공** 경로(추적 메일 실렌더 포함 — 스펙으로만) · 정산표 업로드 실파일 매칭(스펙 `customs-import-apply`) · 어드민 EFS 청구 화면의 KLOW 표 실화면 · klow_web `/track` 실화면.
+- **남은 데이터(DB 브랜치)**: 바이어 주문 `cmw03kavz000pumhht8upp99g`(paid)에 `failed` KLOW 송장 1건 · `ShopSettings.klowSender*` = 테스트 값(`KLOW TEST`). 임시 어드민 세션은 지웠다. `klow_server/.env` 는 건드리지 않았다(DB 브랜치는 명령행 env 로만 접속 — 같은 비밀번호에 호스트만 `ep-delicate-moon-a1dbshsn`).
+- **⑦이 알 것**: staging DB 대기 마이그레이션 2개(A·C) · 배포 순서 server → admin → web(web 이 먼저면 샘플 버튼이 404 견적) · ⚠️ 운영 KLOW 발송인 값 확인 후 EFS 실발급 1건.
 
 ### buyer-sample-checkout — 60행 B (완료 · klow_admin `e133dbb` · klow_web `e06ad99` · server 보강 `56a805a`, git `feat/buyer-sample-checkout` · push 안 함)
 

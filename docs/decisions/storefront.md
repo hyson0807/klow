@@ -417,3 +417,18 @@ klow_web `feat/buyer-sample-package` 의 디자인 시안(바 B · 홈 B · 목�
 - ⚠️ **staging 인디 원본은 전부 `https://cdn.klow.kr`(운영 CDN)** — staging `R2_PUBLIC_BASE` 와 달라 워커가 '허용되지 않은 원본 호스트'로 거절한다. staging Railway 에 `BUYER_IMAGE_SOURCE_ORIGINS=https://cdn.klow.kr` 를 넣어야 staging 에서 인디 생성이 된다(운영은 R2 공개 주소가 cdn.klow.kr 이면 그대로 통과 — 운영 1장 테스트로 확인).
 - 마이그레이션 `20261031150818_add_buyer_indie_image_drafts` 는 사용자 지시로 staging DB 에 직접 `migrate dev`. 전부 additive(NOT NULL 해제 포함) — 롤링 안전. 구 서버 코드는 새 nullable 칸을 몰라도 기존 행이 전부 채워져 있어 깨지지 않는다.
 - **'생성 중' 무한 로딩 사고(같은 날, 운영 ARENCIA 2건)** — 생성 도중 main 배포. Railway 롤링 교체에서 새 인스턴스의 부팅 복구(`running` → `queued`)가 끝난 **뒤** 옛 인스턴스가 대기 초안 2건을 집고 곧바로 종료돼 `running` 으로 남았고, 복구가 부팅 때 한 번뿐이라 되살릴 장치가 없었다(운영 DB 는 직접 못 봤다 — 배포 시점·건수로 추정). 수정: 종료 직전 처리 중 초안 되돌리기(`beforeApplicationShutdown`) + 1분 점검 cron `buyer-image-sweep`(20분 넘은 주인 없는 `running` 복구 · 대기 재시동). ⚠️ 임계값 20분은 한 장 최악(SDK 타임아웃 240초 × 재시도 3)보다 길게 잡았다 — 줄이면 롤링 중 옆 인스턴스가 정상 처리하는 초안을 중복 생성한다. klow_server `8c9796b`.
+
+<a id="2026-11-03"></a>
+## 바이어 제품 샘플 주문 — 줄은 브랜드에 안 묶는다 · 결제 후속효과 분기 · KLOW 송장(`brandId` NULL · 발급 폼 값 그대로 · 자동 재시도 없음) · EFS 배송비 KLOW 부담 (2026-11-03)
+
+바이어 공간 제품 상세 "Get N samples" → 엑심베이 → 어드민 '바이어 주문' → KLOW 송장(buyer-sample-checkout 트랙 — 스펙 [`plan/buyer-sample-checkout/`](../plan/buyer-sample-checkout/README.md), 엔드포인트 [`server/modules/buyer-orders.md`](../server/modules/buyer-orders.md)). KLOW 가 올리브영 등에서 직접 사서 보내는 주문이라 **브랜드는 이 주문을 모른다**. 2026-10-29 에 지운 샘플 박스·합포장 송장과 겉이 닮았지만 브랜드 입고 흐름이 없다.
+
+- ⚠️⚠️ **줄은 브랜드에 묶지 않는다(G7)** — `OrderItem.productId`·`brandId` NULL, `buyerProductId`/`majorProductId` 만. 인디 `productId` 를 채우는 순간 알림톡·스튜디오 주문현황·3PL 발송 대기·리뷰 요청으로 새어 나간다. 그 위에 `Order.kind = buyer_sample` 로 정산·연락처·소비자 조회·어드민 '일반' 유형·PG 정산서에서 **명시적으로 한 번 더** 뺀다(G2 — 자리 표는 모듈 문서).
+- ⚠️⚠️ **결제 확정 부수효과는 `markPaid` 의 pending→paid 블록 맨 앞에서 갈라진다(G8)** — 소비자 경로(통계·카트·확인 메일·EFS 자동 발급·브랜드 알림톡)를 하나도 타지 않고 바이어 메일 2통만. return·웹훅·재조정 cron 이 같은 함수를 타므로 분기는 한 곳이다.
+- **KLOW 송장 = `Shipment.brandId` NULL(G4)** — 브랜드 스코프 조회는 `onlyBrandShipments()` 로 거른다. 마이그레이션 `shipment_brand_nullable` 은 DROP NOT NULL 뿐이다. ⚠️ schema 의 `brand Brand?` 에 **`onDelete: Restrict` 를 명시**할 것 — optional 관계의 Prisma 기본값은 SetNull 이라 빼먹으면 브랜드 삭제가 그 브랜드 송장을 조용히 KLOW 송장으로 바꾼다(2026-10-14 에 마이그레이션 2개로 되돌렸던 실수).
+- **발급은 폼 값 그대로(D12)** — 통관 품명·수량·신고 단가·HS·27번 배송비를 어드민이 확인·수정해 보낸다(기본값 = 주문 스냅샷·결제 단가·화장품 HS·결제 배송비). 서버는 그 값으로 24번을 만들고 `requestPayload.klowForm` 에 남겨 재발급 기본값으로 쓴다. 25번 무게는 다른 송장처럼 비운다(EFS 입고 실측 — 폼에서 뺐다).
+- ⚠️ **KLOW 송장은 자동 재시도도 일반 `retry` 도 없다** — 바이어 추적 메일(송장당 1회, `Shipment.trackingEmailSentAt` 조건부 선점)이 발급 폼 경로 하나에서만 나가게 하려는 것이다. 실패하면 사람이 폼을 보고 다시 누른다.
+- **EFS 배송비는 KLOW 부담(G5)** — 정산표 업로드에서 매칭되지만(미매칭 경고 아님) 브랜드 청구서에는 절대 안 들어가고 `report.klowShipments` 로 따로 보인다.
+- **발급 뒤 환불은 서버가 400** — 송장을 먼저 EFS 취소해야 한다.
+- 추적 링크는 소비자 `/track/:id?t=<서명 토큰>` 을 그대로 쓴다(`getTracking` 이 `kind` 를 안 보는 이유). 화면은 소비자 레이아웃이고 브랜드 칸이 'KLOW' 다.
+- ⚠️ `ShopSettings.klowSender*` 가 비면 발급 400 — staging·운영에 값을 넣어야 한다(로컬 DB 브랜치는 비어 있었다). 이름은 EFS 4번 40바이트 상한이라 영문으로.

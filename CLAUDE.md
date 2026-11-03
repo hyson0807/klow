@@ -204,6 +204,7 @@ docs/PROGRESS.md 를 읽고 <할 일>을 계획에 추가해 줘.   ← 계획: 
 - `2026-10-29` [바이어 공간 샘플 박스·샘플 결제·장바구니 제거 — 스키마까지 드롭(`Order.kind`·입고·부분환불·`BuyerPackage`·`sampleable`) · `Shipment.brandId` 다시 NOT NULL · 남은 바이어 주문은 마이그레이션이 지운다 · 인디 1행 샘플가 규칙과 KLOW 발송인(현장 결제 `ship_to`)은 유지](docs/decisions/storefront.md#2026-10-29)
 - `2026-10-31` [메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용(초안 테이블 → 적용 API 만 `images` 변경) · 최초 적용 때 `originalImages` 백업 · 4:5 는 자르지 않고 채운다 · 생성 원본은 제품 사진 중에서 고른다(대표 사진이 질감 컷인 제품 있음) · `sharp` 는 런타임 dependency · 모델 `gpt-image-2.5-sunburst` 실측 $0.05/장 · `OPENAI_ADMIN_KEY` 는 사용액 조회 한 곳만](docs/decisions/storefront.md#2026-10-31)
 - `2026-11-01` [인디 브랜드도 AI 이미지 제작 — 적용은 바이어 공간 사진(`BuyerProduct.images`)만(브랜드 원본 `Product.image` 무변경) · 바이어 공간에 추가된 제품만 · 인디 백업 = raw `preAiImages` + `aiImagesApplied`(따라가기면 빈 배열) · 초안 테이블 메이저·인디 공용 · 어드민 별도 탭 `/buyer/images` · staging 인디 원본은 `cdn.klow.kr` 라 `BUYER_IMAGE_SOURCE_ORIGINS` 필요](docs/decisions/storefront.md#2026-11-01)
+- `2026-11-03` [바이어 제품 샘플 주문 — 줄은 브랜드에 안 묶는다(G7) · 결제 확정 부수효과는 `markPaid` 맨 앞에서 분기(G8) · KLOW 송장 = `Shipment.brandId` NULL(`onlyBrandShipments` · schema 에 `onDelete: Restrict` 명시) · 발급 폼 값 그대로 신고 · 자동 재시도·일반 retry 없음(추적 메일 송장당 1회) · EFS 배송비 KLOW 부담(`klowShipments`) · 발급 뒤 환불 400 · `klowSender*` 비면 발급 400](docs/decisions/storefront.md#2026-11-03)
 
 ### 배송 · 시딩 · EFS 송장 — `shipping-seeding.md`
 

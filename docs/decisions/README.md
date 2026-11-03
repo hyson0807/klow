@@ -113,3 +113,4 @@
 | `2026-10-14` | [바이어 샘플 합포장 송장 = `Shipment.brandId` NULL · 발송인 KLOW · 라인별 통관 (브랜드 무관 정산·청구 조회는 `onlyBrandShipments` · 바이어 주문은 브랜드 단위 발급 400 · 발급 뒤 환불 400)](./shipping-seeding.md#2026-10-14) | shipping-seeding |
 | `2026-10-31` | [메이저 제품 이미지 AI 리터치 — 생성 ≠ 적용 · 원본 백업 · 자르지 않고 채운다 · 원본 사진은 고른다 · sharp 는 런타임 의존성](./storefront.md#2026-10-31) | storefront |
 | `2026-11-01` | [인디 브랜드도 AI 이미지 제작 — 바이어 공간 사진만 바꾼다 · 바이어 공간에 추가된 제품만 · 이미지 제작은 별도 탭](./storefront.md#2026-11-01) | storefront |
+| `2026-11-03` | [바이어 제품 샘플 주문 — 줄은 브랜드에 안 묶는다 · 결제 후속효과 분기 · KLOW 송장(`brandId` NULL · 발급 폼 값 그대로 · 자동 재시도 없음) · EFS 배송비 KLOW 부담](./storefront.md#2026-11-03) | storefront |
