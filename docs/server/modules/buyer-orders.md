@@ -36,7 +36,7 @@
 | Method | Path | 기능 |
 |---|---|---|
 | GET | `/admin/buyer/orders?paymentStatus=&q=&take=&skip=` | `{ total, orders: [{id, createdAt, paidAt, paymentStatus, status, countryCode, country, totalUsdCents, buyer: {id,email,name,company,country,status}, item}] }`. **기본은 `pending`(결제창 이탈) 숨김** — `paymentStatus` 를 주면 그것만. `q` = 주문 id·이메일·수령인·회사·제품명 부분일치 |
-| GET | `/admin/buyer/orders/:id` | 상세 — `buyer` · `shipTo`(영문 주소·세금번호 포함) · `items[]`(`type`·`publicProductId`(PDP 주소 id, 제품이 지워졌으면 null)·스냅샷) · `payment`(status·provider·tid·currency·method·failureReason·fx·금액 3종) · `carrier` · `shipments[]`(최신순 — 상태·송장번호·현지 번호·추적 상태·`trackingEmailSentAt`) · `canRefund`. 소비자 주문 id 는 404 |
+| GET | `/admin/buyer/orders/:id` | 상세 — `buyer` · `shipTo`(영문 주소·세금번호 포함) · `items[]`(`type`·`publicProductId`(PDP 주소 id, 제품이 지워졌으면 null)·스냅샷) · `payment`(status·provider·tid·currency·method·failureReason·fx·금액 3종) · `carrier` · `shipments[]`(최신순 — 상태·송장번호·현지 번호·추적 상태·`trackingEmailSentAt`) · `canRefund` · `canIssue`(발급 폼과 같은 판정 — 결제완료 + 최신 송장 없음·failed·cancelled). 소비자 주문 id 는 404 |
 | GET | `/admin/buyer/orders/:id/shipment-draft` | KLOW 송장 발급 폼 기본값(D12) — `{ form: {lines: [{orderItemId, name, quantity, declaredUnitUsdCents, hsCode, categoryEn}], shippingFeeUsdCents}, fromPreviousAttempt, sender, senderReady, carrier, canIssue }`. 기본값 = 주문 스냅샷 품명 · 샘플 개수 · 결제 단가 · 화장품 HS(`BRAND_CATEGORY_CUSTOMS.cosmetics` — D11) · 결제 배송비. **앞선 발급 시도가 있으면 그때 쓴 값**(`requestPayload.klowForm`, 줄 집합이 같을 때만) |
 | POST | `/admin/buyer/orders/:id/shipment` | KLOW 송장 발급 — 바디 = 위 `form`(zod `IssueKlowShipmentInput`: 품명·분류 ASCII · `{}|",` 금지 · 신고 단가 ≥1¢ · HS 숫자 6~10 · 배송비 ≥0). 응답 `{ shipment, warnings }` — EFS 실패도 200(`shipment.status='failed'` + `errorMessage`). 400: 발송인 공란 · 폼 줄 ≠ 주문 줄 · 결제 전/취소 주문 · 국내 캐리어. 409: 살아 있는 송장이 이미 있다 |
 
@@ -55,7 +55,7 @@ KLOW 발송인 편집은 `GET|PATCH /admin/settings/klow-sender`([shipments](./s
 - **24번은 폼 값 그대로**: 24-5 품명 · 24-6 분류 · 24-8 HS 를 줄마다(`BuildPayloadLine.customs`) · 24-9 수량 · 24-11 신고 단가. 26번 = Σ 단가×수량 · 27번 = 폼 배송비 · 24-12 상품 URL = 바이어 공간 `/shop/products/<id>`(인디 = 원본 `Product.id`, 메이저 = `BuyerMajorProduct.id`). 25번 무게는 다른 송장처럼 비운다(EFS 입고 실측).
 - 캐리어 = 주문의 국가 고정 `shippingCarrier`(`shippingCarrierByBrand` 에 'KLOW' 키가 없어 `carrierForBrand` 가 그리로 떨어진다).
 - 쓴 폼 값은 `Shipment.requestPayload.klowForm` 에 남는다 — 재발급 폼의 기본값.
-- ⚠️ **자동 재시도 없음** — 네트워크 실패여도 `nextRetryAt=null`. 일반 `POST /admin/shipments/:id/retry` 도 400(발급 폼으로). 추적 메일이 이 경로 하나에서만 나가게 하려는 것이다. 브랜드 단위 경로(`createForOrder`·`createForBrand`·`previewForOrder`)는 바이어 주문을 400(G3 — `loadOrderWithItems` 가 송화인 조회 전에 막는다).
+- ⚠️ **자동 재시도 없음** — 네트워크 실패여도 `nextRetryAt=null`. 재시도 cron(`retryDue`)도 `brandId` 있는 송장만 고르고, 고착된 pending KLOW 송장은 예약 없이 `failed` 로만 올린다(발급 폼에서 다시). 일반 `POST /admin/shipments/:id/retry` 도 400(발급 폼으로). 추적 메일이 이 경로 하나에서만 나가게 하려는 것이다. 브랜드 단위 경로(`createForOrder`·`createForBrand`·`previewForOrder`)는 바이어 주문을 400(G3 — `loadOrderWithItems` 가 송화인 조회 전에 막는다).
 - 발급 성공(`submitted`) 시 주문 `shipped` 전이(`maybeMarkOrderShipped`) + **바이어 추적 메일**(영어 — 송장번호·캐리어·`{FRONTEND_URL}/track/:id?t=<서명 토큰>`). **송장당 1회** — `trackingEmailSentAt` 을 조건부 updateMany 로 먼저 잡고 보낸다. 발송이 실패하면 잡은 시각을 되돌린다(다음 발급 때 다시). 수신자 = 주문 이메일, reply-to = 바이어 문의 수신함.
 - `/v1/orders/:id/tracking` 은 `kind` 를 보지 않는다 — 추적 메일의 서명 토큰으로 바이어 주문도 열린다(토큰 없으면 404). 브랜드 칸은 'KLOW'.
 - EFS 추적 cron 은 브랜드와 무관하게 송장 단위로 돈다 — 배송완료면 주문 `completed`(바이어 상태 `delivered`). 리뷰 요청 cron 은 `brandId` 없는 송장을 건너뛴다.
