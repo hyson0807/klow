@@ -88,7 +88,7 @@
 | GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
 | GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
-| GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`**(샘플 주문 제안 — 둘 다 있을 때만) |
+| GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`**(샘플 주문 제안 — 둘 다 있을 때만) + **`sampleSavePct: number \| null`**(샘플가의 MSRP 대비 할인율 정수 % — 샘플·MSRP 둘 다 있고 샘플가가 더 쌀 때만, 2026-11-04) |
 | POST | `/v1/buyer/inquiries/attachments/presign` | **10회/분/IP** | 요청 채팅 첨부 업로드 URL `{ uploadUrl, key }` (비공개 키 · 크기 서명 · 300초) |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
 
@@ -167,7 +167,7 @@ Anua·COSRX 같은 유명 브랜드는 KLOW 입점 브랜드가 아니라 원본
 | GET | `/v1/buyer/major-prices` | **BuyerGuard** | 위와 같은 모양을 노출 메이저 제품 **전부**에 대해 한 번에(2026-10-28 — 목록이 브랜드마다 부르던 30여 회를 1회로). klow_web `useKbMajorPrices()` 가 이것만 쓴다. 브랜드별 엔드포인트는 구 웹 호환으로 남긴다 |
 | POST | `/v1/buyer/major-orders` | **BuyerGuard** · 5회/분/IP | `{brandSlug, lines: [{productId, qty}], shipMethod, incoterm?, market?, note?}` → `BuyerInquiry(kind=major_order)` + 운영팀 메일(실패는 삼킨다). 라인은 그 브랜드의 노출 제품만(아니면 400 `products_unavailable` + `productIds`), 같은 제품 두 번·빈 라인 400. `market` 비면 가입 국가. `shipMethod`·`incoterm` 은 `BUYER_SHIP_METHODS`·`BUYER_INCOTERMS`(klow_web `KB_SHIP_METHODS`·`KB_INCOTERMS` 미러) |
 
-`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient}`. ⚠️ 소매가(`msrpUsdCents`)는 인디·메이저 카드·상세 어느 공개 응답에도 싣지 않는다(2026-11-03 — 화면에서만 숨기면 RSC 페이로드로 보인다). 서버 안에서 브랜드 `retailMultiple` 계산에만 쓴다.
+`MajorCard` = `{id, name, brand:{slug,name}, image, size, category(BuyerCategory 이름, 미분류 ''), categorySlug(미분류 null), heroIngredient}`. ⚠️ 소매가(`msrpUsdCents`)는 인디·메이저 카드·상세 어느 공개 응답에도 싣지 않는다(2026-11-03 — 화면에서만 숨기면 RSC 페이로드로 보인다). 서버 안에서 브랜드 `retailMultiple` 계산과 인디 상세 `sampleSavePct`(비율만, 2026-11-04) 계산에만 쓴다.
 
 **어드민** (`admin-buyer-major.controller.ts`, AdminGuard — 이 테이블의 id 로 가리킨다)
 
