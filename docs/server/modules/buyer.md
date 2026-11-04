@@ -10,7 +10,7 @@
 
 | 모델 | 역할 |
 |---|---|
-| `BuyerBrand` | 원본 `Brand` 의 1:1 오버레이(`brandId @unique`). 공개 토글·순서·tier·프로필(도시·설립·리드타임·지역·마케팅 지원·derm)·로고 덮어쓰기 |
+| `BuyerBrand` | 원본 `Brand` 의 1:1 오버레이(`brandId @unique`). 공개 토글·순서·tier·프로필(도시·설립·리드타임·지역·마케팅 지원·derm)·로고 덮어쓰기 · **SEO `metaTitle`(120)·`metaDescription`(300)·`intro`(2000)** — 바이어 전용 영어 원문, 빈 문자열 = 폴백(2026-11-04) |
 | `BuyerProduct` | 원본 `Product` 의 1:1 오버레이(`productId @unique`). 공개 토글·카테고리·영문명·스펙·인증(CPNP/FDA OTC/SPF/GMP)·MSRP·**샘플 개수·단가**(`sampleQty`·`sampleUnitUsdCents` — 둘 다 있어야 "Get N samples", [buyer-orders](./buyer-orders.md))·이미지·`benefits`(인디 목록 사이드바 필터 — 고정 8키 `BUYER_BENEFITS`, klow_web `KB_BENEFITS` 미러) |
 | `BuyerPriceTier` | 도매 구간가(USD 센트). **MOQ 의 정본**(아래) |
 | `BuyerCategory` | 홈 카테고리 탭 |
@@ -45,12 +45,13 @@
 
 | Method | Path | 기능 |
 |---|---|---|
+| GET | `/admin/buyer/seo` | **SEO 탭 개요**(2026-11-04) — 메이저 + 인디 브랜드를 한 배열로: `{kind: major\|indie, id(major=BuyerMajorBrand.id · indie=Brand.id), slug, name, published, productCount, metaTitle, metaDescription, intro: string[], introSource: buyer\|brand\|none, fallbackIntro, updatedAt}`. 읽기 전용 — 저장은 각자의 PATCH(인디 아래 · 메이저 `PATCH /admin/buyer/major-brands/:id`) |
 | GET | `/admin/buyer/brands` | 올린 브랜드 목록 — 제품 수·완비 수·노출 수·**필수 칸별 누락 수**(`missingCounts`)·브랜드 단위 사유 |
 | GET | `/admin/buyer/brand-candidates?q=` | **승인 브랜드만** 후보(최대 50) — `added`·승인 제품 수 |
 | POST | `/admin/buyer/brands` `{brandId}` | 브랜드 올리기(승인만, 중복 409 `already_added`) |
 | PUT | `/admin/buyer/brands/order` `{ids: brandId[]}` | 브랜드 순서 |
 | GET | `/admin/buyer/brands/:brandId` | 프로필 + 원본 로고 + `openingOrder`·`retailMultiple` + `videos` |
-| PATCH | `/admin/buyer/brands/:brandId` | 프로필·공개 토글 (`logoUrl: null` = 원본 로고로) |
+| PATCH | `/admin/buyer/brands/:brandId` | 프로필·공개 토글 (`logoUrl: null` = 원본 로고로) · SEO `metaTitle`·`metaDescription`·`intro`(빈 문자열 = 폴백) |
 | DELETE | `/admin/buyer/brands/:brandId` | ⚠️ 입력한 제품 정보·구간가까지 cascade 삭제 — 평소엔 공개 OFF |
 | PUT | `/admin/buyer/brands/:brandId/videos` `{videos: [{url, title?, thumbnailUrl?}]}` | 마케팅 영상 통째 교체(최대 12, 배열 순서 = 노출 순서). url 을 다시 파싱 — 유튜브·인스타 아니면 400 `unsupported_video_url`, 같은 영상 두 번 400 `duplicate_video`. 응답 = 영상 목록 |
 | POST | `/admin/buyer/videos/resolve` `{url}` | **저장 안 함** — url 정규화 + 제목(유튜브 키 없는 oEmbed · 인스타 `og:title` 캡션) + 인스타 썸네일(`og:image` → **R2 복사**). 썸네일 실패는 예외가 아니라 `thumbnailFailed: true` |
@@ -79,7 +80,7 @@
 - 히어로·선반이 가리키는 제품이 비노출이 되면 어드민 응답의 `visible: false` 로 보이고, 공개 API 가 자동으로 뺀다(히어로는 이미지만 남기고 링크를 뗀다).
 - ⚠️ 감사 로그(`AdminAuditInterceptor`)는 본문 10KB 초과분을 자른다 — 성분 8000자 PATCH 는 잘릴 수 있다(R8, 수용).
 - 이미지 재크롭용 프록시(`image-source`)는 **만들지 않는다**(2026-10-04 판정) — R2 가 어드민 오리진 GET 을 CORS 로 허용해서 klow_admin 이 브라우저에서 직접 받아 크롭한다(운영 `cdn.klow.kr` → `admin.klow.kr` · dev 버킷 → `localhost:3000`·`admin-staging.klow.kr` 실측). ⚠️ dev 버킷은 **`localhost:3000` 만** 허용이라 어드민을 다른 포트로 띄우면 재크롭·업로드가 CORS 로 실패한다(화면은 토스트로 "파일로 다시 올려 달라"). 외부 호스트 원본 이미지도 같은 이유로 재크롭이 안 되고 파일 업로드로 대신한다.
-- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영 — 그래서 서버는 `preview` 를 싣지 않는다), 필수 6칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
+- 프런트: klow_admin `/buyer`(브랜드) · `/buyer/seo`(SEO 탭 — 상태 배지 판정은 `buyer/seo/_components/seo-status.ts`, klow_web 제목 템플릿 ` · KLOW Wholesale` 과 기본 제목을 미러) · `/buyer/brands/[brandId]` · `/buyer/products/[productId]`(편집기 + 미리보기 `components/preview/BuyerPreview.tsx`) · `/buyer/home` · `/buyer/inquiries`. 편집기는 **폼 값에서 직접** 카드·PDP 를 그리고(저장 전 반영 — 그래서 서버는 `preview` 를 싣지 않는다), 필수 6칸 판정도 화면에 미러가 있다(`_components/editor-form.ts#localMissing` — 정본은 서버, 규칙을 바꾸면 둘 다).
 
 ## public-buyer.controller.ts (`@Controller('v1/buyer')`, 인증 없음)
 
@@ -87,7 +88,7 @@
 |---|---|---|---|
 | GET | `/v1/buyer/home?lang=` | 전역 | `{ heroSlides, categories, shelves, brands }` — 노출 제품 0 인 카테고리·선반·브랜드는 빠진다. 히어로 `product` 는 노출 중일 때만. 선반은 `kind` + `bands: [{id,label,note}]` + 아이템 `bandId` — 노출 제품이 0 인 칩도 빠진다. **메이저 선반의 아이템 `product` 는 메이저 카드**(가격 없음·번역 없음) |
 | GET | `/v1/buyer/products?category=&q=&take=&cursor=&lang=` | 전역 | 카드 목록 `{ items, total, nextCursor }` — `category` = 카테고리 slug, `q` 는 제품명·브랜드명·key actives 부분일치(**영어 원문으로 대조** — 번역은 잘라 낸 페이지에만), `cursor` = 직전 페이지 마지막 제품 id |
-| GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
+| GET | `/v1/buyer/brands/:slug?lang=` | 전역 | 브랜드 프로필(계산된 `openingOrder`·`retailMultiple` 포함) + 노출 제품 카드 + `intro`(브랜드 소개 — 아래) + `metaTitle`·`metaDescription`(어드민 SEO 값 · 번역본 · 빈 값 = klow_web 기본 템플릿) + `videos: [{provider, id, url, title, thumbnail, vertical}]`(**이 응답에만** — klow_web PDP 는 이미 받는 이 응답을 재사용하므로 `products/:id` 엔 없다) |
 | GET | `/v1/buyer/products/:id?lang=` | 전역 | PDP — 이미지·인증·구간가·스펙·같은 브랜드 다른 제품 최대 8 + **`sample: {qty, unitUsdCents} \| null`**(샘플 주문 제안 — 둘 다 있을 때만) + **`sampleSavePct: number \| null`**(샘플가의 MSRP 대비 할인율 정수 % — 샘플·MSRP 둘 다 있고 샘플가가 더 쌀 때만, 2026-11-04) |
 | POST | `/v1/buyer/inquiries/attachments/presign` | **10회/분/IP** | 요청 채팅 첨부 업로드 URL `{ uploadUrl, key }` (비공개 키 · 크기 서명 · 300초) |
 | POST | `/v1/buyer/inquiries` | **5회/분/IP** | 문의 저장 + 운영팀 메일 |
@@ -98,7 +99,7 @@
 - 조회는 throttle 을 조이지 않는다 — klow_web 은 ISR(`revalidate: 60`)로 받는다(Vercel egress IP 공유).
 - 프런트: klow_web `app/(kb)/kbl/[lang]/`(`/` 홈 · `/shop/brands/[slug]` · `/shop/products/[id]`) — 서버 컴포넌트가 `lib/buyer-space-server.ts` 로 `home`·`brands/:slug`·`products/:id` 를 받고, 카테고리 탭·검색(`products`)과 문의(`inquiries`)만 클라이언트 `api.buyerSpace` 다. sitemap 이 `products` 를 커서로 전부 훑어 노출 브랜드·제품을 싣는다.
 - 서버 캐시 없음. 매 요청 노출 후보를 include 1회로 받아 메모리 판정(규모 수백 행).
-- **`intro`**(2026-10-19, buyer-seo B) = `Brand.description`(브랜드관 한 줄 소개) trim — 바이어 전용 입력 칸은 없다. 브랜드 응답에만 싣고 `?lang=` 이면 `brand` 엔티티로 번역한다. ⚠️ **결과에 한글이 남으면 `''`** — 바이어 공간 8개 언어에 한국어가 없어서다(원문이 한국어인데 영어 화면이거나 번역이 실패한 경우). klow_web 은 빈 값이면 렌더하지 않고, 있으면 브랜드명 아래 + meta description 맨 앞에 쓴다.
+- **`intro`**(2026-10-19, buyer-seo B · 2026-11-04 개정) = **`BuyerBrand.intro`(어드민 SEO) 우선, 비면 `Brand.description`(브랜드관 한 줄 소개 — 브랜드 소유라 어드민이 덮어쓰지 않는다)** trim. 브랜드 응답에만 싣고 `?lang=` 이면 `brand` 엔티티로 `metaTitle`·`metaDescription` 과 함께 번역한다. ⚠️ **결과에 한글이 남으면 `''`**(세 필드 모두) — 바이어 공간 8개 언어에 한국어가 없어서다(원문이 한국어인데 영어 화면이거나 번역이 실패한 경우). klow_web 은 빈 값이면 렌더하지 않고, 있으면 브랜드명 아래 + meta description 맨 앞에 쓴다.
 
 <a id="lang-번역"></a>
 ### `?lang=` 번역 (buyer-i18n, 2026-10-16)
@@ -113,7 +114,7 @@
 | `shelf` / `shelfItem` / `band` | 선반 · 아이템 · 칩 | `title`·`lede` / `tag` / `label`·`note` | 홈 |
 | `heroSlide` | `BuyerHeroSlide` | `caption` | 홈 |
 | `video` | `BuyerBrandVideo` | `title` | 브랜드 |
-| `brand` | `Brand.description` (브랜드관 한 줄 소개) | `intro` | 브랜드 |
+| `brand` | `BuyerBrand.intro` ∥ `Brand.description` · `BuyerBrand.metaTitle`·`metaDescription` | `intro` · `metaTitle` · `metaDescription` | 브랜드 |
 
 - ⚠️ **번역하지 않는 것**(D7·G6): 제품명(`name` = `nameEn`/원본명), 브랜드명·로고·도시·지역, `ingredients`(INCI), `madeIn`, `spf`, 인증·가격·수치. 호출부가 애초에 보내지 않는다. 보낸 필드도 **원문의 숫자 토큰이 번역문에 그대로 없으면 그 필드는 원문**이다(`keepsNumbers`).
 - 바이어 카테고리 slug(`skincare`·`sun-care`…)는 소비자 `category-presets.ts` 의 키(`cleanser`·`toner`…)와 달라 프리셋을 쓸 수 없다 — 카테고리 이름도 LLM 캐시로 번역한다.

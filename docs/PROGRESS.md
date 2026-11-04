@@ -22,6 +22,8 @@ docs/PROGRESS.md 를 읽고 다음 단계를 진행해 줘.
 
 ## 0. 지금 할 것
 
+**`§7` 63행 — 바이어 브랜드 SEO(인디 SEO 칸 + 어드민 `/buyer/seo` 탭, 2026-11-04 트랙 밖 요청)는 코드 완료**(server `37eb955` · admin `28614cb` · web `0791582`, `feat/buyer-seo-admin` · push 안 함 · staging DB 에 `buyer_brand_seo` 적용됨). 다음: staging(server → admin·web) → 운영 → 인디 6개 SEO 입력. 메이저 77개는 운영 DB 에 이미 입력됨. `§9` 63행 메모.
+
 **`§7` 62행 — 바이어 요청 채팅 파일 첨부 + 국가 직접 입력(2026-11-03, 트랙 밖 요청)은 ✅ staging·운영 배포 완료**(server `7ed15ca` → web `f73be6d` · admin `6a948d4`). 남은 것: 운영 어드민 `/buyer/inquiries` 가 열리는지(= 운영 자동 migrate 확인) · admin-staging 첨부 열람 확인 + staging 테스트 문의 2건 삭제. `§9` 62행 메모.
 
 **`§7` 59·60·61행 buyer-sample-checkout — ✅ 2026-11-03 운영 배포 완료**(server `0e10628` · admin `1a2bb95` · web `3c86bf9`, 운영 DB 마이그레이션 2건은 서버 자동 migrate). ⚠️ 운영 `ShopSettings.klowSender*` 가 비어 있으면 KLOW 송장 발급이 400 — 어드민 바이어 주문 발급 폼 '수정'에서 입력. 샘플 버튼은 어드민 제품 편집에서 샘플 개수·단가를 넣은 제품에만 뜬다. 남은 것: EFS 실발급 1건(사용자 확인). 이전 기록 — **61행(C) staging 배포(2026-11-03, 사용자 지시).** staging DB(`ep-icy-flower`)에 `add_buyer_sample_checkout`·`shipment_brand_nullable` `migrate deploy`(대기 2건뿐) → klow_server `232da9d` push → api-staging `shipment-draft`·`sample-countries` 401 확인 → klow_admin `5de9523` · klow_web `e06ad99` push. ⚠️ staging `ShopSettings.klowSender*` 는 **비어 있다** — 어드민 바이어 주문 발급 폼의 '수정'에서 채워야 발급된다. 아래 ①②는 끝났고 ③④·운영 배포가 남았다. (참고: 로컬 :4000 이 feat 코드 + staging DB 라 제품 조회가 500 이던 것도 이 migrate 로 풀렸다.) 이전 기록 — 세 레포 `feat/buyer-sample-checkout`(server `232da9d` · admin `5de9523` · web 은 B 그대로) + DB 브랜치 `ep-delicate-moon` 에 `20261103032646_shipment_brand_nullable` 적용. 남은 것(⑦ — 사용자 확인 후): ① **staging·운영 `ShopSettings.klowSender*` 입력**(비면 발급 400 — DB 브랜치는 비어 있었다) ② staging 병합: staging DB `migrate deploy`(대기 2개 — `add_buyer_sample_checkout`·`shipment_brand_nullable`, 둘 다 롤링 안전) → klow_server → klow_admin → klow_web push ③ staging 테스트 결제 1건 ④ **EFS 실발급 1건은 사용자 확인 후**. `§9` 61행 메모.
@@ -1182,6 +1184,7 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 | 60 | buyer-sample-checkout | **B. klow_admin + klow_web** — 제품 샘플 2칸 · 주문 목록 유형 '바이어주문' · `/buyer/orders` 탭 · Retail price 전면 제거 · 상세 샘플 단가 + "Get N samples"(Discuss wholesale 아래) · 주문서 → 엑심베이 → 결과 · kb 8개 언어. 세 레포 git `feat/buyer-sample-checkout`(server 보강 `56a805a` — 결과 화면용 `item.productId`) — **push 안 함** | 완료 | ✗ | 2026-11-03 | 56a805a / e133dbb / - / e06ad99 / (이 커밋) |
 | 61 | buyer-sample-checkout | **C. KLOW 송장 + efs-billing KLOW 부담 + staging 배포** — `Shipment.brandId` NULL 마이그레이션 · 발송인 `klowSender*` · **발급 폼(제품별 신고가·HS·무게 확인·수정)** · 발급 시 바이어 추적 메일 · 브랜드 단위 발급 차단(G3) · 정산표 업로드 매칭됨+KLOW 부담(미매칭·청구서 제외, G5) · 결정 기록 · staging(server → admin → web). **①~⑥ 완료**(DB 브랜치 `ep-delicate-moon` 에 `20261103032646_shipment_brand_nullable` 적용 · server·admin `feat/buyer-sample-checkout` 커밋, web 무변경) — **⑦ 2026-11-03 staging 배포 완료**(사용자 지시 · staging DB `migrate deploy` 2건 → server push → api-staging 새 라우트 401 확인 → admin·web push). **2026-11-03 운영 배포 완료**(사용자 지시 · server `0e10628` → api.klow.kr 새 라우트 401·제품 200(자동 migrate 2건 적용) → admin `1a2bb95` · web `3c86bf9`). 같은 날 후속(주문서 국가 검색·주소 자동완성·직전 주소 자동 입력·배송비 EMS 정가 할인 표시·PDP 샘플 버튼 정리·공개 응답 MSRP 제거·등록 브랜드만·/simplify)도 함께 나갔다. 남은 것: 운영 `klowSender*` 입력 · EFS 실발급 1건(사용자) | 완료 | ✗ | 2026-11-03 | 232da9d / 5de9523 / - / - / (이 커밋) |
 | 62 | buyer-inquiry-attachments | **바이어 요청 채팅 파일 첨부 + 국가 직접 입력** — `/shop/request` 첫 질문에 사진·PDF·엑셀/CSV(≤5 · 10MB) 첨부: 공개 presign `POST /v1/buyer/inquiries/attachments/presign`(비공개 키 `buyer-inquiries/…` · 크기 서명 · 10/분) → R2 직접 PUT → 문의 `attachments`(키 형식 + `headObject` 확인) → `BuyerInquiry.attachments` Json(마이그레이션 `20261103060102_buyer_inquiry_attachments`) → 어드민 중계 `GET /admin/buyer/inquiries/:id/attachments/:index`(가입 서류 G2 규칙) · `?q=` 로 와도 첫 질문 유지 · 국가 검색 미매칭이면 `Use “입력값”`. 트랙 밖 요청(2026-11-03) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시 — staging 브랜치에서 바로) → staging push server → api-staging 확인 → web·admin → 같은 날 main push server(api.klow.kr 재기동·presign 라우트 확인 · 운영 마이그레이션은 서버 자동 migrate) → web·admin** | 완료(staging·운영 배포) | ✓ | 2026-11-03 | 7ed15ca / 6a948d4 / - / f73be6d / (이 커밋) |
+| 63 | buyer-seo-admin | **바이어 브랜드 SEO — 인디 SEO 칸 + 어드민 SEO 탭** — `BuyerBrand.metaTitle·metaDescription·intro`(마이그레이션 `20261104053932_buyer_brand_seo` — default 있는 ADD COLUMN, 롤링 안전) · 공개 브랜드 응답 intro 는 바이어 칸 우선/비면 `Brand.description` + meta 2칸 번역 · `GET /admin/buyer/seo` · 어드민 `/buyer/seo`(상태 표 + 편집 모달) + 인디 상세 SEO 카드 · 웹 인디 meta 우선. 트랙 밖 요청(2026-11-04) — 마이그레이션 + 3레포 순서 배포라 행. **staging DB(`ep-icy-flower`) 직접 `migrate dev`(사용자 지시)** · 세 레포 `feat/buyer-seo-admin` 커밋, **push 안 함**. 같은 날 운영 DB 메이저 77개 SEO 직접 입력(스키마 무관) | 진행 중(코드 완료 · 배포 대기) | ✗ | 2026-11-04 | 37eb955 / 28614cb / - / 0791582 / (이 커밋) |
 | 13 | aws-fargate | 2. AWS 기반 구성 | 막힘 (AWS 크레딧 승인 대기, 2026-09-11~) | — | | |
 
 > ⚠️ **2026-09-30 우선순위 변경**(사용자) — brand-shipping-fee(4·5·6행)가 cafe24 운영 배포
@@ -1245,6 +1248,14 @@ archive 에 `cafe24 4-1·4-2·5-2·5-3 (한 세션에 넷)` · `3pl 3~6단계 (�
 - 남은 일 (이 순서로):
 - 다음 단계가 알 것:
 ```
+
+### buyer-seo-admin — 63행 (코드 완료 · server `37eb955` · admin `28614cb` · web `0791582` · push 안 함)
+
+- 한 것: 위 행 그대로. 운영 DB 메이저 77개는 이 세션이 SQL 로 직접 채웠다(엑셀 71 + 신규 6, 21개 설명 재작성 — 결정 storefront 2026-11-04). 반영 전 값은 세션 scratchpad 백업뿐이다.
+- 확인한 것: server typecheck · buyer 176 · e2e 통과, 로컬 :4010 부팅 523 라우트 + `/admin/buyer/seo` 매핑 · 공개 응답에 `metaTitle`/`metaDescription` 빈 값. admin·web `tsc`·eslint 통과.
+- 확인하지 못한 것: **어드민 `/buyer/seo` 실화면**(로그인·TOTP 필요) · 인디 meta 값이 있을 때 웹 렌더·번역(staging 에서 값 넣고 확인).
+- 남은 일 (이 순서로): ① staging push server → api-staging `/admin/buyer/seo` 401 확인 → admin·web ② admin-staging `/buyer/seo` 확인 ③ 운영: main push server(자동 migrate) → admin·web ④ 운영 인디 6개 SEO 입력(어드민 SEO 탭 — 문구는 엑셀 Hidden Gem 5개(`| KLOW`·숫자·"Opening orders…" 문장 제거) + abelty 신규) ⑤ Googlebot curl 로 인디 title·description 확인.
+- 다음 단계가 알 것: ⚠️ admin 이 server 보다 먼저면 SEO 탭 404 + 인디 SEO 저장이 구 zod 에서 조용히 strip. web 은 순서 무관. metaTitle 에 KLOW 금지(템플릿이 붙인다).
 
 ### buyer-inquiry-attachments — 62행 (staging·운영 배포 완료 · 어드민 실화면 확인 전)
 
